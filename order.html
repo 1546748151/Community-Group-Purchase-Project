@@ -1006,6 +1006,34 @@ async function submitOrder() {
   const items = Object.values(cart);
   if (items.length === 0) { toast('购物车为空', 'error'); return; }
 
+  // Re-check round is still active and not expired (prevent stale-page submissions)
+  const { data: roundCheck } = await sb.from('rounds').select('is_active, cutoff_time').eq('id', activeRoundId).single();
+  if (!roundCheck || !roundCheck.is_active) {
+    toast('本轮团购已结束，请刷新页面', 'error');
+    cart = {};
+    closeCheckout();
+    loadCustomerProducts();
+    return;
+  }
+  if (roundCheck.cutoff_time && new Date(roundCheck.cutoff_time) <= new Date()) {
+    toast('下单已截止，请刷新页面', 'error');
+    cart = {};
+    closeCheckout();
+    loadCustomerProducts();
+    return;
+  }
+
+  // Re-check stock for all items
+  for (const item of items) {
+    const { data: prod } = await sb.from('products').select('stock').eq('id', item.productId).single();
+    if (prod && prod.stock !== null && prod.stock < item.quantity) {
+      toast(`${item.productName}-${item.specName} 库存不足，仅剩 ${prod.stock} 件`, 'error');
+      closeCheckout();
+      loadCustomerProducts();
+      return;
+    }
+  }
+
   const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
   const orderItems = items.map(i => ({
     product_id: i.productId,
@@ -1099,10 +1127,25 @@ async function lookupOrders() {
 
 async function cancelOrder(orderId) {
   if (!confirm('确定要取消这个订单吗？')) return;
+
+  // Fetch order to get items for stock restoration
+  const { data: order } = await sb.from('orders').select('*').eq('id', orderId).single();
+
   const { error } = await sb.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
   if (error) { toast('取消失败', 'error'); return; }
+
+  // Restore stock
+  if (order && order.items) {
+    for (const item of order.items) {
+      const { data: prod } = await sb.from('products').select('stock').eq('id', item.product_id).single();
+      if (prod && prod.stock !== null) {
+        await sb.from('products').update({ stock: prod.stock + item.quantity }).eq('id', item.product_id);
+      }
+    }
+  }
+
   lookupOrders();
-  toast('订单已取消');
+  toast('订单已取消，库存已恢复');
 }
 
 // ============================================================
@@ -1113,12 +1156,16 @@ async function renderOrderManager(el) {
 
   // Fetch rounds for selector
   const allRounds = await getRounds();
-  if (!adminRoundId && allRounds.length > 0) adminRoundId = allRounds[0].id;
+  if (!adminRoundId && allRounds.length > 0) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : allRounds[0].id; }
 
   // Build round selector
-  let roundOpts = allRounds.map(r =>
-    `<option value="${r.id}" ${r.id === adminRoundId ? 'selected' : ''}>${escHtml(r.name)} ${r.is_active ? '(进行中)' : ''}</option>`
-  ).join('');
+  let roundOpts = allRounds.map(r => {
+    let statusLabel = '';
+    if (r.is_active && r.cutoff_time && new Date(r.cutoff_time) < new Date()) statusLabel = '(已截止)';
+    else if (r.is_active) statusLabel = '(进行中)';
+    else statusLabel = '(已结束)';
+    return `<option value="${r.id}" ${r.id === adminRoundId ? 'selected' : ''}>${escHtml(r.name)} ${statusLabel}</option>`;
+  }).join('');
 
   // Fetch orders for selected round
   let query = sb.from('orders').select('*').eq('status', 'active');
@@ -1247,7 +1294,7 @@ async function renderPaymentSummary(el) {
   el.innerHTML = '<div class="skel-line skeleton"></div><div class="skel-line skeleton"></div>';
 
   const allRounds = await getRounds();
-  if (!adminRoundId && allRounds.length > 0) adminRoundId = allRounds[0].id;
+  if (!adminRoundId && allRounds.length > 0) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : allRounds[0].id; }
 
   let roundOpts = allRounds.map(r =>
     `<option value="${r.id}" ${r.id === adminRoundId ? 'selected' : ''}>${escHtml(r.name)} ${r.is_active ? '(进行中)' : ''}</option>`
@@ -1359,6 +1406,10 @@ async function renderSettings(el) {
   const { data: pwData } = await sb.from('settings').select('value').eq('key', 'admin_password').single();
   const hasPassword = pwData?.value && pwData.value.length > 0;
 
+  // Auto-deactivate expired rounds
+  const now = new Date().toISOString();
+  await sb.from('rounds').update({ is_active: false }).eq('is_active', true).lt('cutoff_time', now).not('cutoff_time', 'is', null);
+
   // Fetch rounds for management list
   const rounds = await getRounds();
 
@@ -1370,7 +1421,7 @@ async function renderSettings(el) {
       roundsHtml += `<div class="order-item-row" style="padding:10px 0">
         <span class="item-name">
           <span style="font-weight:600">${escHtml(r.name)}</span>
-          ${r.is_active ? '<span class="badge badge-success" style="margin-left:6px">进行中</span>' : '<span class="badge badge-muted" style="margin-left:6px">已结束</span>'}
+          ${r.is_active && r.cutoff_time && new Date(r.cutoff_time) < new Date() ? '<span class="badge badge-danger" style="margin-left:6px">已截止</span>' : r.is_active ? '<span class="badge badge-success" style="margin-left:6px">进行中</span>' : '<span class="badge badge-muted" style="margin-left:6px">已结束</span>'}
           <br><span class="caption">截止: ${cf}</span>
         </span>
         <span style="display:flex;gap:4px">
