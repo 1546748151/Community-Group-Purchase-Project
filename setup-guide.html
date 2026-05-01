@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>邻选 · 部署使用指南</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{
+  font-family:'Geist',-apple-system,BlinkMacSystemFont,sans-serif;
+  background:#faf8f5;color:#1a1815;line-height:1.7;
+  -webkit-font-smoothing:antialiased;max-width:780px;margin:0 auto;padding:48px 24px;
+}
+h1{font-size:2rem;font-weight:700;letter-spacing:-.025em;margin-bottom:8px}
+h2{font-size:1.375rem;font-weight:600;letter-spacing:-.015em;margin-top:48px;margin-bottom:12px;padding-top:32px;border-top:1px solid #e7e5e2}
+h3{font-size:1.0625rem;font-weight:600;margin-top:28px;margin-bottom:8px}
+p{margin-bottom:14px;color:#78716c;font-size:.9375rem}
+ul,ol{margin-bottom:14px;padding-left:20px;color:#78716c;font-size:.9375rem}
+li{margin-bottom:6px}
+code{
+  background:#f0efed;padding:2px 6px;border-radius:4px;font-size:.875rem;
+  font-family:'SF Mono','Cascadia Code',monospace;color:#1a1815;
+}
+pre{
+  background:#1a1815;color:#e8e6e3;padding:16px 20px;border-radius:10px;
+  overflow-x:auto;font-size:.8125rem;line-height:1.6;margin-bottom:16px;
+  font-family:'SF Mono','Cascadia Code',monospace;
+}
+.step{
+  background:#fff;border:1px solid #e7e5e2;border-radius:14px;padding:24px;margin-bottom:20px;
+}
+.step-num{
+  display:inline-flex;width:28px;height:28px;border-radius:50%;background:#15803d;color:#fff;
+  align-items:center;justify-content:center;font-size:.8125rem;font-weight:600;margin-bottom:8px;
+}
+.note{
+  background:#fef7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px 18px;margin:16px 0;
+  font-size:.875rem;color:#92400e;
+}
+.warn{
+  background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;margin:16px 0;
+  font-size:.875rem;color:#991b1b;
+}
+img{max-width:100%;border-radius:10px;border:1px solid #e7e5e2;margin:12px 0}
+.toc{background:#fff;border:1px solid #e7e5e2;border-radius:14px;padding:20px;margin:24px 0}
+.toc a{color:#15803d;text-decoration:none;font-size:.9375rem}
+.toc a:hover{text-decoration:underline}
+.toc ol{margin-bottom:0}
+@media (max-width:600px){body{padding:24px 16px}h1{font-size:1.5rem}}
+</style>
+</head>
+<body>
+<h1>邻选 · 部署使用指南</h1>
+<p>按照以下步骤，大约需要 <strong>15 分钟</strong> 完成全部设置。全程免费，无需购买服务器或域名。</p>
+
+<div class="toc">
+  <strong style="font-size:.9375rem">目录</strong>
+  <ol style="margin-top:8px">
+    <li><a href="#s1">注册 Supabase 账号</a></li>
+    <li><a href="#s2">创建数据库项目</a></li>
+    <li><a href="#s3">初始化数据库表</a></li>
+    <li><a href="#s4">获取连接信息</a></li>
+    <li><a href="#s5">部署网页到 Cloudflare Pages</a></li>
+    <li><a href="#s6">首次使用配置</a></li>
+    <li><a href="#s7">日常使用教程</a></li>
+  </ol>
+</div>
+
+<!-- STEP 1 -->
+<h2 id="s1">第一步：注册 Supabase 账号</h2>
+<div class="step">
+  <div class="step-num">1</div>
+  <p>Supabase 是一个免费的开源数据库服务，我们用它来存储商品和订单数据。</p>
+  <ol>
+    <li>用浏览器打开 <code>supabase.com</code></li>
+    <li>点击右上角 <strong>"Start your project"</strong></li>
+    <li>选择 <strong>"Sign in with GitHub"</strong>（推荐，最方便）</li>
+    <li>如果没有 GitHub 账号，也可以用邮箱注册</li>
+  </ol>
+  <div class="note">
+    免费版提供 500MB 数据库空间和每月 5GB 流量，对于小区团购来说绰绰有余。
+  </div>
+</div>
+
+<!-- STEP 2 -->
+<h2 id="s2">第二步：创建数据库项目</h2>
+<div class="step">
+  <div class="step-num">2</div>
+  <ol>
+    <li>登录后点击 <strong>"New project"</strong></li>
+    <li>填写以下信息：
+      <ul>
+        <li><strong>Name</strong>：填 <code>groupbuy</code>（或任意名字）</li>
+        <li><strong>Database Password</strong>：设置一个数据库密码（建议用浏览器生成的随机密码，记下来备用）</li>
+        <li><strong>Region</strong>：选择 <strong>Northeast Asia (Tokyo)</strong> 或 <strong>Southeast Asia (Singapore)</strong>，离国内最近，速度最快</li>
+      </ul>
+    </li>
+    <li>点击 <strong>"Create new project"</strong>，等待 1-2 分钟让数据库创建完成</li>
+  </ol>
+</div>
+
+<!-- STEP 3 -->
+<h2 id="s3">第三步：初始化数据库表</h2>
+<div class="step">
+  <div class="step-num">3</div>
+  <p>在 Supabase 项目面板中，左侧菜单找到 <strong>SQL Editor</strong>，执行以下操作：</p>
+  <ol>
+    <li>点击 <strong>"New query"</strong></li>
+    <li>打开 <a href="supabase-schema.sql" target="_blank">supabase-schema.sql</a>，复制全部内容</li>
+    <li>粘贴到 SQL Editor 中</li>
+    <li>点击右下角绿色 <strong>"Run"</strong> 按钮</li>
+  </ol>
+  <div class="note">
+    执行成功后，你会看到三个表：products（商品）、orders（订单）、settings（设置），以及自动创建的安全策略。这意味着数据库已经准备就绪。
+  </div>
+</div>
+
+<!-- STEP 4 -->
+<h2 id="s4">第四步：获取连接信息</h2>
+<div class="step">
+  <div class="step-num">4</div>
+  <p>在 Supabase 项目面板左侧菜单，找到 <strong>Settings &gt; API</strong>：</p>
+  <ol>
+    <li>复制 <strong>Project URL</strong>（格式如 <code>https://xxxxx.supabase.co</code>）</li>
+    <li>复制 <strong>anon public key</strong>（一长串以 <code>eyJ</code> 开头的文字）</li>
+    <li>把这两个信息保存到记事本备用，下一步用到</li>
+  </ol>
+  <div class="warn">
+    请使用 <strong>anon public key</strong>（公开密钥），不要使用 service_role key（私密密钥）。service_role key 会绕过所有安全策略，不应该在网页中使用。
+  </div>
+</div>
+
+<!-- STEP 5 -->
+<h2 id="s5">第五步：部署网页到 Cloudflare Pages</h2>
+<div class="step">
+  <div class="step-num">5</div>
+  <p>Cloudflare Pages 是免费、快速的静态网页托管服务，而且在国内也能正常访问。</p>
+  <ol>
+    <li>用浏览器打开 <code>dash.cloudflare.com</code></li>
+    <li>注册/登录 Cloudflare 账号（可用邮箱注册）</li>
+    <li>左侧菜单找到 <strong>Workers &amp; Pages</strong>，点击进入</li>
+    <li>点击 <strong>"Create"</strong> → 选择 <strong>"Pages"</strong> → 选择 <strong>"Upload assets"</strong></li>
+    <li>给你的项目起个名字（如 <code>groupbuy</code>）</li>
+    <li>把以下三个文件拖拽上传：
+      <ul>
+        <li><code>order.html</code> — 核心下单工具</li>
+        <li><code>landing.html</code> — 宣传页面（可选）</li>
+        <li><code>supabase-schema.sql</code> — 数据库脚本（备存）</li>
+      </ul>
+    </li>
+    <li>点击 <strong>"Deploy"</strong></li>
+    <li>等待 1 分钟左右部署完成，你会得到一个网址如 <code>https://groupbuy.pages.dev</code></li>
+  </ol>
+  <div class="note">
+    这个网址就是你的下单页面地址。邻居扫码或点击这个链接就能进入下单页面。
+  </div>
+  <h3>备选方案：如果没有 Cloudflare 账号</h3>
+  <p>你也可以使用其他免费托管服务：</p>
+  <ul>
+    <li><strong>GitHub Pages</strong>：把文件上传到 GitHub 仓库，在 Settings 中启用 Pages</li>
+    <li><strong>Vercel</strong>：类似 Cloudflare Pages，注册后拖拽部署</li>
+    <li><strong>Netlify</strong>：同样支持拖拽部署静态页面</li>
+  </ul>
+</div>
+
+<!-- STEP 6 -->
+<h2 id="s6">第六步：首次使用配置</h2>
+<div class="step">
+  <div class="step-num">6</div>
+  <p>用浏览器打开你刚部署的网址，会看到初始化设置页面。</p>
+  <ol>
+    <li>在 <strong>Supabase URL</strong> 输入框粘贴第四步复制的 Project URL</li>
+    <li>在 <strong>Anon Key</strong> 输入框粘贴第四步复制的 anon key</li>
+    <li>点击 <strong>"保存并连接"</strong></li>
+  </ol>
+  <p>连接成功后会自动进入顾客下单页面。</p>
+  <p>然后设置管理员密码：</p>
+  <ol>
+    <li>在网址后面加上 <code>#admin</code>（如 <code>https://groupbuy.pages.dev#admin</code>），回车</li>
+    <li>这是首次进入，直接输入你想设置的管理密码并回车（密码就设置好了）</li>
+    <li>进入后台后，点击 <strong>"设置"</strong> 标签可以修改密码</li>
+  </ol>
+  <div class="warn">
+    请务必记住你的管理员密码。如果忘记了，需要在 Supabase 的 SQL Editor 中手动清空 admin_password 记录来重置。
+  </div>
+</div>
+
+<!-- STEP 7 -->
+<h2 id="s7">第七步：日常使用教程</h2>
+
+<h3>发起一次团购的完整流程</h3>
+
+<div class="step">
+  <p><strong>1. 进入后台</strong>：在浏览器打开你的网址，在网址后加 <code>#admin</code>，输入管理密码。</p>
+</div>
+
+<div class="step">
+  <p><strong>2. 添加商品</strong>：在"商品"标签页，点击"添加商品"：</p>
+  <ul>
+    <li>填写商品名称（如"烟台红富士苹果"）</li>
+    <li>可选填写商品图片链接（在微信中长按图片 → 复制图片链接）</li>
+    <li>添加规格：如"5斤装 / 28元"、"10斤装 / 50元"</li>
+    <li>可选设置库存数量（卖完自动停售）</li>
+    <li>点击"添加商品"</li>
+  </ul>
+</div>
+
+<div class="step">
+  <p><strong>3. 生成下单二维码</strong>：</p>
+  <ul>
+    <li>点击"二维码"标签页</li>
+    <li>页面自动显示你的下单二维码</li>
+    <li>长按二维码图片 → 保存到手机相册</li>
+    <li>把二维码发到业主微信群，配上文字说明（如"本周团购开始啦，大家扫码下单"）</li>
+  </ul>
+</div>
+
+<div class="step">
+  <p><strong>4. 设置截止时间（可选）</strong>：</p>
+  <ul>
+    <li>点击"设置"标签页</li>
+    <li>设置下单截止时间</li>
+    <li>到了截止时间，顾客端会自动显示"下单已结束"</li>
+  </ul>
+</div>
+
+<div class="step">
+  <p><strong>5. 查看订单</strong>：</p>
+  <ul>
+    <li>点击"订单"标签页，实时查看所有邻居的下单</li>
+    <li>每个用户的订单自动按人汇总，显示购买明细和应付金额</li>
+    <li>底部显示每个商品的总销量统计</li>
+    <li>点击"导出 Excel"可以下载订单表格用于备货对账</li>
+  </ul>
+</div>
+
+<div class="step">
+  <p><strong>6. 收款</strong>：</p>
+  <ul>
+    <li>截止后，点击"收款"标签页</li>
+    <li>页面列出所有人的应付金额</li>
+    <li>点击"一键复制收款清单"</li>
+    <li>打开微信 → 业主群 → 群工具 → 群收款</li>
+    <li>参考复制的清单，逐一发起群收款</li>
+  </ul>
+</div>
+
+<h3>顾客如何使用</h3>
+
+<div class="step">
+  <ol>
+    <li>在微信群里长按二维码 → 识别图中二维码</li>
+    <li>打开页面后，看到所有在售商品</li>
+    <li>点击商品选择规格和数量</li>
+    <li>选好后点击底部"去下单"</li>
+    <li>填写群昵称（必填）+ 备注（选填）</li>
+    <li>提交订单，完成</li>
+    <li>如需修改，点击页面上方"查/改订单"，输入昵称查询并操作</li>
+  </ol>
+</div>
+
+<div class="note" style="margin-top:32px">
+  <strong>温馨提示：</strong>Supabase 和 Cloudflare Pages 的免费额度对于一个小区的团购来说完全足够。如果未来你的团购规模扩大，Supabase 的付费方案也只要 $25/月起步。但大概率你用不到付费方案。
+</div>
+</body>
+</html>
