@@ -796,7 +796,7 @@ function buildProductSummary(orders) {
     (o.items || []).forEach(it => {
       const name = it.product_name || '';
       const spec = it.spec_name || '';
-      const unit = parsePurchaseUnit(spec);
+      const unit = getItemUnitQty(it);
       const isSplitUnit = unit !== null;
       const key = isSplitUnit ? (it.product_id || name) : `${it.product_id || name}::${spec}`;
       if (!productSales[key]) {
@@ -814,7 +814,7 @@ function buildProductSummary(orders) {
       }
       const quantity = Number(it.quantity) || 0;
       productSales[key].specs.add(spec);
-      productSales[key].qty += (isSplitUnit ? unit : 1) * quantity;
+      productSales[key].qty += getItemStockQty(it);
       productSales[key].orderQty += quantity;
       productSales[key].amount += Number(it.subtotal) || 0;
     });
@@ -835,13 +835,42 @@ function buildProductSummary(orders) {
 
 function parsePurchaseUnit(specName) {
   const raw = String(specName || '').trim();
-  if (!/^\d+(?:\.\d+)?$/.test(raw)) return null;
-  const n = Number(raw);
+  let n = null;
+  if (/^\d+(?:\.\d+)?$/.test(raw)) {
+    n = Number(raw);
+  } else if (/^\d+(?:\.\d+)?\/\d+(?:\.\d+)?$/.test(raw)) {
+    const [numerator, denominator] = raw.split('/').map(Number);
+    n = denominator > 0 ? numerator / denominator : null;
+  }
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function formatQty(n) {
   return Number(n).toFixed(3).replace(/\.?0+$/, '');
+}
+
+function getItemUnitQty(item) {
+  if (item && item.unit_qty !== undefined && item.unit_qty !== null) {
+    const n = Number(item.unit_qty);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return parsePurchaseUnit(item?.specName || item?.spec_name) || null;
+}
+
+function getItemStockQty(item) {
+  if (item && item.purchase_qty !== undefined && item.purchase_qty !== null) {
+    const n = Number(item.purchase_qty);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  const quantity = Number(item?.quantity) || 0;
+  return (getItemUnitQty(item) || 1) * quantity;
+}
+
+function formatOrderItemQty(item) {
+  const count = Number(item?.quantity) || 0;
+  const stockQty = getItemStockQty(item);
+  if (Math.abs(stockQty - count) < 0.0001) return `x${formatQty(count)}`;
+  return `x${formatQty(count)}（计 ${formatQty(stockQty)} 份）`;
 }
 
 function buildPurchaseSummaryText(roundLabel, productSummary) {
@@ -1001,7 +1030,7 @@ function openProductForm(id) {
       </div>
       <div class="form-group">
         <label class="form-label">库存数量</label>
-        <input type="number" id="pf-stock" class="form-input" placeholder="留空表示不限库存" min="0" step="0.01">
+        <input type="number" id="pf-stock" class="form-input" placeholder="留空表示不限库存" min="0" step="0.001">
         <span class="form-hint">设置后库存卖完自动停止下单</span>
       </div>
       <span class="form-error" id="pf-error" style="display:none"></span>
@@ -1356,8 +1385,9 @@ async function submitOrder() {
   // Re-check stock for all items
   for (const item of items) {
     const { data: prod } = await sb.from('products').select('stock').eq('id', item.productId).single();
-    if (prod && prod.stock !== null && prod.stock < item.quantity) {
-      toast(`${item.productName}-${item.specName} 库存不足，仅剩 ${formatQty(prod.stock)} 件`, 'error');
+    const needQty = getItemStockQty(item);
+    if (prod && prod.stock !== null && Number(prod.stock) < needQty) {
+      toast(`${item.productName}-${item.specName} 库存不足，仅剩 ${formatQty(prod.stock)} 份`, 'error');
       closeCheckout();
       loadCustomerProducts();
       return;
@@ -1371,6 +1401,8 @@ async function submitOrder() {
     spec_name: i.specName,
     spec_price: i.specPrice,
     quantity: i.quantity,
+    unit_qty: getItemUnitQty(i) || 1,
+    purchase_qty: getItemStockQty(i),
     subtotal: parseFloat((i.specPrice * i.quantity).toFixed(2))
   }));
 
@@ -1391,7 +1423,7 @@ async function submitOrder() {
   for (const item of items) {
     const { data: prod } = await sb.from('products').select('stock').eq('id', item.productId).single();
     if (prod && prod.stock !== null) {
-      const newStock = Math.max(0, prod.stock - item.quantity);
+      const newStock = Math.max(0, Number(prod.stock) - getItemStockQty(item));
       await sb.from('products').update({ stock: newStock }).eq('id', item.productId);
     }
   }
@@ -1442,7 +1474,7 @@ async function lookupOrders() {
       </div>`;
     items.forEach(it => {
       html += `<div class="order-item-row">
-        <span class="item-name">${escHtml(it.product_name)} - ${escHtml(it.spec_name)} x${it.quantity}</span>
+        <span class="item-name">${escHtml(it.product_name)} - ${escHtml(it.spec_name)} ${formatOrderItemQty(it)}</span>
         <span class="item-price">${it.subtotal.toFixed(2)}</span>
       </div>`;
     });
@@ -1469,7 +1501,7 @@ async function cancelOrder(orderId) {
     for (const item of order.items) {
       const { data: prod } = await sb.from('products').select('stock').eq('id', item.product_id).single();
       if (prod && prod.stock !== null) {
-        await sb.from('products').update({ stock: prod.stock + item.quantity }).eq('id', item.product_id);
+        await sb.from('products').update({ stock: Number(prod.stock) + getItemStockQty(item) }).eq('id', item.product_id);
       }
     }
   }
@@ -1582,7 +1614,7 @@ async function renderOrderManager(el) {
     userOrders.forEach(o => {
       (o.items || []).forEach(it => {
         html += `<div class="order-item-row">
-          <span class="item-name">${escHtml(it.product_name)} - ${escHtml(it.spec_name)} x${it.quantity}</span>
+          <span class="item-name">${escHtml(it.product_name)} - ${escHtml(it.spec_name)} ${formatOrderItemQty(it)}</span>
           <span class="item-price">${it.subtotal.toFixed(2)}</span>
         </div>`;
       });
@@ -1601,10 +1633,10 @@ async function exportOrders() {
   if (!orders || orders.length === 0) { toast('没有可导出的订单', 'info'); return; }
 
   // Sheet 1: User orders
-  const rows1 = [['顾客昵称', '商品名称', '规格', '数量', '单价', '小计', '备注', '应付总额', '下单时间']];
+  const rows1 = [['顾客昵称', '商品名称', '规格', '购买次数', '折算采购数量', '单价', '小计', '备注', '应付总额', '下单时间']];
   orders.forEach(o => {
     (o.items || []).forEach(it => {
-      rows1.push([o.customer_name, it.product_name, it.spec_name, it.quantity, it.spec_price, it.subtotal, o.note || '', o.total_amount, new Date(o.created_at).toLocaleString('zh-CN')]);
+      rows1.push([o.customer_name, it.product_name, it.spec_name, formatQty(it.quantity), formatQty(getItemStockQty(it)), it.spec_price, it.subtotal, o.note || '', o.total_amount, new Date(o.created_at).toLocaleString('zh-CN')]);
     });
   });
 
