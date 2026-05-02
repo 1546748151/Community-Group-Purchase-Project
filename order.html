@@ -923,6 +923,14 @@ function buildProductSummary(orders) {
   });
 }
 
+function hasVisibleOrderItems(order) {
+  return (order?.items || []).some(it => !it.deleted);
+}
+
+function getAdminVisibleOrders(orders) {
+  return (orders || []).filter(hasVisibleOrderItems);
+}
+
 function parsePurchaseUnit(specName) {
   const raw = String(specName || '').trim();
   let n = null;
@@ -1374,7 +1382,7 @@ async function loadProductForEdit(id) {
   let hasOrders = false;
   if (activeRoundId) {
     const { data: allOrders } = await adminRpc('admin_get_orders', { p_round_id: activeRoundId });
-    hasOrders = (allOrders || []).some(o => (o.items || []).some(it => it.product_id === id));
+    hasOrders = (allOrders || []).some(o => (o.items || []).some(it => !it.deleted && it.product_id === id));
   }
 
   const specs = data.specs || [];
@@ -1862,10 +1870,11 @@ async function renderOrderManager(el) {
   }).join('');
 
   // Fetch orders for selected round
-  const { data: orders, error } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
+  const { data: rawOrders, error } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
 
   if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab(\'orders\')">重试</button></div>'; return; }
 
+  const orders = getAdminVisibleOrders(rawOrders);
   const currentRound = allRounds.find(r => r.id === adminRoundId);
   const roundLabel = currentRound ? currentRound.name : '本轮团购';
   const totalOrders = orders?.length || 0;
@@ -1958,7 +1967,8 @@ async function renderOrderManager(el) {
 }
 
 async function exportOrders() {
-  const { data: orders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
+  const { data: rawOrders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
+  const orders = getAdminVisibleOrders(rawOrders);
   if (!orders || orders.length === 0) { toast('没有可导出的订单', 'info'); return; }
 
   // Sheet 1: User orders
@@ -2003,7 +2013,8 @@ async function renderPaymentSummary(el) {
     `<option value="${r.id}" ${r.id === adminRoundId ? 'selected' : ''}>${escHtml(r.name)} ${r.is_active ? '(进行中)' : ''}</option>`
   ).join('');
 
-  const { data: orders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
+  const { data: rawOrders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
+  const orders = getAdminVisibleOrders(rawOrders);
   const fees = adminRoundId ? await getRoundFees(adminRoundId) : normalizeFeeConfig({});
 
   const currentRound = allRounds.find(r => r.id === adminRoundId);
