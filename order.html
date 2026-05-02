@@ -325,27 +325,40 @@ body[data-mode="admin"] .cart-bar{display:none}
 .modal-overlay{background:rgba(7,24,50,.36);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .modal-sheet{border:1px solid var(--color-border);border-bottom:0}
 .app-header{background:rgba(255,255,255,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-bottom:1px solid var(--color-border-light)}
-.customer-hero{padding:10px 2px 16px}
-.brand-line{display:flex;align-items:center;gap:8px;color:var(--color-accent);font-size:1.35rem;font-weight:900}
+.customer-hero{padding:8px 2px 14px}
+.brand-line{display:flex;align-items:center;gap:8px;color:var(--color-accent);font-size:1.4rem;font-weight:900;letter-spacing:0}
 .brand-mark{width:24px;height:24px;border:3px solid currentColor;border-radius:9px 9px 9px 3px;display:inline-block}
-.round-line{display:flex;align-items:center;gap:8px;font-size:1.05rem;font-weight:850;margin-top:14px;color:var(--color-text)}
-.deadline-pill{height:44px;border-radius:14px;background:linear-gradient(135deg,#eef5ff,#e8f1ff);display:flex;align-items:center;justify-content:center;color:var(--color-accent);font-weight:850;margin:14px 0}
-.customer-search{height:52px;border:1px solid var(--color-border);border-radius:16px;background:#fff;display:flex;align-items:center;gap:10px;padding:0 16px;color:var(--color-text-muted);margin-bottom:14px}
-.category-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px;-webkit-overflow-scrolling:touch}
-.category-chip{height:42px;padding:0 17px;border-radius:13px;background:#f2f5fa;display:flex;align-items:center;white-space:nowrap;font-weight:800;color:#344054}
+.customer-hero-card{border:1px solid var(--color-border);border-radius:20px;background:rgba(255,255,255,.86);padding:14px;box-shadow:0 12px 30px rgba(20,74,132,.06);margin-bottom:14px}
+.round-line{display:flex;align-items:center;gap:8px;font-size:1.05rem;font-weight:850;color:var(--color-text);margin-bottom:12px}
+.deadline-pill{height:48px;border-radius:16px;background:linear-gradient(135deg,#0b72ee,#0349b6);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;margin:0;box-shadow:0 12px 26px rgba(6,77,168,.2)}
+.customer-search{height:50px;border:1px solid var(--color-border);border-radius:18px;background:#fff;display:flex;align-items:center;gap:10px;padding:0 17px;color:var(--color-text-muted);margin-bottom:13px;box-shadow:0 8px 20px rgba(20,74,132,.04)}
+.category-row{display:flex;gap:10px;overflow-x:auto;padding:2px 0 4px;margin-bottom:12px;-webkit-overflow-scrolling:touch}
+.category-chip{height:40px;padding:0 18px;border-radius:16px;background:#f2f5fa;display:flex;align-items:center;white-space:nowrap;font-weight:800;color:#344054}
 .category-chip.active{background:linear-gradient(135deg,var(--color-accent),#0b63c7);color:#fff}
-.shop-product{background:#fff;border:1px solid var(--color-border);border-radius:18px;display:grid;grid-template-columns:112px 1fr auto;gap:14px;align-items:center;padding:10px;margin-bottom:12px;box-shadow:0 8px 24px rgba(20,74,132,.06)}
-.shop-product-img{width:112px;height:104px;border-radius:14px;background:linear-gradient(135deg,#f8d493,#fff4da);object-fit:cover}
+.shop-product{position:relative;background:#fff;border:1px solid var(--color-border);border-radius:20px;display:grid;grid-template-columns:102px minmax(0,1fr);gap:13px;align-items:start;padding:12px 14px;margin-bottom:12px;box-shadow:0 10px 28px rgba(20,74,132,.065)}
+.shop-product-img{width:102px;height:100px;border-radius:15px;background:linear-gradient(135deg,#f8d493,#fff4da);object-fit:cover}
 .shop-product-img.placeholder{display:flex;align-items:center;justify-content:center;color:#9b5a1d;font-weight:900}
-.shop-product-name{font-size:1.05rem;font-weight:900;line-height:1.25;margin-bottom:8px}
-.shop-product-spec{font-size:.875rem;color:var(--color-text-secondary);margin-bottom:14px}
-.shop-product-price{font-size:1.35rem;line-height:1;font-weight:900;color:var(--color-danger)}
+.shop-product-body{min-width:0;padding-right:56px}
+.shop-product-name{font-size:1rem;font-weight:900;line-height:1.24;margin-bottom:7px;color:var(--color-text);word-break:break-word}
+.shop-product-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:11px}
+.shop-product-spec,.shop-product-stock{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:8px;background:#f5f8fc;color:var(--color-text-secondary);font-size:.8rem;font-weight:650}
+.shop-product-price{font-size:1.34rem;line-height:1;font-weight:900;color:var(--color-danger)}
 .shop-product-price small{font-size:.8rem;color:var(--color-text-secondary);font-weight:600}
-.add-round{width:42px;height:42px;border-radius:13px;border:0;background:linear-gradient(135deg,var(--color-accent),#0b63c7);color:#fff;font-size:1.75rem;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 22px rgba(6,77,168,.22)}
-.qty-ctrl{border-color:var(--color-border);border-radius:12px;background:#fff}
-.cart-bar{left:50%;bottom:58px;max-width:444px;width:calc(100% - 32px);border:1px solid var(--color-border);border-radius:24px;padding:12px 14px;background:rgba(255,255,255,.96);box-shadow:0 16px 36px rgba(20,74,132,.18)}
-.cart-total{font-size:1.35rem;color:var(--color-danger);font-weight:900}
-.cart-count{font-weight:750}
+.shop-product-action{position:absolute;right:14px;bottom:18px;display:flex;align-items:center;justify-content:center;z-index:2}
+.add-round{width:44px;height:44px;border-radius:50%;border:0;background:linear-gradient(135deg,var(--color-accent),#0b63c7);color:#fff;font-size:1.7rem;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 24px rgba(6,77,168,.25)}
+.shop-product .qty-ctrl{width:104px;height:38px;border-color:var(--color-border);border-radius:13px;background:#fff;box-shadow:0 8px 18px rgba(20,74,132,.08)}
+.shop-product .qty-ctrl button{width:34px;height:36px;color:var(--color-accent);font-weight:850}
+.shop-product .qty-ctrl .qty-val{min-width:34px;font-weight:850}
+.shop-product .spec-grid{display:flex;flex-wrap:wrap;grid-template-columns:none;gap:8px;margin-top:10px;max-width:calc(100% - 2px);padding-right:58px}
+.shop-product .spec-option{width:auto;min-width:58px;max-width:96px;height:32px;padding:0 12px;border-radius:10px;font-size:.82rem;background:#fff;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cart-bar{left:50%;bottom:14px;max-width:444px;width:calc(100% - 28px);border:1px solid var(--color-border);border-radius:24px;padding:12px 14px;background:rgba(255,255,255,.97);box-shadow:0 18px 42px rgba(20,74,132,.2);display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
+.cart-icon{position:relative;width:52px;height:52px;border-radius:18px;background:linear-gradient(135deg,var(--color-accent),#0b63c7);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.65rem;box-shadow:0 10px 22px rgba(6,77,168,.22)}
+.cart-badge{position:absolute;right:-4px;top:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:var(--color-danger);color:#fff;font-size:.75rem;font-weight:900;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+.cart-summary{min-width:0}
+.cart-total{font-size:1.4rem;color:var(--color-danger);font-weight:900;line-height:1.1}
+.cart-total::before{content:'¥';font-size:.82em;margin-right:1px}
+.cart-count{font-weight:750;color:var(--color-text-secondary);font-size:.88rem;margin-top:4px}
+.cart-detail{color:var(--color-accent);font-size:.82rem;font-weight:850;margin-left:6px}
 .admin-shell{display:grid;grid-template-columns:220px 1fr;gap:0;min-height:calc(100dvh - 40px);background:rgba(255,255,255,.88);border:1px solid var(--color-border);border-radius:24px;box-shadow:0 24px 80px rgba(16,66,134,.14);overflow:hidden}
 .admin-side{background:linear-gradient(180deg,#fff,#f4f8ff);border-right:1px solid var(--color-border);padding:24px 18px}
 .admin-brand{display:flex;align-items:center;gap:9px;color:var(--color-accent);font-size:1.5rem;font-weight:900;margin-bottom:28px}
@@ -372,8 +385,13 @@ body[data-mode="admin"] .cart-bar{display:none}
   .purchase-summary-head{display:block}.purchase-summary-head .btn{margin-top:12px;width:100%}
   .purchase-row{grid-template-columns:minmax(0,1fr) auto}.purchase-amount{grid-column:1 / -1;color:var(--color-text-secondary);font-size:.82rem}
   .fee-config-grid{grid-template-columns:1fr}.fee-row{grid-template-columns:1fr auto}
-  .shop-product{grid-template-columns:104px 1fr auto}
-  .shop-product-img{width:104px;height:98px}
+  .shop-product{grid-template-columns:96px minmax(0,1fr);gap:12px;padding:12px}
+  .shop-product-img{width:96px;height:96px}
+  .shop-product-body{padding-right:50px}
+  .shop-product-name{font-size:.96rem}
+  .shop-product .spec-grid{padding-right:48px}
+  .shop-product .spec-option{min-width:52px;height:30px;padding:0 10px}
+  .shop-product .qty-ctrl{width:98px}
 }
 </style>
 </head>
@@ -431,8 +449,10 @@ body[data-mode="admin"] .cart-bar{display:none}
       <button class="btn btn-ghost btn-sm" onclick="showOrderLookup()">查/改订单</button>
     </div>
     <div class="customer-hero">
-      <div class="round-line">美好小区团购群 <span style="color:var(--color-text-muted)">›</span></div>
-      <div class="deadline-pill" id="customer-deadline-pill">请在截止前下单</div>
+      <div class="customer-hero-card">
+        <div class="round-line">美好小区团购群 <span style="color:var(--color-text-muted)">›</span></div>
+        <div class="deadline-pill" id="customer-deadline-pill">请在截止前下单</div>
+      </div>
       <div class="customer-search">⌕ <span>搜索商品名称</span></div>
       <div class="category-row">
         <div class="category-chip active">全部</div>
@@ -463,9 +483,13 @@ body[data-mode="admin"] .cart-bar{display:none}
 
     <!-- Cart Bar -->
     <div id="cart-bar" class="cart-bar hidden">
+      <div class="cart-icon">
+        <i class="ph ph-shopping-cart-simple"></i>
+        <span class="cart-badge" id="cart-badge">0</span>
+      </div>
       <div class="cart-summary">
         <div class="cart-total" id="cart-total-amount">0.00</div>
-        <div class="cart-count" id="cart-item-count">0 件商品</div>
+        <div class="cart-count"><span id="cart-item-count">0 件商品</span><span class="cart-detail">明细⌃</span></div>
       </div>
       <button class="btn btn-primary btn-lg" onclick="openCheckout()" id="btn-checkout">
         去下单
@@ -614,12 +638,9 @@ async function initApp() {
     const { error } = await sb.from('settings').select('key').limit(1);
     if (error) throw error;
 
-    // Check if returning admin
-    const session = getSession();
-    if (session && session.expires > Date.now()) {
-      switchMode('admin');
-    } else if (window.location.hash === '#admin') {
-      switchMode('admin-login');
+    if (window.location.hash === '#admin') {
+      const session = getSession();
+      switchMode(session && session.expires > Date.now() ? 'admin' : 'admin-login');
     } else {
       switchMode('customer');
     }
@@ -664,7 +685,12 @@ function saveSetup() {
   initApp();
 }
 window.addEventListener('hashchange', () => {
-  if (window.location.hash === '#admin') switchMode('admin-login');
+  if (window.location.hash === '#admin') {
+    const session = getSession();
+    switchMode(session && session.expires > Date.now() ? 'admin' : 'admin-login');
+  } else {
+    switchMode('customer');
+  }
 });
 
 // ============================================================
@@ -704,12 +730,14 @@ async function adminLogin() {
 
   setSession();
   document.getElementById('admin-password-input').value = '';
+  if (window.location.hash !== '#admin') window.location.hash = '#admin';
   switchMode('admin');
   toast('欢迎回来，团长');
 }
 
 function adminLogout() {
   clearSession();
+  if (window.location.hash === '#admin') history.replaceState(null, '', window.location.pathname);
   switchMode('customer');
   toast('已退出后台');
 }
@@ -1182,6 +1210,7 @@ async function loadCustomerProducts() {
     const imgHtml = p.image
       ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
       : `<div class="shop-product-img placeholder">邻选</div>`;
+    const stockHtml = p.stock !== null && !stockSoldOut ? `<span class="shop-product-stock">剩余 ${p.stock} 份</span>` : '';
     const actionHtml = stockSoldOut
       ? `<span class="badge badge-muted">已售罄</span>`
       : selected
@@ -1193,17 +1222,17 @@ async function loadCustomerProducts() {
         : `<button class="add-round" onclick="selectSpec('${p.id}','${escAttr(firstSpec.name)}',${firstSpec.price},'${escAttr(p.name)}')">+</button>`;
     html += `<div class="shop-product" style="opacity:${stockSoldOut ? '.55' : '1'}">
       ${imgHtml}
-      <div>
+      <div class="shop-product-body">
         <div class="shop-product-name">${escHtml(p.name)}</div>
-        <div class="shop-product-spec">${escHtml(displaySpec)}${p.stock !== null && !stockSoldOut ? ` · 剩余 ${p.stock}` : ''}</div>
+        <div class="shop-product-meta"><span class="shop-product-spec">${escHtml(displaySpec)}</span>${stockHtml}</div>
         <div class="shop-product-price">¥${Number(displayPrice || 0).toFixed(2)} <small>/份</small></div>
-        ${specs.length > 1 ? `<div class="spec-grid" style="margin-top:10px">${specs.map(s => {
+        ${specs.length > 1 ? `<div class="spec-grid">${specs.map(s => {
           const cartKey = `${p.id}-${s.name}`;
           const inCart = cart[cartKey];
           return `<div class="spec-option ${inCart ? 'selected' : ''} ${stockSoldOut ? 'disabled' : ''}" onclick="${stockSoldOut ? '' : `selectSpec('${p.id}','${escAttr(s.name)}',${s.price},'${escAttr(p.name)}')`}">${escHtml(s.name)}</div>`;
         }).join('')}</div>` : ''}
       </div>
-      <div>${actionHtml}</div>
+      <div class="shop-product-action">${actionHtml}</div>
     </div>`;
   });
   productsEl.innerHTML = html;
@@ -1243,6 +1272,8 @@ function updateCartBar() {
     bar.classList.remove('hidden');
     document.getElementById('cart-total-amount').textContent = total.toFixed(2);
     document.getElementById('cart-item-count').textContent = `${count} 件商品`;
+    const badge = document.getElementById('cart-badge');
+    if (badge) badge.textContent = count;
   }
 }
 
