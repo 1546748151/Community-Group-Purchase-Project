@@ -1125,10 +1125,14 @@ async function saveRoundFees() {
     other: document.getElementById('fee-other')?.value,
     note: document.getElementById('fee-note')?.value
   });
-  const { error } = await adminRpc('admin_save_round_fees', { p_round_id: adminRoundId, p_fees: fees });
-  if (error) { toast('费用保存失败，请确认数据库已更新', 'error'); return; }
-  toast('费用已保存');
-  renderAdminTab('summary');
+  try {
+    const { error } = await adminRpc('admin_save_round_fees', { p_round_id: adminRoundId, p_fees: fees });
+    if (error) { toast('费用保存失败，请确认数据库已更新', 'error'); return; }
+    toast('费用已保存');
+    renderAdminTab('summary');
+  } catch (e) {
+    toast('操作失败，请重新登录后重试', 'error');
+  }
 }
 
 // ============================================================
@@ -1315,21 +1319,28 @@ function openProductForm(id) {
     const payload = { name, image, specs, tags, stock, is_active: isEdit ? editingProductActiveState : true };
 
     btn.disabled = true; btn.textContent = '保存中...';
-    const result = await adminRpc('admin_save_product', {
-      p_id: isEdit ? id : null,
-      p_name: payload.name,
-      p_image: payload.image,
-      p_specs: payload.specs,
-      p_tags: payload.tags,
-      p_stock: payload.stock,
-      p_is_active: payload.is_active
-    });
+    try {
+      const result = await adminRpc('admin_save_product', {
+        p_id: isEdit ? id : null,
+        p_name: payload.name,
+        p_image: payload.image,
+        p_specs: payload.specs,
+        p_tags: payload.tags,
+        p_stock: payload.stock,
+        p_is_active: payload.is_active
+      });
 
-    if (result.error) { errEl.textContent = '保存失败: ' + result.error.message; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品'; return; }
+      if (result.error) { errEl.textContent = '保存失败: ' + result.error.message; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品'; return; }
 
-    modal.remove();
-    renderAdminTab('products');
-    toast(isEdit ? '商品已更新' : '商品已添加');
+      modal.remove();
+      renderAdminTab('products');
+      toast(isEdit ? '商品已更新' : '商品已添加');
+    } catch (e) {
+      errEl.textContent = '操作失败，请重新登录后重试';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = isEdit ? '保存修改' : '添加商品';
+    }
   };
 }
 
@@ -1429,10 +1440,14 @@ async function toggleProduct(id, currentActive) {
 
 async function deleteProduct(id) {
   if (!confirm('确定删除这个商品吗？该商品也会从本轮已提交订单中移除，并重新计算订单金额。此操作不可撤销。')) return;
-  const { error } = await adminRpc('admin_delete_product', { p_id: id });
-  if (error) { toast('删除失败: ' + error.message, 'error'); return; }
-  renderAdminTab('products');
-  toast('商品已删除');
+  try {
+    const { error } = await adminRpc('admin_delete_product', { p_id: id });
+    if (error) { toast('删除失败: ' + error.message, 'error'); return; }
+    renderAdminTab('products');
+    toast('商品已删除');
+  } catch (e) {
+    toast('操作失败，请重新登录后重试', 'error');
+  }
 }
 
 // ============================================================
@@ -2290,16 +2305,21 @@ function createNewRound() {
     const errEl = document.getElementById('round-error');
     if (!name) { errEl.textContent = '请输入轮次名称'; errEl.style.display = 'block'; return; }
 
-    const { data, error } = await adminRpc('admin_create_round', {
-      p_name: name,
-      p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null
-    });
-    if (error) { errEl.textContent = '创建失败: ' + error.message; errEl.style.display = 'block'; return; }
+    try {
+      const { data, error } = await adminRpc('admin_create_round', {
+        p_name: name,
+        p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null
+      });
+      if (error) { errEl.textContent = '创建失败: ' + error.message; errEl.style.display = 'block'; return; }
 
-    adminRoundId = data;
-    modal.remove();
-    renderAdminTab('settings');
-    toast('新轮次已创建并启用');
+      adminRoundId = data;
+      modal.remove();
+      renderAdminTab('settings');
+      toast('新轮次已创建并启用');
+    } catch (e) {
+      errEl.textContent = '操作失败，请重新登录后重试';
+      errEl.style.display = 'block';
+    }
   };
 }
 
@@ -2335,59 +2355,80 @@ async function editRound(id) {
     const errEl = document.getElementById('round-error');
     if (!name) { errEl.textContent = '请输入轮次名称'; errEl.style.display = 'block'; return; }
 
-    const { error } = await adminRpc('admin_update_round', {
-      p_id: id,
-      p_name: name,
-      p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null
-    });
-    if (error) { errEl.textContent = '保存失败: ' + error.message; errEl.style.display = 'block'; return; }
+    try {
+      const { error } = await adminRpc('admin_update_round', {
+        p_id: id,
+        p_name: name,
+        p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null
+      });
+      if (error) { errEl.textContent = '保存失败: ' + error.message; errEl.style.display = 'block'; return; }
 
-    modal.remove();
-    renderAdminTab('settings');
-    toast('轮次已更新');
+      modal.remove();
+      renderAdminTab('settings');
+      toast('轮次已更新');
+    } catch (e) {
+      errEl.textContent = '操作失败，请重新登录后重试';
+      errEl.style.display = 'block';
+    }
   };
 }
 
 async function activateRound(id) {
   if (!confirm('启用这个轮次将自动关闭其他轮次。确认吗？')) return;
-  const { error } = await adminRpc('admin_activate_round', { p_id: id });
-  if (error) { toast('启用失败', 'error'); return; }
-  adminRoundId = id;
-  renderAdminTab('settings');
-  toast('轮次已启用');
+  try {
+    const { error } = await adminRpc('admin_activate_round', { p_id: id });
+    if (error) { toast('启用失败', 'error'); return; }
+    adminRoundId = id;
+    renderAdminTab('settings');
+    toast('轮次已启用');
+  } catch (e) {
+    toast('操作失败，请重新登录后重试', 'error');
+  }
 }
 
 async function deleteRound(id, name) {
   if (!confirm(`确定删除「${name}」吗？该轮次的所有订单也会一起删除，此操作不可撤销。`)) return;
-  const { error } = await adminRpc('admin_delete_round', { p_id: id });
-  if (error) {
-    toast(error.message.includes('cannot delete active round') ? '不能删除进行中的轮次' : '删除失败', 'error');
-    return;
+  try {
+    const { error } = await adminRpc('admin_delete_round', { p_id: id });
+    if (error) {
+      toast(error.message.includes('cannot delete active round') ? '不能删除进行中的轮次' : '删除失败', 'error');
+      return;
+    }
+    if (adminRoundId === id) adminRoundId = null;
+    renderAdminTab('settings');
+    toast('轮次和订单已删除');
+  } catch (e) {
+    toast('操作失败，请重新登录后重试', 'error');
   }
-  if (adminRoundId === id) adminRoundId = null;
-  renderAdminTab('settings');
-  toast('轮次和订单已删除');
 }
 
 async function saveSiteTitle() {
   const input = document.getElementById('site-title-input');
   const title = input.value.trim();
   if (!title) { toast('请输入标题名称', 'error'); return; }
-  const { error } = await adminRpc('admin_set_site_title', { p_title: title });
-  if (error) { toast('保存失败', 'error'); return; }
-  await loadSiteTitle();
-  toast('标题已保存');
+  try {
+    const { error } = await adminRpc('admin_set_site_title', { p_title: title });
+    if (error) { toast('保存失败', 'error'); return; }
+    await loadSiteTitle();
+    toast('标题已保存');
+  } catch (e) {
+    toast('操作失败，请重新登录后重试', 'error');
+  }
 }
 
 async function changePassword() {
   const pw = document.getElementById('new-password').value.trim();
   if (!pw) { toast('请输入密码', 'error'); return; }
   if (pw.length < 4) { toast('密码至少4位', 'error'); return; }
-  const hash = await hashPassword(pw);
-  const { error } = await adminRpc('admin_set_password', { p_pw_hash: hash });
-  if (error) { toast('修改失败', 'error'); return; }
-  document.getElementById('new-password').value = '';
-  toast('密码已更新');
+  try {
+    const hash = await hashPassword(pw);
+    const { error } = await adminRpc('admin_set_password', { p_pw_hash: hash });
+    if (error) { toast('修改失败', 'error'); return; }
+    document.getElementById('new-password').value = '';
+    toast('密码已更新');
+  } catch (e) {
+    toast('操作失败，请重新登录后重试', 'error');
+  }
 }
 
 // ============================================================
