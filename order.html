@@ -232,6 +232,16 @@ body{
 .product-card .product-prices{font-size:.875rem;color:var(--color-text-secondary);margin-bottom:12px}
 .product-card .stock-info{font-size:.75rem;color:var(--color-text-muted);margin-top:8px}
 
+/* --- Sold-Out Divider --- */
+.sold-out-divider{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 0 8px;margin-top:4px;
+  color:var(--color-text-muted);font-size:.8125rem;font-weight:500;
+}
+.sold-out-divider::before,.sold-out-divider::after{
+  content:'';flex:1;height:1px;background:var(--color-border-light);
+}
+
 /* --- Admin Nav --- */
 .admin-nav{display:flex;gap:8px;overflow-x:auto;padding:4px 0;margin-bottom:16px;-webkit-overflow-scrolling:touch}
 .admin-nav button{
@@ -861,10 +871,10 @@ async function renderAdminTab(tab) {
   if (!el) return;
   el.style.display = 'block';
 
-  // For orders/payment tabs, pre-fetch active round
+  // For orders/payment tabs, always sync to current active round
   if (tab === 'orders' || tab === 'summary') {
     const active = await getActiveRound();
-    if (!adminRoundId) adminRoundId = active ? active.id : null;
+    adminRoundId = active ? active.id : null;
   }
   switch(tab) {
     case 'products': await renderProductManager(el); break;
@@ -1302,7 +1312,7 @@ function openProductForm(id) {
       image = urlData.publicUrl;
     }
 
-    const payload = { name, image, specs, tags, stock, is_active: true };
+    const payload = { name, image, specs, tags, stock, is_active: isEdit ? editingProductActiveState : true };
 
     btn.disabled = true; btn.textContent = '保存中...';
     const result = await adminRpc('admin_save_product', {
@@ -1364,6 +1374,7 @@ function addSpecRow() {
 async function loadProductForEdit(id) {
   const { data } = await adminRpc('admin_get_product', { p_id: id });
   if (!data) return;
+  editingProductActiveState = data.is_active !== false; // 捕获当前上下架状态
   document.getElementById('pf-name').value = data.name || '';
   // Handle image: show preview if exists
   if (data.image) {
@@ -1406,10 +1417,14 @@ async function loadProductForEdit(id) {
 }
 
 async function toggleProduct(id, currentActive) {
-  const { error } = await adminRpc('admin_toggle_product', { p_id: id, p_is_active: !currentActive });
-  if (error) { toast('操作失败', 'error'); return; }
-  renderAdminTab('products');
-  toast(currentActive ? '商品已下架' : '商品已上架');
+  try {
+    const { error } = await adminRpc('admin_toggle_product', { p_id: id, p_is_active: !currentActive });
+    if (error) { toast('操作失败: ' + error.message, 'error'); return; }
+    renderAdminTab('products');
+    toast(currentActive ? '商品已下架' : '商品已上架');
+  } catch (e) {
+    toast('操作失败，请重新登录后重试', 'error');
+  }
 }
 
 async function deleteProduct(id) {
@@ -1427,6 +1442,7 @@ let cart = {};
 let activeRoundId = null;
 let cachedProducts = [];
 let cachedSummaryByProduct = {};
+let editingProductActiveState = true; // 编辑商品时保留原上下架状态
 
 async function loadCustomerProducts() {
   const productsEl = document.getElementById('customer-products');
@@ -1486,13 +1502,27 @@ async function loadCustomerProducts() {
     categoryRow.innerHTML = ['全部', ...allTags].map(tag => `<button class="category-chip ${customerSelectedTag === tag ? 'active' : ''}" onclick="customerSelectedTag='${escAttr(tag)}';loadCustomerProducts()">${escHtml(tag)}</button>`).join('');
   }
   const visibleProducts = products.filter(p => productMatchesFilter(p, customerSearchQuery, customerSelectedTag));
+  // 售罄商品置底：非售罄在前，售罄在后，各自保持原有顺序
+  visibleProducts.sort((a, b) => {
+    const aOut = a.stock !== null && a.stock <= 0;
+    const bOut = b.stock !== null && b.stock <= 0;
+    if (aOut && !bOut) return 1;
+    if (!aOut && bOut) return -1;
+    return 0;
+  });
   let currentProductSummary = [];
   cachedSummaryByProduct = {};
   currentProductSummary.forEach(row => { cachedSummaryByProduct[row.productId || row.name] = row; });
   cachedProducts = products;
 
   let html = '';
+  let hitSoldOut = false;
   visibleProducts.forEach(p => {
+    const isSoldOut = p.stock !== null && p.stock <= 0;
+    if (isSoldOut && !hitSoldOut) {
+      hitSoldOut = true;
+      html += '<div class="sold-out-divider"><span>以下商品已售罄</span></div>';
+    }
     html += buildProductCardHtml(p);
   });
   if (visibleProducts.length === 0) {
@@ -1858,7 +1888,7 @@ async function renderOrderManager(el) {
 
   // Fetch rounds for selector
   const allRounds = await getRounds();
-  if (!adminRoundId && allRounds.length > 0) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : allRounds[0].id; }
+  if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : (allRounds[0]?.id || null); }
 
   // Build round selector
   let roundOpts = allRounds.map(r => {
@@ -2007,7 +2037,7 @@ async function renderPaymentSummary(el) {
   el.innerHTML = '<div class="skel-line skeleton"></div><div class="skel-line skeleton"></div>';
 
   const allRounds = await getRounds();
-  if (!adminRoundId && allRounds.length > 0) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : allRounds[0].id; }
+  if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : (allRounds[0]?.id || null); }
 
   let roundOpts = allRounds.map(r =>
     `<option value="${r.id}" ${r.id === adminRoundId ? 'selected' : ''}>${escHtml(r.name)} ${r.is_active ? '(进行中)' : ''}</option>`
