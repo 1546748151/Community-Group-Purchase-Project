@@ -1,504 +1,244 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-variation="editorial-warm">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>邻选 — 社区团购下单工具</title>
-<meta name="description" content="极简二维码下单，让社区团购告别 Excel 接龙">
+<title>邻选 - 社区团购下单工具</title>
+<meta name="description" content="告别群接龙。团长设置商品生成二维码，邻居扫码下单，订单自动汇总，一键复制收款清单。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='8' width='18' height='16' rx='6' fill='none' stroke='%23064da8' stroke-width='3'/%3E%3Cpath d='M22 13h3a4 4 0 0 1 0 8h-3' fill='none' stroke='%23064da8' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Satoshi:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Geist:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-/* ============================================================
-   DESIGN VARIATIONS
-   ============================================================ */
-:root {
-  --font-display: 'Playfair Display', Georgia, serif;
-  --font-body: 'Satoshi', 'Geist', -apple-system, sans-serif;
-  --color-bg: #faf8f5;
-  --color-surface: #ffffff;
-  --color-text: #1a1815;
-  --color-text-secondary: #78716c;
-  --color-text-muted: #a8a29e;
-  --color-accent: #15803d;
-  --color-accent-light: #f0fdf4;
-  --color-accent-border: #bbf7d0;
-  --color-border: #e7e5e2;
-  --color-warm: #fef7ed;
-  --color-warm-border: #fed7aa;
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
-  --section-gap: 96px;
+:root{
+  --blue:#064da8;
+  --blue-2:#0b63c7;
+  --blue-3:#003b86;
+  --ink:#101828;
+  --muted:#5f6f89;
+  --soft:#f1f7ff;
+  --soft-2:#e8f2ff;
+  --line:#d8e4f5;
+  --card:#fff;
+  --red:#ef2f2f;
+  --shadow:0 24px 80px rgba(16,66,134,.14);
+  --shadow-soft:0 16px 48px rgba(20,74,132,.09);
+  --radius:22px;
+  --sans:Geist,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --serif:"Playfair Display",Georgia,serif;
 }
-
-[data-variation="swiss-precision"] {
-  --font-display: 'Satoshi', 'Geist', sans-serif;
-  --font-body: 'Satoshi', 'Geist', sans-serif;
-  --color-bg: #f8fafc;
-  --color-text: #0f172a;
-  --color-text-secondary: #64748b;
-  --color-accent: #0ea5e9;
-  --color-accent-light: #f0f9ff;
-  --color-accent-border: #bae6fd;
-  --color-warm: #f8fafc;
-  --color-warm-border: #e2e8f0;
-}
-
-[data-variation="dark-monograph"] {
-  --font-display: 'Playfair Display', Georgia, serif;
-  --font-body: 'Satoshi', 'Geist', sans-serif;
-  --color-bg: #171614;
-  --color-surface: #1f1d1c;
-  --color-text: #e8e6e3;
-  --color-text-secondary: #a8a29e;
-  --color-text-muted: #78716c;
-  --color-accent: #4ade80;
-  --color-accent-light: #052e16;
-  --color-accent-border: #166534;
-  --color-border: #292524;
-  --color-warm: #1c1917;
-  --color-warm-border: #44403c;
-}
-
-/* ============================================================
-   BASE
-   ============================================================ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{font-size:16px;scroll-behavior:smooth;-webkit-text-size-adjust:100%}
-body{
-  font-family:var(--font-body);
-  background:var(--color-bg);
-  color:var(--color-text);
-  line-height:1.7;
-  -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
-}
-.container{max-width:1200px;margin:0 auto;padding:0 24px}
-
-/* ============================================================
-   TYPOGRAPHY
-   ============================================================ */
-h1,h2,h3,.display{font-family:var(--font-display)}
-.display-xl{font-size:clamp(3rem,6vw,5.5rem);font-weight:600;line-height:.92;letter-spacing:-.025em;text-wrap:balance}
-.display-lg{font-size:clamp(2.25rem,4vw,3.5rem);font-weight:600;line-height:1.0;letter-spacing:-.02em;text-wrap:balance}
-.display-md{font-size:clamp(1.75rem,3vw,2.5rem);font-weight:600;line-height:1.05;letter-spacing:-.015em}
-.section-label{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--color-accent);margin-bottom:16px}
-.body-lg{font-size:clamp(1.0625rem,1.5vw,1.25rem);color:var(--color-text-secondary);line-height:1.8;text-wrap:balance}
-.body-text{font-size:1rem;color:var(--color-text-secondary);line-height:1.75}
-.caption{font-size:.8125rem;color:var(--color-text-muted)}
-
-/* ============================================================
-   BUTTONS
-   ============================================================ */
-.btn{
-  display:inline-flex;align-items:center;gap:8px;font-family:var(--font-body);
-  font-size:.9375rem;font-weight:500;padding:14px 28px;border:none;border-radius:var(--radius-md);
-  cursor:pointer;text-decoration:none;transition:transform .15s cubic-bezier(.22,.8,.32,1.05),background .2s ease;
-  user-select:none;
-}
-.btn:active{transform:scale(.97)}
-.btn-primary{background:var(--color-accent);color:#fff}
-.btn-primary:hover{background:var(--color-accent);filter:brightness(.9)}
-.btn-outline{background:transparent;color:var(--color-text);border:1.5px solid var(--color-border)}
-.btn-outline:hover{border-color:var(--color-text)}
-
-/* ============================================================
-   NAV
-   ============================================================ */
-.nav{
-  position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 24px;
-  display:flex;justify-content:space-between;align-items:center;
-  transition:background .3s ease,backdrop-filter .3s ease;
-}
-.nav.scrolled{background:rgba(250,248,245,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-.nav-brand{font-family:var(--font-display);font-size:1.5rem;font-weight:600;color:var(--color-text);text-decoration:none}
-
-/* ============================================================
-   GRAIN OVERLAY
-   ============================================================ */
-.grain{
-  position:fixed;inset:0;z-index:200;pointer-events:none;opacity:.03;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-/* ============================================================
-   HERO - Split Screen
-   ============================================================ */
-.hero{
-  min-height:100dvh;display:grid;grid-template-columns:1fr 1fr;align-items:center;
-  padding:80px 24px 48px;gap:48px;
-}
-.hero-content{padding-right:24px}
-.hero-title{margin-bottom:24px}
-.hero-desc{margin-bottom:32px;max-width:48ch}
-.hero-actions{display:flex;gap:12px;flex-wrap:wrap}
-.hero-visual{
-  position:relative;height:100%;min-height:480px;
-  display:flex;align-items:center;justify-content:center;
-}
-.hero-card{
-  background:var(--color-surface);border:1px solid var(--color-border);
-  border-radius:var(--radius-xl);padding:32px;width:100%;max-width:360px;
-  box-shadow:0 2px 4px rgba(0,0,0,.02),0 12px 40px -16px rgba(0,0,0,.08);
-  transform:rotate(1deg);transition:transform .4s cubic-bezier(.22,.8,.32,1.05);
-}
-.hero-card:hover{transform:rotate(0deg)}
-.hero-card .qrcode-placeholder{
-  width:160px;height:160px;margin:0 auto 20px;background:var(--color-border);
-  border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;
-}
-.hero-card .mock-title{font-size:.875rem;font-weight:600;text-align:center;margin-bottom:12px}
-.hero-card .mock-items{display:flex;flex-direction:column;gap:8px}
-.hero-card .mock-item{
-  display:flex;justify-content:space-between;padding:8px 0;
-  border-bottom:1px solid var(--color-border);font-size:.8125rem;
-}
-
-/* ============================================================
-   PAIN POINTS - Comparison
-   ============================================================ */
-.pain-section{padding:var(--section-gap) 24px}
-.comparison-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:48px}
-.compare-col{border-radius:var(--radius-lg);padding:32px}
-.compare-col.old{background:#fef2f2;border:1px solid #fecaca}
-.compare-col.new{background:var(--color-accent-light);border:1px solid var(--color-accent-border)}
-.compare-col h3{font-family:var(--font-display);font-size:1.25rem;margin-bottom:16px}
-.compare-col ul{list-style:none;display:flex;flex-direction:column;gap:10px}
-.compare-col li{font-size:.9375rem;display:flex;align-items:center;gap:8px}
-.compare-col li svg{flex-shrink:0}
-
-/* ============================================================
-   FEATURES - Bento Grid
-   ============================================================ */
-.features-section{padding:var(--section-gap) 24px;background:var(--color-surface)}
-.bento-grid{
-  display:grid;grid-template-columns:2fr 1fr 1fr;
-  grid-template-rows:auto auto;gap:24px;margin-top:48px;
-}
-.bento-card{
-  background:var(--color-bg);border:1px solid var(--color-border);
-  border-radius:var(--radius-xl);padding:28px;
-  transition:transform .3s cubic-bezier(.22,.8,.32,1.05),box-shadow .3s ease;
-}
-.bento-card:hover{transform:translateY(-2px);box-shadow:0 8px 30px -12px rgba(0,0,0,.06)}
-.bento-card.feature-main{grid-row:span 2}
-.bento-card h4{font-family:var(--font-display);font-size:1.25rem;font-weight:600;margin-bottom:8px}
-.bento-card p{font-size:.875rem;color:var(--color-text-secondary);line-height:1.65}
-.bento-icon{
-  width:44px;height:44px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;
-  margin-bottom:16px;background:var(--color-accent-light);color:var(--color-accent);
-}
-
-/* ============================================================
-   FLOW - Horizontal Steps
-   ============================================================ */
-.flow-section{padding:var(--section-gap) 24px}
-.flow-steps{
-  display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-top:48px;
-  counter-reset:step;
-}
-.flow-step{
-  position:relative;padding:28px 24px;background:var(--color-surface);
-  border:1px solid var(--color-border);border-radius:var(--radius-lg);
-}
-.flow-step::before{
-  counter-increment:step;content:counter(step);
-  font-family:var(--font-display);font-size:2.5rem;font-weight:600;color:var(--color-accent-light);
-  position:absolute;top:12px;right:16px;line-height:1;
-}
-.flow-step h4{font-family:var(--font-display);font-size:1.125rem;margin-bottom:8px;position:relative;z-index:1}
-.flow-step p{font-size:.8125rem;color:var(--color-text-secondary);line-height:1.6}
-
-/* ============================================================
-   CTA
-   ============================================================ */
-.cta-section{padding:var(--section-gap) 24px;text-align:center}
-.cta-section .display-md{margin-bottom:16px}
-.cta-section .body-lg{margin-bottom:32px;max-width:56ch;margin-left:auto;margin-right:auto}
-
-/* ============================================================
-   FOOTER
-   ============================================================ */
-.footer{padding:40px 24px;border-top:1px solid var(--color-border);text-align:center}
-
-/* ============================================================
-   SCROLL REVEAL
-   ============================================================ */
-.reveal{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s cubic-bezier(.22,.8,.32,1.05)}
-.reveal.visible{opacity:1;transform:translateY(0)}
-.reveal-delay-1{transition-delay:.1s}
-.reveal-delay-2{transition-delay:.2s}
-.reveal-delay-3{transition-delay:.3s}
-
-/* ============================================================
-   TWEAKS PANEL
-   ============================================================ */
-.tweaks-panel{
-  position:fixed;bottom:16px;right:16px;z-index:300;display:none;
-  background:var(--color-surface);border:1px solid var(--color-border);
-  border-radius:var(--radius-lg);padding:20px;box-shadow:0 8px 32px rgba(0,0,0,.08);
-  min-width:240px;
-}
-.tweaks-panel.open{display:block}
-.tweaks-toggle{
-  position:fixed;bottom:16px;right:16px;z-index:301;
-  width:40px;height:40px;border-radius:50%;border:1px solid var(--color-border);
-  background:var(--color-surface);cursor:pointer;display:flex;align-items:center;justify-content:center;
-  font-size:1.125rem;display:none;
-}
-.tweaks-toggle.open{display:flex}
-.tweak-group{margin-bottom:12px}
-.tweak-group label{display:block;font-size:.75rem;font-weight:600;margin-bottom:4px;color:var(--color-text-secondary)}
-.tweak-group select,.tweak-group input{width:100%;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-sm);font-family:var(--font-body);font-size:.8125rem;background:var(--color-bg)}
-
-/* ============================================================
-   RESPONSIVE
-   ============================================================ */
-@media (max-width:900px){
-  :root{--section-gap:64px}
-  .hero{grid-template-columns:1fr;gap:32px;padding-top:96px;min-height:auto}
-  .hero-visual{min-height:320px}
-  .comparison-grid{grid-template-columns:1fr}
-  .bento-grid{grid-template-columns:1fr;grid-template-rows:auto}
-  .flow-steps{grid-template-columns:1fr 1fr}
-}
-@media (max-width:600px){
-  .container{padding:0 16px}
-  .hero{padding:88px 16px 32px}
-  .hero-card{transform:none}
-  .flow-steps{grid-template-columns:1fr}
-  .hero-actions{flex-direction:column}
-  .hero-actions .btn{width:100%;justify-content:center}
-}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{font-family:var(--sans);background:#f8fbff;color:var(--ink);line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.shell{width:min(1180px,calc(100vw - 32px));margin:18px auto 36px;background:linear-gradient(145deg,#fff 0%,#eff6ff 48%,#fff 100%);border:1px solid var(--line);border-radius:26px;overflow:hidden;box-shadow:0 30px 90px rgba(20,74,132,.12)}
+.nav{height:78px;display:flex;align-items:center;justify-content:space-between;padding:0 58px;position:sticky;top:0;z-index:20;background:rgba(255,255,255,.78);backdrop-filter:blur(18px);border-bottom:1px solid rgba(216,228,245,.72)}
+.brand{display:flex;align-items:center;gap:10px;color:var(--blue);font-size:28px;font-weight:900;letter-spacing:0}
+.mark{width:32px;height:32px;border:3px solid var(--blue);border-radius:12px 12px 12px 4px;position:relative;flex:0 0 auto}
+.mark:after{content:"";position:absolute;width:12px;height:12px;border:3px solid var(--blue);border-left:0;border-bottom:0;right:-8px;top:7px;border-radius:4px}
+.links{display:flex;align-items:center;gap:34px;font-size:14px;font-weight:700}
+.links a:first-child{color:var(--blue);border-bottom:2px solid var(--blue);padding-bottom:10px}
+.nav-actions{display:flex;align-items:center;gap:14px;font-size:14px;font-weight:800}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border-radius:13px;font-weight:850;transition:transform .18s ease,box-shadow .18s ease,background .18s ease;border:1px solid transparent;white-space:nowrap}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:linear-gradient(135deg,var(--blue),var(--blue-2));color:#fff;box-shadow:0 12px 24px rgba(6,77,168,.24)}
+.btn-primary:hover{box-shadow:0 16px 32px rgba(6,77,168,.28)}
+.btn-outline{background:rgba(255,255,255,.86);color:var(--blue);border-color:#bcd0eb;box-shadow:0 10px 28px rgba(20,74,132,.08)}
+.btn-sm{height:42px;padding:0 18px}
+.btn-lg{height:72px;padding:0 24px;min-width:206px;justify-content:flex-start}
+.btn-ico{width:34px;height:34px;border:2px solid currentColor;border-radius:12px;position:relative}
+.btn-ico:after{content:"";position:absolute;width:10px;height:10px;border:2px solid currentColor;border-left:0;border-bottom:0;right:-6px;top:8px;border-radius:3px}
+.btn-text strong{display:block;font-size:17px;line-height:1.2}.btn-text small{display:block;font-size:12px;font-weight:700;opacity:.76;margin-top:4px}
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:44px 58px 58px;position:relative;min-height:640px}
+.hero-copy{padding-top:72px;position:relative;z-index:2}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;height:34px;border-radius:999px;background:#eaf3ff;color:var(--blue);padding:0 13px;font-size:13px;font-weight:850;margin-bottom:18px}
+h1{font-family:var(--serif);font-size:72px;line-height:1.04;margin:0 0 28px;letter-spacing:0;font-weight:800}
+h1 span{color:var(--blue)}
+.hero-copy p{font-size:17px;line-height:2;color:#26364f;margin:0 0 34px}
+.cta-row{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:58px}
+.trust{display:flex;gap:16px;background:rgba(255,255,255,.86);border:1px solid var(--line);border-radius:14px;padding:12px 20px;width:max-content;box-shadow:0 10px 28px rgba(20,74,132,.08)}
+.trust span{display:flex;align-items:center;gap:7px;color:#234466;font-size:13px;font-weight:700}
+.trust span:before{content:"";width:18px;height:18px;border-radius:6px;border:2px solid var(--blue)}
+.dessert{position:absolute;left:-78px;bottom:-8px;width:575px;height:326px;background:url("assets/dessert-hero.png") left bottom/690px auto no-repeat;overflow:hidden;pointer-events:none;z-index:1;opacity:.92;-webkit-mask-image:linear-gradient(90deg,#000 0%,#000 62%,rgba(0,0,0,.72) 78%,transparent 100%),linear-gradient(0deg,#000 0%,#000 72%,rgba(0,0,0,.56) 88%,transparent 100%);-webkit-mask-composite:source-in;mask-image:linear-gradient(90deg,#000 0%,#000 62%,rgba(0,0,0,.72) 78%,transparent 100%),linear-gradient(0deg,#000 0%,#000 72%,rgba(0,0,0,.56) 88%,transparent 100%);mask-composite:intersect}
+.dessert:after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 20% 82%,rgba(255,255,255,0) 0 34%,rgba(248,251,255,.38) 66%,rgba(248,251,255,.98) 100%),linear-gradient(90deg,rgba(248,251,255,0) 0%,rgba(248,251,255,0) 54%,rgba(248,251,255,.86) 92%,rgba(248,251,255,1) 100%),linear-gradient(0deg,rgba(248,251,255,0) 0%,rgba(248,251,255,.18) 65%,rgba(248,251,255,.98) 100%)}
+.visual{position:relative;display:flex;align-items:flex-start;justify-content:flex-start;padding:10px 0 0 0}
+.phone{width:318px;min-height:632px;background:#fff;border:7px solid #111827;border-radius:48px;padding:22px 20px 20px;box-shadow:0 24px 70px rgba(15,23,42,.28);position:relative;z-index:3}
+.island{width:112px;height:28px;background:#030712;border-radius:999px;position:absolute;top:10px;left:50%;transform:translateX(-50%)}
+.status{display:flex;justify-content:space-between;font-size:13px;font-weight:900;margin-bottom:34px}
+.phone h3{font-size:19px;margin:0 0 4px}
+.round{font-size:13px;font-weight:800;margin-bottom:10px}
+.deadline{height:34px;background:#fff0da;border-radius:9px;color:#a05a12;font-size:12px;display:flex;align-items:center;padding:0 12px;margin-bottom:12px}
+.product{display:grid;grid-template-columns:54px 1fr 78px;gap:9px;align-items:center;padding:11px 0;border-bottom:1px solid #e8eef7}
+.thumb{width:54px;height:54px;border-radius:10px;background:#fff url("assets/dessert-swiss-roll-cutout.png") center/contain no-repeat}
+.thumb.b{background:#fff url("assets/dessert-basque-cutout.png") center/contain no-repeat}.thumb.c{background:#fff url("assets/dessert-cupcakes-cutout.png") center/contain no-repeat}.thumb.d{background:#fff url("assets/dessert-macarons-cutout.png") center/contain no-repeat}.thumb.e{background:#fff url("assets/dessert-tiramisu-cutout.png") center/contain no-repeat}
+.pname{font-size:12px;font-weight:800}.spec{font-size:11px;color:var(--muted);margin-top:2px}.price{font-size:13px;color:var(--red);font-weight:900;margin-top:4px}
+.qty{height:34px;border:1px solid #d8e2f0;border-radius:8px;display:flex;align-items:center;justify-content:space-around;font-weight:900}
+.submit{height:44px;background:linear-gradient(135deg,var(--blue),#075fcb);border-radius:9px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;margin-top:18px}
+.qr-float{position:absolute;right:-24px;top:392px;width:146px;height:224px;background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:2}
+.hand{font-family:KaiTi,serif;font-size:18px;line-height:1.6;color:#21314d;text-align:center;transform:rotate(-7deg)}
+.qr{width:110px;height:110px;background:linear-gradient(90deg,#111 8px,transparent 8px) 0 0/16px 16px,linear-gradient(#111 8px,transparent 8px) 0 0/16px 16px,#fff;border:10px solid #fff;box-shadow:0 0 0 1px #d8e2f0;border-radius:10px}
+.section{margin:0 38px 22px;background:rgba(255,255,255,.78);border:1px solid var(--line);border-radius:22px;padding:34px;box-shadow:0 18px 50px rgba(20,74,132,.06)}
+.section-title{text-align:center;font-family:var(--serif);font-size:30px;font-weight:800;margin-bottom:22px}
+.section-title .vs{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:999px;background:var(--blue);color:#fff;font-family:var(--sans);font-size:16px;margin:0 14px}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.panel{background:linear-gradient(145deg,#fff,#f2f7ff);border-radius:18px;padding:24px;min-height:230px;position:relative;border:1px solid #e6effb;overflow:hidden}
+.panel h3{font-size:22px;margin:0 0 18px;color:#0b3f87}.panel.old h3{color:#111827}
+.bullet{display:flex;align-items:center;gap:10px;margin:14px 0;color:#243551;font-size:15px}
+.x,.ok{width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;flex:0 0 auto}
+.x{border:1px solid #9ca3af;color:#475569}.ok{background:var(--blue);color:#fff}
+.mini-card{position:absolute;right:26px;bottom:26px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;width:205px;box-shadow:0 16px 34px rgba(20,74,132,.15)}
+.money{font-size:28px;font-weight:900;margin:12px 0;color:#111827}
+.relay-sheet{position:absolute;right:28px;bottom:25px;width:218px;height:142px;border:1px solid #d8e4f5;border-radius:13px;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(239,246,255,.92));box-shadow:0 14px 30px rgba(20,74,132,.12);transform:rotate(-3deg);padding:15px}
+.relay-sheet:before{content:"群接龙统计表";display:block;font-size:10px;color:#8192aa;margin-bottom:8px}
+.relay-sheet span{display:grid;grid-template-columns:28px 1fr 38px;gap:8px;height:auto;margin:6px 0}
+.relay-sheet span:before,.relay-sheet span:after,.relay-sheet b{content:"";display:block;height:9px;border-radius:999px;background:#dbe7f6}
+.relay-sheet i{position:absolute;right:-16px;bottom:22px;background:#9aa9bd;color:#fff;border-radius:999px;padding:4px 8px;font-style:normal;font-size:10px;box-shadow:0 8px 18px rgba(20,74,132,.14)}
+.scribble{position:absolute;right:198px;bottom:42px;width:68px;height:50px;border:2px solid #b8c9df;border-right:0;border-top:0;transform:skew(-16deg) rotate(-6deg);opacity:.8}
+.steps{display:grid;grid-template-columns:repeat(7,auto);gap:16px;align-items:center;justify-content:center}
+.step{min-height:100px;border:1px solid var(--line);border-radius:16px;background:#fff;display:flex;align-items:center;gap:14px;padding:18px 20px}
+.step-ico{width:42px;height:42px;border:2px solid var(--blue);border-radius:12px;flex:0 0 auto}.step strong{color:var(--blue);display:block;font-size:16px}.step small{color:var(--muted);font-size:12px}
+.arrow{color:#8bb0de;font-size:28px;font-weight:800}
+.roles{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.role{min-height:320px;background:linear-gradient(145deg,#fff,#f3f8ff);border:1px solid var(--line);border-radius:20px;padding:34px;position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(250px,1fr) 185px;gap:14px;align-items:center}
+.role h3{font-size:27px;color:var(--blue);margin:0 0 12px;font-family:var(--serif)}
+.role p{color:var(--muted);margin:0 0 18px}.role ul{display:grid;gap:10px;list-style:none;margin-bottom:24px}.role li{color:#344767;font-size:15px}.role li:before{content:"";display:inline-block;width:8px;height:8px;background:var(--blue);border-radius:50%;margin-right:9px}
+.role-copy{position:relative;z-index:2;min-width:0}
+.mock-laptop{position:relative;justify-self:end;width:185px;height:120px;background:#111827;border-radius:9px 9px 4px 4px;padding:9px;box-shadow:0 16px 38px rgba(15,23,42,.18)}.mock-laptop:after{content:"";position:absolute;left:-13px;right:-13px;bottom:-9px;height:12px;background:linear-gradient(90deg,#cbd5e1,#f8fafc,#cbd5e1);border-radius:0 0 18px 18px}.screen{background:#fff;height:92px;border-radius:4px;padding:8px;display:grid;grid-template-columns:46px 1fr;gap:8px;overflow:hidden}.screen:before{content:"";display:block;border-radius:4px;background:linear-gradient(#eff6ff,#e6f1ff)}.screen div{height:7px;background:#e5edf7;border-radius:999px;margin-bottom:6px;max-width:100%}.screen div:first-child{background:#bbf7d0;width:42px}.screen div:nth-child(2){height:15px;background:#111827;width:55px}.screen div:nth-child(3){width:104px}.screen div:nth-child(4){width:94px}.screen div:nth-child(5){width:110px}
+.mock-phone{position:relative;justify-self:end;width:132px;height:242px;border:5px solid #111827;border-radius:25px;background:#fff;padding:14px 8px;box-shadow:0 16px 34px rgba(15,23,42,.16)}.mock-phone .product{grid-template-columns:30px 1fr;padding:6px 0}.mock-phone .thumb{width:30px;height:30px;background-size:220px auto}.mock-phone .pname{font-size:11px}.mock-phone .price{font-size:12px}.mock-phone .submit{height:28px;margin-top:10px}
+.bottom-cta{margin:0 38px 38px;background:linear-gradient(135deg,#064da8,#003b86);border-radius:18px;padding:34px 48px;color:#fff;display:grid;grid-template-columns:1fr auto auto auto;gap:20px;align-items:center}
+.bottom-cta h2{font-size:32px;margin:0 0 8px;font-family:var(--serif)}.bottom-cta p{margin:0;color:#dbeafe}.bottom-cta .btn-outline{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.38);color:#fff}
+.bottom-qr{width:110px;height:110px;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 28px rgba(0,0,0,.12)}.bottom-qr .qr{width:88px;height:88px;border-width:8px;border-radius:8px}
+.footer{padding:34px 38px 44px;text-align:center;color:#7890ad;font-size:13px}.footer-links{display:flex;justify-content:center;gap:54px;margin-bottom:28px;color:#355173;font-weight:700}
+@media(max-width:980px){.shell{width:calc(100vw - 16px);margin:8px}.nav{padding:0 24px}.links{display:none}.hero{grid-template-columns:1fr;padding:24px;min-height:auto}.hero-copy{padding-top:24px}h1{font-size:48px}.trust{width:auto;flex-wrap:wrap}.compare,.roles,.bottom-cta{grid-template-columns:1fr}.steps{grid-template-columns:1fr}.arrow{display:none}.qr-float{display:none}.dessert{display:none}.section,.bottom-cta{margin-left:18px;margin-right:18px}.phone{width:100%;max-width:330px}.visual{justify-content:flex-start;padding-left:0}.relay-sheet{display:none}.bottom-qr{display:none}}
+@media(max-width:560px){.nav-actions a:first-child{display:none}.brand{font-size:22px}.hero{padding:20px 16px}.section{padding:22px}.section-title{font-size:23px}.compare .mini-card{position:static;margin-top:18px}.steps{grid-template-columns:1fr}.role{grid-template-columns:1fr;min-height:260px;padding:24px}.mock-laptop,.mock-phone{justify-self:center;margin-top:8px;width:100%;max-width:270px}.mock-phone{max-width:210px}.cta-row{flex-direction:column}.btn-lg{width:100%;justify-content:flex-start}.bottom-cta{padding:26px 22px}.footer-links{flex-direction:column;gap:12px}}
 </style>
 </head>
 <body>
-<div class="grain"></div>
+<main class="shell">
+  <nav class="nav">
+    <a href="#" class="brand"><span class="mark"></span>邻选</a>
+    <div class="links">
+      <a href="#">首页</a><a href="#how">怎么用</a><a href="#roles">谁在用</a><a href="#features">功能介绍</a><a href="#help">帮助中心</a>
+    </div>
+    <div class="nav-actions">
+      <a href="order.html#admin">登录</a>
+      <a class="btn btn-primary btn-sm" href="order.html#admin">开始使用</a>
+    </div>
+  </nav>
 
-<!-- NAV -->
-<nav class="nav" id="nav">
-  <a href="#" class="nav-brand">邻选</a>
-  <a href="#features" class="btn btn-outline" style="padding:8px 16px;font-size:.8125rem">了解更多</a>
-</nav>
+  <section class="hero">
+    <div class="dessert"></div>
+    <div class="hero-copy">
+      <div class="eyebrow">社区团购 · 微信扫码下单</div>
+      <h1>告别接龙，<br><span>一码下单</span></h1>
+      <p>设置商品，生成二维码，发到群里。<br>邻居扫码下单，订单自动汇总。<br>一键计算付款总额，省时又省心。</p>
+      <div class="cta-row">
+        <a class="btn btn-primary btn-lg" href="order.html#admin"><span class="btn-ico"></span><span class="btn-text"><strong>团长开始使用</strong><small>创建团购，生成二维码</small></span></a>
+        <a class="btn btn-outline btn-lg" href="order.html"><span class="btn-ico"></span><span class="btn-text"><strong>邻居扫码下单</strong><small>扫描二维码，快速下单</small></span></a>
+      </div>
+      <div class="trust"><span>简单易用</span><span>订单自动汇总</span><span>一键算总额</span><span>安全可靠</span></div>
+    </div>
 
-<!-- HERO -->
-<section class="hero container">
-  <div class="hero-content reveal">
-    <p class="section-label">社区团购新方式</p>
-    <h1 class="display-xl hero-title">告别接龙，<br>一码下单</h1>
-    <p class="body-lg hero-desc">
-      专为小区团长打造的极简下单工具。设置商品、生成二维码、发到群里——
-      邻居扫码即下单，订单自动汇总，收款金额一键可算。没有服务器，没有月费，不用下载 App。
-    </p>
-    <div class="hero-actions">
-      <a href="order.html#admin" class="btn btn-primary">开始使用</a>
-      <a href="#flow" class="btn btn-outline">查看流程</a>
-    </div>
-  </div>
-  <div class="hero-visual reveal reveal-delay-1">
-    <div class="hero-card">
-      <div class="qrcode-placeholder">
-        <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
-          <rect x="4" y="4" width="112" height="112" rx="12" stroke="var(--color-accent)" stroke-width="2"/>
-          <rect x="16" y="16" width="8" height="8" fill="var(--color-accent)"/>
-          <rect x="28" y="16" width="8" height="8" fill="var(--color-accent)"/>
-          <rect x="40" y="16" width="8" height="8" fill="var(--color-accent)"/>
-          <rect x="64" y="16" width="8" height="8" fill="var(--color-accent)"/>
-          <rect x="80" y="16" width="8" height="8" fill="var(--color-accent)"/>
-          <rect x="96" y="16" width="8" height="8" fill="var(--color-accent)"/>
-          <rect x="56" y="40" width="8" height="8" fill="var(--color-accent)"/>
-          <rect x="72" y="40" width="16" height="8" fill="var(--color-accent)"/>
-          <rect x="20" y="52" width="36" height="8" fill="var(--color-accent)"/>
-          <rect x="64" y="52" width="36" height="8" fill="var(--color-accent)"/>
-          <rect x="36" y="64" width="28" height="8" fill="var(--color-accent)"/>
-          <rect x="72" y="64" width="8" height="8" fill="var(--color-accent)"/>
-          <rect x="20" y="76" width="20" height="8" fill="var(--color-accent)"/>
-          <rect x="48" y="76" width="20" height="8" fill="var(--color-accent)"/>
-          <rect x="16" y="88" width="8" height="8" fill="var(--color-accent)"/>
-          <rect x="40" y="88" width="8" height="8" fill="var(--color-accent)"/>
-          <rect x="64" y="88" width="16" height="8" fill="var(--color-accent)"/>
-          <rect x="96" y="88" width="8" height="8" fill="var(--color-accent)"/>
-          <path d="M52 100c5-3 10-3 16 0" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round"/>
-        </svg>
+    <div class="visual">
+      <div class="phone">
+        <div class="island"></div>
+        <div class="status"><span>9:41</span><span>5G 100%</span></div>
+        <h3><span style="color:var(--blue)">邻选</span> 团购下单</h3>
+        <div class="round">美味甜品团购群 <span style="background:#dcfce7;color:#15803d;padding:3px 8px;border-radius:6px;font-size:11px">团长：小郭</span></div>
+        <div class="deadline">截至 05月26日 20:00 前</div>
+        <div class="product"><div class="thumb"></div><div><div class="pname">瑞士卷（原味）</div><div class="spec">350g/盒</div><div class="price">¥29.90 /盒</div></div><div class="qty">− 2 +</div></div>
+        <div class="product"><div class="thumb b"></div><div><div class="pname">巴斯克芝士蛋糕</div><div class="spec">1.1kg/盒</div><div class="price">¥69.90 /盒</div></div><div class="qty">− 1 +</div></div>
+        <div class="product"><div class="thumb c"></div><div><div class="pname">缤纷纸杯蛋糕</div><div class="spec">6只装</div><div class="price">¥39.90 /盒</div></div><div class="qty">− 1 +</div></div>
+        <div class="product"><div class="thumb d"></div><div><div class="pname">马卡龙礼盒</div><div class="spec">36枚</div><div class="price">¥129.00 /盒</div></div><div class="qty">− 1 +</div></div>
+        <div class="product"><div class="thumb e"></div><div><div class="pname">提拉米苏</div><div class="spec">800g/盒</div><div class="price">¥59.90 /盒</div></div><div class="qty">− 1 +</div></div>
+        <div class="submit">提交订单</div>
       </div>
-      <div class="mock-title">本期团购 — 新鲜直达</div>
-      <div class="mock-items">
-        <div class="mock-item"><span>烟台红富士 5斤装</span><span style="font-weight:600;color:var(--color-accent)">28.00</span></div>
-        <div class="mock-item"><span>土鸡蛋 30枚</span><span style="font-weight:600;color:var(--color-accent)">35.00</span></div>
-        <div class="mock-item"><span>五常大米 5kg</span><span style="font-weight:600;color:var(--color-accent)">42.00</span></div>
-      </div>
+      <div class="qr-float"><div class="hand">扫一扫<br>下单更方便</div><div class="qr"></div></div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- PAIN POINTS -->
-<section class="pain-section container" id="pain">
-  <div class="reveal">
-    <p class="section-label">为什么需要它</p>
-    <h2 class="display-lg">传统接龙的烦恼，<br>用这个工具一次解决</h2>
-  </div>
-  <div class="comparison-grid">
-    <div class="compare-col old reveal">
-      <h3>传统 Excel 接龙</h3>
-      <ul>
-        <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="var(--color-danger)" stroke-width="2" stroke-linecap="round"/></svg>消息刷屏，订单难找</li>
-        <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="var(--color-danger)" stroke-width="2" stroke-linecap="round"/></svg>手动统计，容易算错</li>
-        <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="var(--color-danger)" stroke-width="2" stroke-linecap="round"/></svg>规格混乱，难以管理</li>
-        <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="var(--color-danger)" stroke-width="2" stroke-linecap="round"/></svg>每人应付金额要逐笔计算</li>
-        <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="var(--color-danger)" stroke-width="2" stroke-linecap="round"/></svg>修改订单靠群里喊</li>
-      </ul>
-    </div>
-    <div class="compare-col new reveal reveal-delay-1">
-      <h3>邻选下单工具</h3>
-      <ul>
-        <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 8l3 4 6-8" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>扫码即用，零门槛</li>
-        <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 8l3 4 6-8" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>自动汇总，零差错</li>
-        <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 8l3 4 6-8" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>多规格灵活配置</li>
-        <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 8l3 4 6-8" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>一键生成收款清单</li>
-        <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 8l3 4 6-8" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>截止前自由修改</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<!-- FEATURES -->
-<section class="features-section" id="features">
-  <div class="container">
-    <div class="reveal">
-      <p class="section-label">核心功能</p>
-      <h2 class="display-lg">四个模块，<br>覆盖下单全流程</h2>
-    </div>
-    <div class="bento-grid">
-      <div class="bento-card feature-main reveal">
-        <div class="bento-icon">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="2" y="2" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M2 8h18" stroke="currentColor" stroke-width="1.5"/><path d="M8 8v12" stroke="currentColor" stroke-width="1.5"/></svg>
-        </div>
-        <h4>商品管理</h4>
-        <p>添加商品名称、价格、多规格（不同重量/口味分别定价）、库存上限。设置后一键生成下单二维码，发到业主群即可。支持随时编辑和上下架商品，灵活应对每次团购的不同需求。</p>
+  <section class="section" id="features">
+    <div class="section-title">传统接龙 <span class="vs">VS</span> 邻选</div>
+    <div class="compare">
+      <div class="panel old">
+        <h3>传统接龙</h3>
+        <div class="bullet"><span class="x">×</span>多人接龙，信息混乱</div>
+        <div class="bullet"><span class="x">×</span>人工统计，容易出错</div>
+        <div class="bullet"><span class="x">×</span>反复核对，耗时耗力</div>
+        <div class="bullet"><span class="x">×</span>计算总额，繁琐易错</div>
+        <div class="relay-sheet"><span></span><span></span><span></span><span></span><i>...</i></div>
       </div>
-      <div class="bento-card reveal reveal-delay-1">
-        <div class="bento-icon">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="12" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="3" y="12" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="12" y="12" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
-        </div>
-        <h4>扫码下单</h4>
-        <p>邻居微信扫码直接打开，无需注册登录。选择规格、调整数量、填写昵称即可提交。</p>
-      </div>
-      <div class="bento-card reveal reveal-delay-2">
-        <div class="bento-icon">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 17V5a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" stroke-width="1.5"/><path d="M7 9l3 3 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <h4>自动统计</h4>
-        <p>订单实时汇总，按用户分组展示。支持导出 Excel 表格对账备货。</p>
-      </div>
-      <div class="bento-card reveal reveal-delay-3">
-        <div class="bento-icon">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M11 7v4l3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        </div>
-        <h4>收款汇总</h4>
-        <p>自动计算每人应付金额，一键复制清单，直接粘贴到微信群收款，无需手动计算。</p>
+      <div class="panel">
+        <h3>使用邻选</h3>
+        <div class="bullet"><span class="ok">✓</span>二维码下单，简单高效</div>
+        <div class="bullet"><span class="ok">✓</span>订单自动汇总，清晰准确</div>
+        <div class="bullet"><span class="ok">✓</span>实时统计，省时省心</div>
+        <div class="bullet"><span class="ok">✓</span>一键计算总额，轻松收款</div>
+        <div class="mini-card"><div style="color:var(--muted);font-size:13px">应付总额</div><div class="money">¥2,345.60</div><div class="submit" style="height:40px;margin:0">一键计算总额</div></div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- FLOW -->
-<section class="flow-section container" id="flow">
-  <div class="reveal">
-    <p class="section-label">三步上手</p>
-    <h2 class="display-lg">几分钟搞定，<br>不用学技术</h2>
-  </div>
-  <div class="flow-steps">
-    <div class="flow-step reveal">
-      <h4>设置商品</h4>
-      <p>打开后台，添加本次团购的商品，设定名称、规格、价格和库存</p>
+  <section class="section" id="how">
+    <div class="section-title">四步完成团购，轻松又高效</div>
+    <div class="steps">
+      <div class="step"><div class="step-ico"></div><div><strong>设置商品</strong><small>添加商品、价格和库存</small></div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="step-ico"></div><div><strong>生成二维码</strong><small>一键生成，分享更快</small></div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="step-ico"></div><div><strong>邻居扫码下单</strong><small>选择商品，提交订单</small></div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="step-ico"></div><div><strong>自动汇总结算</strong><small>订单汇总，一键总额</small></div></div>
     </div>
-    <div class="flow-step reveal reveal-delay-1">
-      <h4>生成二维码</h4>
-      <p>一键生成下单二维码，保存图片发到业主微信群</p>
+  </section>
+
+  <section class="section roles" id="roles">
+    <div class="role">
+      <div class="role-copy">
+        <h3>团长后台</h3>
+        <p>高效管理，一目了然。</p>
+        <ul>
+          <li>商品管理，灵活设置规格和库存</li>
+          <li>订单实时汇总，数据清晰</li>
+          <li>一键复制收款清单，方便发群收款</li>
+          <li>导出订单，方便备货对账</li>
+        </ul>
+        <a class="btn btn-primary btn-sm" href="order.html#admin">进入团长后台</a>
+      </div>
+      <div class="mock-laptop"><div class="screen"><div></div><div></div><div></div><div></div><div></div></div></div>
     </div>
-    <div class="flow-step reveal reveal-delay-2">
-      <h4>邻居下单</h4>
-      <p>邻居扫码选商品、填昵称、提交。你后台实时看到所有订单</p>
+    <div class="role">
+      <div class="role-copy">
+        <h3>邻居下单端</h3>
+        <p>简单便捷，扫码即可下单。</p>
+        <ul>
+          <li>商品清晰，价格透明</li>
+          <li>操作简单，快速下单</li>
+          <li>截止前可查询和修改</li>
+          <li>提交成功后安心等待团长通知</li>
+        </ul>
+        <a class="btn btn-outline btn-sm" href="order.html">打开下单端</a>
+      </div>
+      <div class="mock-phone">
+        <div class="product"><div class="thumb"></div><div><div class="pname">瑞士卷</div><div class="price">¥29.90</div></div></div>
+        <div class="product"><div class="thumb b"></div><div><div class="pname">巴斯克</div><div class="price">¥69.90</div></div></div>
+        <div class="product"><div class="thumb c"></div><div><div class="pname">纸杯蛋糕</div><div class="price">¥39.90</div></div></div>
+        <div class="submit"></div>
+      </div>
     </div>
-    <div class="flow-step reveal reveal-delay-3">
-      <h4>收款备货</h4>
-      <p>截止后一键复制收款清单，发群收款，导出 Excel 备货</p>
-    </div>
-  </div>
-</section>
+  </section>
 
-<!-- CTA -->
-<section class="cta-section container">
-  <h2 class="display-md">让你的社区团购，<br>从今天开始轻松起来</h2>
-  <p class="body-lg">完全免费，无需服务器，无需下载 App。打开网页，设置商品，生成二维码，发到群里——就这么简单。</p>
-  <a href="order.html#admin" class="btn btn-primary" style="font-size:1rem;padding:16px 36px">立即开始使用</a>
-</section>
+  <section class="bottom-cta">
+    <div><h2>让团购更简单，让生活更美好</h2><p>邻选，轻量级社区团购工具，专为微信团购场景打造。</p></div>
+    <a class="btn btn-outline btn-lg" href="order.html#admin"><span class="btn-ico"></span><span class="btn-text"><strong>团长开始使用</strong><small>创建团购，生成二维码</small></span></a>
+    <a class="btn btn-outline btn-lg" href="order.html"><span class="btn-ico"></span><span class="btn-text"><strong>邻居扫码下单</strong><small>扫描二维码，快速下单</small></span></a>
+    <div class="bottom-qr"><div class="qr"></div></div>
+  </section>
 
-<!-- FOOTER -->
-<footer class="footer">
-  <p class="caption">邻选 · 社区团购极简下单工具 · 免费使用</p>
-</footer>
-
-<!-- TWEAKS TOGGLE -->
-<button class="tweaks-toggle" id="tweaks-toggle" onclick="toggleTweaks()" title="风格切换">
-  <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M9 2v4M9 12v4M2 9h4M12 9h4" stroke="currentColor" stroke-width="1.5"/></svg>
-</button>
-
-<!-- TWEAKS PANEL -->
-<div class="tweaks-panel" id="tweaks-panel">
-  <div class="tweak-group">
-    <label>风格主题</label>
-    <select onchange="switchVariation(this.value)">
-      <option value="editorial-warm">温暖编辑风</option>
-      <option value="swiss-precision">瑞士极简风</option>
-      <option value="dark-monograph">暗色专论风</option>
-    </select>
-  </div>
-  <p class="caption" style="margin-top:8px">选择你喜欢的风格</p>
-</div>
-
-<script>
-// NAV SCROLL
-const nav = document.getElementById('nav');
-window.addEventListener('scroll', () => {
-  nav.classList.toggle('scrolled', window.scrollY > 48);
-}, {passive:true});
-
-// SCROLL REVEAL
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-}, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-
-// VARIATION SWITCHER
-function switchVariation(v) {
-  document.documentElement.setAttribute('data-variation', v);
-  localStorage.setItem('groupbuy_landing_theme', v);
-}
-// Restore saved variation
-const saved = localStorage.getItem('groupbuy_landing_theme');
-if (saved) document.documentElement.setAttribute('data-variation', saved);
-
-// TWEAKS PANEL
-function toggleTweaks() {
-  const panel = document.getElementById('tweaks-panel');
-  panel.classList.toggle('open');
-}
-
-// EDIT MODE PROTOCOL
-window.addEventListener('message', function(e) {
-  if (e.data.type === '__activate_edit_mode') {
-    document.getElementById('tweaks-toggle').classList.add('open');
-    document.getElementById('tweaks-panel').classList.add('open');
-  }
-  if (e.data.type === '__deactivate_edit_mode') {
-    document.getElementById('tweaks-toggle').classList.remove('open');
-    document.getElementById('tweaks-panel').classList.remove('open');
-  }
-});
-window.parent.postMessage({ type: '__edit_mode_available' }, '*');
-</script>
+  <footer class="footer" id="help">
+    <div class="footer-links"><span>微信生态内使用</span><span>数据安全可靠</span><span>专注社区团购场景</span><a href="setup-guide.html">部署使用指南</a></div>
+    <p>© 2026 邻选。社区团购下单工具。</p>
+  </footer>
+</main>
 </body>
 </html>

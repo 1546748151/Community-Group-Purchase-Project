@@ -7,7 +7,7 @@
 <meta name="description" content="极简社区团购下单工具">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -263,6 +263,99 @@ body{
   #app{border-left:1px solid var(--color-border-light);border-right:1px solid var(--color-border-light)}
   .cart-bar{border-left:1px solid var(--color-border-light);border-right:1px solid var(--color-border-light)}
 }
+
+/* ============================================================
+   BLUE PREMIUM UI OVERRIDES
+   ============================================================ */
+:root{
+  --color-bg:#f4f8ff;
+  --color-surface:#ffffff;
+  --color-border:#d8e4f5;
+  --color-border-light:#edf3fb;
+  --color-text:#101828;
+  --color-text-secondary:#667085;
+  --color-text-muted:#98a2b3;
+  --color-accent:#064da8;
+  --color-accent-hover:#003f8f;
+  --color-accent-light:#e8f2ff;
+  --color-accent-border:#b9d3f4;
+  --color-danger:#ef2f2f;
+  --color-danger-light:#fff1f1;
+  --radius-sm:10px;
+  --radius-md:14px;
+  --radius-lg:18px;
+  --radius-xl:26px;
+  --shadow-card:0 12px 32px rgba(20,74,132,.08);
+  --shadow-elevated:0 16px 42px rgba(20,74,132,.14);
+  --shadow-modal:0 20px 64px rgba(15,23,42,.18);
+  --font-sans:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+body{background:radial-gradient(circle at 50% 0,#fff 0,#eaf4ff 48%,#f8fbff 100%)}
+#app{background:linear-gradient(180deg,#fff 0,#f7fbff 100%)}
+body[data-mode="admin"] #app{max-width:1180px;background:transparent}
+body[data-mode="admin"] .cart-bar{display:none}
+.page-title{font-weight:900;letter-spacing:0}
+.section-title{font-weight:850;letter-spacing:0}
+.btn{font-weight:800;box-shadow:none}
+.btn-primary{background:linear-gradient(135deg,var(--color-accent),#0b63c7);box-shadow:0 10px 24px rgba(6,77,168,.22)}
+.btn-primary:active{background:var(--color-accent-hover)}
+.btn-secondary{background:#fff;border-color:var(--color-border);color:var(--color-accent)}
+.btn-ghost{color:#355173}
+.form-input{border-color:var(--color-border);border-radius:14px;background:rgba(255,255,255,.92)}
+.form-input:focus{border-color:var(--color-accent);box-shadow:0 0 0 4px rgba(6,77,168,.1)}
+.card{border-color:var(--color-border);box-shadow:var(--shadow-card)}
+.badge-success{background:#dcfce7;color:#15803d}
+.badge-muted{background:#eef4fb;color:#667085}
+.modal-overlay{background:rgba(7,24,50,.36);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.modal-sheet{border:1px solid var(--color-border);border-bottom:0}
+.app-header{background:rgba(255,255,255,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-bottom:1px solid var(--color-border-light)}
+.customer-hero{padding:10px 2px 16px}
+.brand-line{display:flex;align-items:center;gap:8px;color:var(--color-accent);font-size:1.35rem;font-weight:900}
+.brand-mark{width:24px;height:24px;border:3px solid currentColor;border-radius:9px 9px 9px 3px;display:inline-block}
+.round-line{display:flex;align-items:center;gap:8px;font-size:1.05rem;font-weight:850;margin-top:14px;color:var(--color-text)}
+.deadline-pill{height:44px;border-radius:14px;background:linear-gradient(135deg,#eef5ff,#e8f1ff);display:flex;align-items:center;justify-content:center;color:var(--color-accent);font-weight:850;margin:14px 0}
+.customer-search{height:52px;border:1px solid var(--color-border);border-radius:16px;background:#fff;display:flex;align-items:center;gap:10px;padding:0 16px;color:var(--color-text-muted);margin-bottom:14px}
+.category-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px;-webkit-overflow-scrolling:touch}
+.category-chip{height:42px;padding:0 17px;border-radius:13px;background:#f2f5fa;display:flex;align-items:center;white-space:nowrap;font-weight:800;color:#344054}
+.category-chip.active{background:linear-gradient(135deg,var(--color-accent),#0b63c7);color:#fff}
+.shop-product{background:#fff;border:1px solid var(--color-border);border-radius:18px;display:grid;grid-template-columns:112px 1fr auto;gap:14px;align-items:center;padding:10px;margin-bottom:12px;box-shadow:0 8px 24px rgba(20,74,132,.06)}
+.shop-product-img{width:112px;height:104px;border-radius:14px;background:linear-gradient(135deg,#f8d493,#fff4da);object-fit:cover}
+.shop-product-img.placeholder{display:flex;align-items:center;justify-content:center;color:#9b5a1d;font-weight:900}
+.shop-product-name{font-size:1.05rem;font-weight:900;line-height:1.25;margin-bottom:8px}
+.shop-product-spec{font-size:.875rem;color:var(--color-text-secondary);margin-bottom:14px}
+.shop-product-price{font-size:1.35rem;line-height:1;font-weight:900;color:var(--color-danger)}
+.shop-product-price small{font-size:.8rem;color:var(--color-text-secondary);font-weight:600}
+.add-round{width:42px;height:42px;border-radius:13px;border:0;background:linear-gradient(135deg,var(--color-accent),#0b63c7);color:#fff;font-size:1.75rem;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 22px rgba(6,77,168,.22)}
+.qty-ctrl{border-color:var(--color-border);border-radius:12px;background:#fff}
+.cart-bar{left:50%;bottom:58px;max-width:444px;width:calc(100% - 32px);border:1px solid var(--color-border);border-radius:24px;padding:12px 14px;background:rgba(255,255,255,.96);box-shadow:0 16px 36px rgba(20,74,132,.18)}
+.cart-total{font-size:1.35rem;color:var(--color-danger);font-weight:900}
+.cart-count{font-weight:750}
+.admin-shell{display:grid;grid-template-columns:220px 1fr;gap:0;min-height:calc(100dvh - 40px);background:rgba(255,255,255,.88);border:1px solid var(--color-border);border-radius:24px;box-shadow:0 24px 80px rgba(16,66,134,.14);overflow:hidden}
+.admin-side{background:linear-gradient(180deg,#fff,#f4f8ff);border-right:1px solid var(--color-border);padding:24px 18px}
+.admin-brand{display:flex;align-items:center;gap:9px;color:var(--color-accent);font-size:1.5rem;font-weight:900;margin-bottom:28px}
+.admin-main{padding:24px;background:linear-gradient(145deg,#f8fbff,#fff)}
+.admin-topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+.admin-title h2{font-size:1.5rem;margin:0 0 4px}.admin-title p{margin:0;color:var(--color-text-secondary);font-size:.85rem}
+.admin-nav{display:grid;gap:8px;overflow:visible;margin:0;padding:0}
+.admin-nav button{width:100%;height:44px;border-radius:12px;justify-content:flex-start;text-align:left;border:0;background:transparent;font-size:.92rem;font-weight:850;color:#475467}
+.admin-nav button.active{background:linear-gradient(135deg,var(--color-accent),#0b63c7);box-shadow:0 10px 22px rgba(6,77,168,.2)}
+.stat-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+.stat-card{border-color:var(--color-border);border-radius:16px;box-shadow:0 10px 24px rgba(20,74,132,.06)}
+.stat-value{font-size:1.7rem;font-weight:900}
+.copyable{background:#f4f8ff;border:1px solid var(--color-border);border-radius:14px}
+@media(max-width:760px){
+  body[data-mode="admin"] #app{max-width:480px;background:linear-gradient(180deg,#fff 0,#f7fbff 100%)}
+  .admin-shell{display:block;border:0;border-radius:0;box-shadow:none;background:transparent;min-height:auto}
+  .admin-side{border:0;background:transparent;padding:0}
+  .admin-brand{display:none}
+  .admin-main{padding:0;background:transparent}
+  .admin-topbar{padding:16px 20px;margin:0;background:rgba(255,255,255,.82);position:sticky;top:0;z-index:40;backdrop-filter:blur(18px)}
+  .admin-nav{display:flex;gap:8px;overflow-x:auto;padding:4px 0 16px;margin-bottom:0;-webkit-overflow-scrolling:touch}
+  .admin-nav button{width:auto;flex-shrink:0;justify-content:center;padding:0 16px;border:1px solid var(--color-border);background:#fff;border-radius:999px;height:38px;font-size:.82rem}
+  .stat-row{grid-template-columns:1fr 1fr}
+  .shop-product{grid-template-columns:104px 1fr auto}
+  .shop-product-img{width:104px;height:98px}
+}
 </style>
 </head>
 <body>
@@ -313,10 +406,22 @@ body{
   <div id="mode-customer" class="mode-section" style="display:none">
     <div class="app-header">
       <div>
-        <h2 class="section-title">社区团购</h2>
+        <h2 class="brand-line"><span class="brand-mark"></span>邻选 <span style="color:var(--color-text);font-size:1.05rem">团购下单</span></h2>
         <p class="caption" id="cutoff-countdown"></p>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="showOrderLookup()">查/改订单</button>
+    </div>
+    <div class="customer-hero">
+      <div class="round-line">美好小区团购群 <span style="color:var(--color-text-muted)">›</span></div>
+      <div class="deadline-pill" id="customer-deadline-pill">请在截止前下单</div>
+      <div class="customer-search">⌕ <span>搜索商品名称</span></div>
+      <div class="category-row">
+        <div class="category-chip active">全部</div>
+        <div class="category-chip">蛋糕</div>
+        <div class="category-chip">点心</div>
+        <div class="category-chip">礼盒</div>
+        <div class="category-chip">冷藏甜品</div>
+      </div>
     </div>
 
     <!-- Cutoff Overlay -->
@@ -366,35 +471,52 @@ body{
 
   <!-- ========== ADMIN MODE ========== -->
   <div id="mode-admin" class="mode-section" style="display:none">
-    <div class="app-header">
-      <div><h2 class="section-title">团长后台</h2></div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost btn-sm" onclick="switchMode('customer')">预览</button>
-        <button class="btn btn-secondary btn-sm" onclick="adminLogout()">退出</button>
+    <div class="admin-shell">
+      <aside class="admin-side">
+        <div class="admin-brand"><span class="brand-mark"></span>邻选</div>
+        <div class="admin-nav" id="admin-nav">
+          <button class="active" onclick="switchAdminTab('products')">商品管理</button>
+          <button onclick="switchAdminTab('orders')">订单汇总</button>
+          <button onclick="switchAdminTab('summary')">收款清单</button>
+          <button onclick="switchAdminTab('qr')">下单二维码</button>
+          <button onclick="switchAdminTab('settings')">轮次设置</button>
+        </div>
+      </aside>
+      <div class="admin-main">
+        <div class="admin-topbar">
+          <div class="admin-title">
+            <h2>团长后台</h2>
+            <p>管理商品、订单、收款和下单二维码</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" onclick="switchMode('customer')">预览顾客端</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminLogout()">退出</button>
+          </div>
+        </div>
+        <div id="admin-tab-products" class="admin-tab"></div>
+        <div id="admin-tab-orders" class="admin-tab" style="display:none"></div>
+        <div id="admin-tab-summary" class="admin-tab" style="display:none"></div>
+        <div id="admin-tab-qr" class="admin-tab" style="display:none"></div>
+        <div id="admin-tab-settings" class="admin-tab" style="display:none"></div>
       </div>
     </div>
-    <div class="admin-nav" id="admin-nav">
-      <button class="active" onclick="switchAdminTab('products')">商品</button>
-      <button onclick="switchAdminTab('orders')">订单</button>
-      <button onclick="switchAdminTab('summary')">收款</button>
-      <button onclick="switchAdminTab('qr')">二维码</button>
-      <button onclick="switchAdminTab('settings')">设置</button>
-    </div>
-    <div id="admin-tab-products" class="admin-tab"></div>
-    <div id="admin-tab-orders" class="admin-tab" style="display:none"></div>
-    <div id="admin-tab-summary" class="admin-tab" style="display:none"></div>
-    <div id="admin-tab-qr" class="admin-tab" style="display:none"></div>
-    <div id="admin-tab-settings" class="admin-tab" style="display:none"></div>
   </div>
 
   <!-- ========== CHECKOUT MODAL ========== -->
   <div id="modal-checkout" class="modal-overlay hidden" onclick="if(event.target===this)closeCheckout()">
     <div class="modal-sheet">
       <div class="modal-handle"></div>
-      <h3 class="section-title" style="margin-bottom:16px">确认订单</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3 class="section-title">确认订单</h3>
+        <span class="badge badge-muted">1 确认订单</span>
+      </div>
       <div id="checkout-items" style="margin-bottom:16px"></div>
-      <div style="display:flex;justify-content:space-between;padding:12px 0;border-top:1.5px solid var(--color-border);margin-bottom:16px">
-        <span style="font-weight:600">应付总额</span>
+      <div style="background:linear-gradient(135deg,#f1f7ff,#fff);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:16px;color:var(--color-accent);font-weight:800">
+        截止前可修改订单
+        <div class="caption" style="margin-top:4px">如需调整商品、数量或备注，请在截止时间前操作。</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:14px 0;border-top:1.5px solid var(--color-border);margin-bottom:16px">
+        <span style="font-weight:800">应付总额</span>
         <span style="font-size:1.25rem;font-weight:700;color:var(--color-accent)" id="checkout-total"></span>
       </div>
       <div class="form-group" style="margin-bottom:12px">
@@ -414,12 +536,16 @@ body{
   <!-- ========== ORDER SUCCESS MODAL ========== -->
   <div id="modal-success" class="modal-overlay hidden">
     <div class="modal-sheet" style="text-align:center">
-      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" style="margin:0 auto 16px"><circle cx="28" cy="28" r="24" fill="var(--color-accent-light)"/><path d="M18 28l7 7 13-14" stroke="var(--color-accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <h3 class="section-title" style="margin-bottom:8px">下单成功</h3>
+      <div style="width:96px;height:96px;border-radius:50%;background:radial-gradient(circle,#2c75d2,#064da8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:54px;margin:0 auto 16px;box-shadow:0 16px 32px rgba(6,77,168,.26)">✓</div>
+      <h3 class="section-title" style="margin-bottom:8px;font-size:1.55rem">下单成功</h3>
       <p class="body-text" style="margin-bottom:4px">订单编号</p>
       <p style="font-family:monospace;font-size:.875rem;background:var(--color-border-light);padding:8px 16px;border-radius:var(--radius-sm);display:inline-block;margin-bottom:16px" id="success-order-id"></p>
-      <p class="caption" style="margin-bottom:20px">团长已收到你的订单，如需修改请在截止前操作</p>
-      <button class="btn btn-primary btn-block btn-lg" onclick="closeSuccess()">完成</button>
+      <p class="caption" style="margin-bottom:20px">团长已收到你的订单，截止前可通过昵称查询并修改。</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <button class="btn btn-primary btn-block" onclick="closeSuccess();showOrderLookup()">修改订单</button>
+        <button class="btn btn-secondary btn-block" onclick="closeSuccess()">继续逛逛</button>
+      </div>
+      <button class="btn btn-ghost btn-block btn-sm" onclick="closeSuccess()">返回首页</button>
     </div>
   </div>
 
@@ -490,6 +616,7 @@ function hideAll() {
   document.querySelectorAll('.mode-section').forEach(s => { s.classList.remove('active'); s.style.display = 'none'; });
 }
 function switchMode(mode) {
+  document.body.dataset.mode = mode;
   hideAll();
   const el = document.getElementById('mode-' + mode);
   if (el) { el.classList.add('active'); el.style.display = (mode === 'admin-login' ? 'flex' : 'block'); }
@@ -620,7 +747,13 @@ async function renderProductManager(el) {
 
   if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab(\'products\')">重试</button></div>'; return; }
 
-  let html = `<button class="btn btn-primary btn-block" onclick="openProductForm()" style="margin-bottom:16px">
+  const productCount = products?.length || 0;
+  const activeCount = (products || []).filter(p => p.is_active).length;
+  let html = `<div class="stat-row">
+    <div class="stat-card"><div class="stat-value" style="color:var(--color-accent)">${productCount}</div><div class="stat-label">全部商品</div></div>
+    <div class="stat-card"><div class="stat-value">${activeCount}</div><div class="stat-label">已上架商品</div></div>
+  </div>
+  <button class="btn btn-primary btn-block" onclick="openProductForm()" style="margin-bottom:16px">
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3v12M3 9h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     添加商品
   </button>`;
@@ -638,7 +771,8 @@ async function renderProductManager(el) {
       const stockInfo = p.stock !== null ? `库存: ${p.stock}` : '不限库存';
       const statusBadge = p.is_active ? '<span class="badge badge-success">上架</span>' : '<span class="badge badge-muted">已下架</span>';
       html += `<div class="card" style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        ${p.image ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" style="width:100%;height:140px;object-fit:cover;border-radius:var(--radius-md);margin-bottom:12px" onerror="this.style.display='none'">` : ''}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
               <span style="font-weight:600;font-size:.9375rem">${escHtml(p.name)}</span>
@@ -648,7 +782,6 @@ async function renderProductManager(el) {
             <p class="caption">${stockInfo}</p>
           </div>
         </div>
-        ${p.image ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" style="width:100%;height:120px;object-fit:cover;border-radius:var(--radius-sm);margin-bottom:8px" onerror="this.style.display='none'">` : ''}
         <div style="display:flex;gap:8px">
           <button class="btn btn-secondary btn-sm" onclick="openProductForm('${p.id}')">编辑</button>
           <button class="btn btn-ghost btn-sm" onclick="toggleProduct('${p.id}',${p.is_active})">${p.is_active ? '下架' : '上架'}</button>
@@ -873,6 +1006,12 @@ async function loadCustomerProducts() {
   }
   overlay.style.display = 'none';
   updateCutoffCountdown(cutoffTime);
+  const deadlinePill = document.getElementById('customer-deadline-pill');
+  if (deadlinePill) {
+    deadlinePill.textContent = cutoffTime
+      ? `请在 ${cutoffTime.toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })} 前下单`
+      : '本期团购正在进行中';
+  }
 
   productsEl.innerHTML = '<div class="skel-card skeleton"></div><div class="skel-card skeleton"></div>';
   const { data: products, error } = await sb.from('products').select('*').eq('is_active', true).order('created_at');
@@ -891,26 +1030,37 @@ async function loadCustomerProducts() {
   products.forEach(p => {
     const specs = p.specs || [];
     const stockSoldOut = p.stock !== null && p.stock <= 0;
-    html += `<div class="card product-card ${stockSoldOut ? '' : 'card-tap'}" style="opacity:${stockSoldOut ? '0.5' : '1'}">
-      ${p.image ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="product-img" loading="lazy" onerror="this.style.display='none'">` : ''}
-      <div class="product-name">${escHtml(p.name)}</div>
-      ${stockSoldOut ? '<span class="badge badge-muted" style="margin-bottom:8px">已售罄</span>' : ''}
-      <div class="spec-grid">`;
-    specs.forEach(s => {
-      const cartKey = `${p.id}-${s.name}`;
-      const inCart = cart[cartKey];
-      html += `<div class="spec-option ${inCart ? 'selected' : ''} ${stockSoldOut ? 'disabled' : ''}"
-        onclick="${stockSoldOut ? '' : `selectSpec('${p.id}','${escAttr(s.name)}',${s.price},'${escAttr(p.name)}')`}">
-        <div>${escHtml(s.name)}</div>
-        <div style="font-weight:600;color:var(--color-accent)">${s.price}</div>
-        <div style="font-size:.6875rem;color:var(--color-text-muted)">元</div>
-      </div>`;
-    });
-    html += `</div>`;
-    if (p.stock !== null && !stockSoldOut) {
-      html += `<div class="stock-info">剩余库存: ${p.stock}</div>`;
-    }
-    html += `</div>`;
+    const firstSpec = specs[0] || { name: '默认', price: 0 };
+    const selectedKey = Object.keys(cart).find(k => k.startsWith(p.id + '-'));
+    const selected = selectedKey ? cart[selectedKey] : null;
+    const displaySpec = selected ? selected.specName : firstSpec.name;
+    const displayPrice = selected ? selected.specPrice : firstSpec.price;
+    const imgHtml = p.image
+      ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
+      : `<div class="shop-product-img placeholder">邻选</div>`;
+    const actionHtml = stockSoldOut
+      ? `<span class="badge badge-muted">已售罄</span>`
+      : selected
+        ? `<div class="qty-ctrl">
+            <button onclick="updateCartItem('${escAttr(selectedKey)}',-1)">−</button>
+            <span class="qty-val">${selected.quantity}</span>
+            <button onclick="updateCartItem('${escAttr(selectedKey)}',1)">+</button>
+          </div>`
+        : `<button class="add-round" onclick="selectSpec('${p.id}','${escAttr(firstSpec.name)}',${firstSpec.price},'${escAttr(p.name)}')">+</button>`;
+    html += `<div class="shop-product" style="opacity:${stockSoldOut ? '.55' : '1'}">
+      ${imgHtml}
+      <div>
+        <div class="shop-product-name">${escHtml(p.name)}</div>
+        <div class="shop-product-spec">${escHtml(displaySpec)}${p.stock !== null && !stockSoldOut ? ` · 剩余 ${p.stock}` : ''}</div>
+        <div class="shop-product-price">¥${Number(displayPrice || 0).toFixed(2)} <small>/份</small></div>
+        ${specs.length > 1 ? `<div class="spec-grid" style="margin-top:10px">${specs.map(s => {
+          const cartKey = `${p.id}-${s.name}`;
+          const inCart = cart[cartKey];
+          return `<div class="spec-option ${inCart ? 'selected' : ''} ${stockSoldOut ? 'disabled' : ''}" onclick="${stockSoldOut ? '' : `selectSpec('${p.id}','${escAttr(s.name)}',${s.price},'${escAttr(p.name)}')`}">${escHtml(s.name)}</div>`;
+        }).join('')}</div>` : ''}
+      </div>
+      <div>${actionHtml}</div>
+    </div>`;
   });
   productsEl.innerHTML = html;
   updateCartBar();
@@ -960,8 +1110,8 @@ function openCheckout() {
   itemsEl.innerHTML = items.map((i, idx) => {
     const cartKey = `${i.productId}-${i.specName}`;
     return `
-    <div class="order-item-row" style="padding:8px 0;align-items:center">
-      <span class="item-name">${escHtml(i.productName)} - ${escHtml(i.specName)}</span>
+    <div class="order-item-row" style="padding:12px;border:1px solid var(--color-border);border-radius:var(--radius-md);margin-bottom:10px;align-items:center;background:#fff">
+      <span class="item-name"><strong>${escHtml(i.productName)}</strong><br><span class="caption">${escHtml(i.specName)}</span></span>
       <span style="display:flex;align-items:center;gap:8px">
         <span class="qty-ctrl" style="border:none">
           <button onclick="adjustCheckoutQty('${cartKey}',-1)" style="width:28px;height:28px;font-size:.875rem">-</button>
@@ -1105,9 +1255,9 @@ async function lookupOrders() {
   let html = '';
   orders.forEach(order => {
     const items = order.items || [];
-    html += `<div class="card" style="margin-bottom:12px">
+    html += `<div class="card" style="margin-bottom:12px;border-radius:var(--radius-lg)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span class="badge badge-success">有效</span>
+        <span class="badge badge-success">已提交</span>
         <span class="caption">${new Date(order.created_at).toLocaleString('zh-CN')}</span>
       </div>`;
     items.forEach(it => {
@@ -1117,8 +1267,8 @@ async function lookupOrders() {
       </div>`;
     });
     if (order.note) html += `<p class="caption" style="margin-top:4px">备注: ${escHtml(order.note)}</p>`;
-    html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border-light)">
-      <span style="font-weight:600">合计: ${order.total_amount.toFixed(2)}</span>
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border-light)">
+      <span style="font-weight:800">实付金额: <span style="color:var(--color-accent);font-size:1.1rem">${order.total_amount.toFixed(2)}</span></span>
       <button class="btn btn-danger btn-sm" onclick="cancelOrder('${order.id}')">取消订单</button>
     </div></div>`;
   });
@@ -1383,11 +1533,15 @@ function renderQRCode(el) {
 
   setTimeout(() => {
     const container = document.getElementById('qr-container');
-    if (container && typeof QRCode !== 'undefined') {
+    if (!container) return;
+    if (typeof QRCode !== 'undefined') {
       container.innerHTML = '';
       new QRCode(container, { text: url, width: 200, height: 200, colorDark: '#1c1917', colorLight: '#ffffff' });
+    } else {
+      // Fallback: show URL if QR library failed to load
+      container.innerHTML = `<div style="padding:40px 20px;background:var(--color-border-light);border-radius:var(--radius-md);word-break:break-all;font-size:.8125rem;color:var(--color-text-secondary)">${url}</div>`;
     }
-  }, 100);
+  }, 200);
 }
 
 function copyPageUrl() {
