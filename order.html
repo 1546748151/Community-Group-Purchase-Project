@@ -879,6 +879,7 @@ function buildProductSummary(orders) {
   const productSales = {};
   (orders || []).forEach(o => {
     (o.items || []).forEach(it => {
+      if (it.deleted) return;
       const name = it.product_name || '';
       const spec = it.spec_name || '';
       const unit = getItemUnitQty(it);
@@ -1404,7 +1405,7 @@ async function toggleProduct(id, currentActive) {
 }
 
 async function deleteProduct(id) {
-  if (!confirm('确定要彻底删除这个商品吗？此操作不可撤销。')) return;
+  if (!confirm('确定删除这个商品吗？该商品也会从本轮已提交订单中移除，并重新计算订单金额。此操作不可撤销。')) return;
   const { error } = await adminRpc('admin_delete_product', { p_id: id });
   if (error) { toast('删除失败: ' + error.message, 'error'); return; }
   renderAdminTab('products');
@@ -1799,9 +1800,14 @@ async function lookupOrders() {
         <span class="caption">${new Date(order.created_at).toLocaleString('zh-CN')}</span>
       </div>`;
     items.forEach(it => {
+      const isDeleted = !!it.deleted;
+      const itemName = isDeleted ? '商品已删除' : (it.product_name || '');
+      const specLabel = isDeleted ? '已从本轮团购移除' : formatUnitLabel(it.spec_name);
+      const qtyLabel = isDeleted ? '' : ` ${formatOrderItemQty(it)}`;
+      const itemAmount = Number(it.subtotal) || 0;
       html += `<div class="order-item-row">
-        <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} ${formatOrderItemQty(it)}</span>
-        <span class="item-price">${it.subtotal.toFixed(2)}</span>
+        <span class="item-name">${escHtml(itemName)} - ${escHtml(specLabel)}${qtyLabel}${isDeleted ? ' <span class="badge badge-muted" style="margin-left:6px">已删除</span>' : ''}</span>
+        <span class="item-price">${itemAmount.toFixed(2)}</span>
       </div>`;
     });
     if (order.note) html += `<p class="caption" style="margin-top:4px">备注: ${escHtml(order.note)}</p>`;
@@ -1937,6 +1943,7 @@ async function renderOrderManager(el) {
       </div>`;
     userOrders.forEach(o => {
       (o.items || []).forEach(it => {
+        if (it.deleted) return;
         html += `<div class="order-item-row">
           <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} ${formatOrderItemQty(it)}</span>
           <span class="item-price">${it.subtotal.toFixed(2)}</span>
@@ -1958,6 +1965,7 @@ async function exportOrders() {
   const rows1 = [['顾客昵称', '商品名称', '规格', '购买次数', '折算采购数量', '单价', '小计', '备注', '应付总额', '下单时间']];
   orders.forEach(o => {
     (o.items || []).forEach(it => {
+      if (it.deleted) return;
       rows1.push([o.customer_name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), formatQtyLabel(getItemStockQty(it)), it.spec_price, it.subtotal, o.note || '', o.total_amount, new Date(o.created_at).toLocaleString('zh-CN')]);
     });
   });
