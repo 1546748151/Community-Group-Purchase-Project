@@ -484,7 +484,12 @@ body[data-mode="admin"] .cart-bar{display:none}
     <!-- Cart Bar -->
     <div id="cart-bar" class="cart-bar hidden">
       <div class="cart-icon">
-        <i class="ph ph-shopping-cart-simple"></i>
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+          <path d="M8 8h16l-2 9H10L8 8Z" stroke="currentColor" stroke-width="2.3" stroke-linejoin="round"/>
+          <path d="M4 5h2.7L10 17" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+          <circle cx="11" cy="22" r="1.6" fill="currentColor"/>
+          <circle cx="21" cy="22" r="1.6" fill="currentColor"/>
+        </svg>
         <span class="cart-badge" id="cart-badge">0</span>
       </div>
       <div class="cart-summary">
@@ -996,7 +1001,7 @@ function openProductForm(id) {
       </div>
       <div class="form-group">
         <label class="form-label">库存数量</label>
-        <input type="number" id="pf-stock" class="form-input" placeholder="留空表示不限库存" min="0" step="1">
+        <input type="number" id="pf-stock" class="form-input" placeholder="留空表示不限库存" min="0" step="0.01">
         <span class="form-hint">设置后库存卖完自动停止下单</span>
       </div>
       <span class="form-error" id="pf-error" style="display:none"></span>
@@ -1020,7 +1025,7 @@ function openProductForm(id) {
 
     const name = document.getElementById('pf-name').value.trim();
     const stockVal = document.getElementById('pf-stock').value.trim();
-    const stock = stockVal === '' ? null : parseInt(stockVal);
+    const stock = stockVal === '' ? null : parseFloat(stockVal);
     const specs = [];
     document.querySelectorAll('.spec-row').forEach(row => {
       const sname = row.querySelector('.spec-name').value.trim();
@@ -1210,7 +1215,7 @@ async function loadCustomerProducts() {
     const imgHtml = p.image
       ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
       : `<div class="shop-product-img placeholder">邻选</div>`;
-    const stockHtml = p.stock !== null && !stockSoldOut ? `<span class="shop-product-stock">剩余 ${p.stock} 份</span>` : '';
+    const stockHtml = p.stock !== null && !stockSoldOut ? `<span class="shop-product-stock">剩余 ${formatQty(p.stock)} 份</span>` : '';
     const actionHtml = stockSoldOut
       ? `<span class="badge badge-muted">已售罄</span>`
       : selected
@@ -1352,7 +1357,7 @@ async function submitOrder() {
   for (const item of items) {
     const { data: prod } = await sb.from('products').select('stock').eq('id', item.productId).single();
     if (prod && prod.stock !== null && prod.stock < item.quantity) {
-      toast(`${item.productName}-${item.specName} 库存不足，仅剩 ${prod.stock} 件`, 'error');
+      toast(`${item.productName}-${item.specName} 库存不足，仅剩 ${formatQty(prod.stock)} 件`, 'error');
       closeCheckout();
       loadCustomerProducts();
       return;
