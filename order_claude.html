@@ -457,7 +457,7 @@ body[data-mode="admin"] .cart-bar{display:none}
     </div>
     <div class="customer-hero">
       <div class="customer-hero-card">
-        <div class="round-line">美好小区团购群 <span style="color:var(--color-text-muted)">›</span></div>
+        <div class="round-line"><span id="site-title-text">美好小区团购群</span> <span style="color:var(--color-text-muted)">›</span></div>
         <div class="deadline-pill" id="customer-deadline-pill">请在截止前下单</div>
       </div>
       <label class="customer-search">⌕ <input id="customer-search-input" type="search" placeholder="搜索商品名称、规格或标签" oninput="customerSearchQuery=this.value;debouncedSearchLoad()"></label>
@@ -680,6 +680,7 @@ async function initApp() {
     } else {
       switchMode('customer');
     }
+    await loadSiteTitle();
   } catch(e) {
     showError('连接失败: ' + e.message);
   }
@@ -700,6 +701,16 @@ function switchMode(mode) {
   if (mode === 'customer') loadCustomerProducts();
   if (mode === 'admin') renderAdminTab('products');
   if (mode === 'admin-login') document.getElementById('login-error').style.display = 'none';
+}
+
+async function loadSiteTitle() {
+  try {
+    const { data } = await sb.rpc('get_site_title');
+    const title = (data || '美好小区团购群').trim();
+    const titleEl = document.getElementById('site-title-text');
+    if (titleEl) titleEl.textContent = title;
+    document.title = `${title} - 团购下单`;
+  } catch(_) {}
 }
 function showLoading() {
   hideAll();
@@ -2113,6 +2124,8 @@ function copyPageUrl() {
 async function renderSettings(el) {
   const { data: needsPassword } = await sb.rpc('needs_admin_password');
   const hasPassword = !needsPassword;
+  const { data: siteTitleData } = await sb.rpc('get_site_title');
+  const siteTitle = (siteTitleData || '美好小区团购群').trim();
 
   // Fetch rounds for management list
   const rounds = await getRounds();
@@ -2145,6 +2158,16 @@ async function renderSettings(el) {
       <p class="body-text" style="margin-bottom:12px">每次团购创建一个新轮次，订单和收款将按轮次分开</p>
       ${roundsHtml}
       <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="createNewRound()">+ 创建新轮次</button>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <h3 class="section-title" style="margin-bottom:12px">顾客端标题</h3>
+      <p class="body-text" style="margin-bottom:12px">显示在顾客下单页顶部，例如小区名或团购群名</p>
+      <div class="form-group" style="margin-bottom:8px">
+        <label class="form-label">标题名称</label>
+        <input type="text" id="site-title-input" class="form-input" value="${escAttr(siteTitle)}" maxlength="30">
+      </div>
+      <button class="btn btn-primary" onclick="saveSiteTitle()">保存标题</button>
     </div>
 
     <div class="card" style="margin-bottom:16px">
@@ -2273,6 +2296,16 @@ async function deleteRound(id, name) {
   if (adminRoundId === id) adminRoundId = null;
   renderAdminTab('settings');
   toast('轮次和订单已删除');
+}
+
+async function saveSiteTitle() {
+  const input = document.getElementById('site-title-input');
+  const title = input.value.trim();
+  if (!title) { toast('请输入标题名称', 'error'); return; }
+  const { error } = await adminRpc('admin_set_site_title', { p_title: title });
+  if (error) { toast('保存失败', 'error'); return; }
+  await loadSiteTitle();
+  toast('标题已保存');
 }
 
 async function changePassword() {
