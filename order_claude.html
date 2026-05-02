@@ -1688,13 +1688,26 @@ function showOrderLookup() {
   document.getElementById('modal-lookup').classList.remove('hidden');
 }
 function closeLookup() { document.getElementById('modal-lookup').classList.add('hidden'); }
+function focusLookupResults() {
+  const sheet = document.querySelector('#modal-lookup .modal-sheet');
+  const resultsEl = document.getElementById('lookup-results');
+  if (sheet && resultsEl) {
+    sheet.scrollTo({ top: Math.max(0, resultsEl.offsetTop - 12), behavior: 'smooth' });
+  }
+}
 
 async function lookupOrders() {
   const name = document.getElementById('lookup-name').value.trim();
   const resultsEl = document.getElementById('lookup-results');
   if (!name) { resultsEl.innerHTML = '<p class="caption" style="text-align:center">请输入昵称</p>'; return; }
+  if (!activeRoundId) {
+    resultsEl.innerHTML = '<div class="empty-state" style="padding:24px"><p>暂无进行中的团购</p><p class="caption">当前没有可查询的本轮订单</p></div>';
+    focusLookupResults();
+    return;
+  }
 
   resultsEl.innerHTML = '<div class="skel-line skeleton"></div><div class="skel-line skeleton"></div>';
+  focusLookupResults();
 
   // Only show orders from the current active round
   const { data: orders, error } = await sb.rpc('lookup_orders', {
@@ -1704,6 +1717,7 @@ async function lookupOrders() {
 
   if (error || !orders || orders.length === 0) {
     resultsEl.innerHTML = '<div class="empty-state" style="padding:24px"><p>未找到你的订单</p><p class="caption">请确认昵称是否正确</p></div>';
+    focusLookupResults();
     return;
   }
 
@@ -1733,6 +1747,7 @@ async function lookupOrders() {
     </div></div>`;
   });
   resultsEl.innerHTML = html;
+  focusLookupResults();
 }
 
 const cancellingOrders = new Set();
@@ -2085,6 +2100,7 @@ async function renderSettings(el) {
         <span style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-sm" onclick="editRound('${r.id}')">编辑</button>
           ${!r.is_active ? `<button class="btn btn-secondary btn-sm" onclick="activateRound('${r.id}')">启用</button>` : ''}
+          ${!r.is_active ? `<button class="btn btn-danger btn-sm" onclick="deleteRound('${r.id}', '${escAttr(r.name)}')">删除</button>` : ''}
         </span>
       </div>`;
     });
@@ -2214,6 +2230,18 @@ async function activateRound(id) {
   adminRoundId = id;
   renderAdminTab('settings');
   toast('轮次已启用');
+}
+
+async function deleteRound(id, name) {
+  if (!confirm(`确定删除「${name}」吗？该轮次的所有订单也会一起删除，此操作不可撤销。`)) return;
+  const { error } = await adminRpc('admin_delete_round', { p_id: id });
+  if (error) {
+    toast(error.message.includes('cannot delete active round') ? '不能删除进行中的轮次' : '删除失败', 'error');
+    return;
+  }
+  if (adminRoundId === id) adminRoundId = null;
+  renderAdminTab('settings');
+  toast('轮次和订单已删除');
 }
 
 async function changePassword() {
