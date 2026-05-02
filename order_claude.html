@@ -1572,6 +1572,7 @@ function openCartDetails() {
 function openCheckout() {
   const items = Object.values(cart);
   if (items.length === 0) return;
+  resetCheckoutSubmit();
 
   const itemsEl = document.getElementById('checkout-items');
   itemsEl.innerHTML = buildCartItemsHtml(true);
@@ -1597,9 +1598,18 @@ function adjustCheckoutQty(cartKey, delta) {
 
 function closeCheckout() {
   document.getElementById('modal-checkout').classList.add('hidden');
+  resetCheckoutSubmit();
 }
 
 let submitting = false;
+function resetCheckoutSubmit() {
+  submitting = false;
+  const btn = document.getElementById('btn-submit-order');
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '提交订单';
+  }
+}
 async function submitOrder() {
   if (submitting) return;
   const name = document.getElementById('checkout-name').value.trim();
@@ -1661,8 +1671,7 @@ async function submitOrder() {
     cart = {};
     loadCustomerProducts();
   } finally {
-    submitting = false;
-    if (!success) { btn.disabled = false; btn.textContent = '提交订单'; }
+    resetCheckoutSubmit();
   }
 }
 
