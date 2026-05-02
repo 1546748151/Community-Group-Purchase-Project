@@ -1169,7 +1169,7 @@ function openProductForm(id) {
           <img id="pf-image-preview-img" src="" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-md);border:1px solid var(--color-border-light)">
           <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px;color:var(--color-danger)" onclick="clearProductImage()">移除图片</button>
         </div>
-        <input type="file" id="pf-image-file" accept="image/*" style="font-family:var(--font-sans);font-size:.875rem" onchange="previewProductImage(this)">
+        <input type="file" id="pf-image-file" accept="image/jpeg,image/png,image/gif,image/webp" style="font-family:var(--font-sans);font-size:.875rem" onchange="previewProductImage(this)">
         <span class="form-hint">支持 JPG/PNG/GIF/WebP，最大 5MB。选填。</span>
         <input type="hidden" id="pf-image-url" value="">
       </div>
@@ -1226,9 +1226,38 @@ function openProductForm(id) {
     let image = document.getElementById('pf-image-url').value || null;
     const fileInput = document.getElementById('pf-image-file');
     if (fileInput.files.length > 0) {
-      errEl.textContent = '安全版本已关闭浏览器直传图片，请先填写图片 URL';
-      errEl.style.display = 'block';
-      return;
+      btn.disabled = true; btn.textContent = '上传图片中...';
+      const file = fileInput.files[0];
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        errEl.textContent = '只支持 JPG/PNG/GIF/WebP 图片';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品';
+        return;
+      }
+      if (file.size > 5242880) {
+        errEl.textContent = '图片不能超过 5MB';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品';
+        return;
+      }
+      const extMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' };
+      const ext = extMap[file.type] || 'jpg';
+      const randomPart = crypto.getRandomValues(new Uint32Array(2));
+      const path = `products/${Date.now()}-${randomPart[0].toString(36)}${randomPart[1].toString(36)}.${ext}`;
+      const { error: uploadErr } = await sb.storage.from('product-images').upload(path, file, {
+        contentType: file.type,
+        cacheControl: '3600',
+        upsert: false
+      });
+      if (uploadErr) {
+        errEl.textContent = '图片上传失败: ' + uploadErr.message;
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品';
+        return;
+      }
+      const { data: urlData } = sb.storage.from('product-images').getPublicUrl(path);
+      image = urlData.publicUrl;
     }
 
     const payload = { name, image, specs, tags, stock, is_active: true };
@@ -1255,6 +1284,8 @@ function openProductForm(id) {
 function previewProductImage(input) {
   const file = input.files[0];
   if (!file) return;
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) { toast('只支持 JPG/PNG/GIF/WebP 图片', 'error'); input.value = ''; return; }
   if (file.size > 5242880) { toast('图片不能超过 5MB', 'error'); input.value = ''; return; }
   const reader = new FileReader();
   reader.onload = function(e) {
