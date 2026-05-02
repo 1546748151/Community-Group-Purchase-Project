@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
@@ -366,6 +366,22 @@ body[data-mode="admin"] .cart-bar{display:none}
 .tag-list{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
 .tag-pill{height:32px;padding:0 12px;border-radius:999px;background:#f2f5fa;color:#344054;border:1px solid transparent;font-size:.8rem;font-weight:800;display:inline-flex;align-items:center;cursor:pointer}
 .tag-pill.active{background:var(--color-accent-light);border-color:var(--color-accent);color:var(--color-accent)}
+.admin-product-list{display:grid;gap:12px;margin-top:12px}
+.admin-product-card{display:grid;grid-template-columns:112px minmax(0,1fr);gap:14px;align-items:stretch;background:#fff;border:1px solid var(--color-border);border-radius:18px;padding:12px;box-shadow:0 10px 26px rgba(20,74,132,.065)}
+.admin-product-thumb{width:112px;height:112px;border-radius:14px;background:linear-gradient(135deg,#f8d493,#fff4da);object-fit:cover;align-self:start;border:1px solid var(--color-border-light)}
+.admin-product-thumb.placeholder{display:flex;align-items:center;justify-content:center;color:#9b5a1d;font-weight:900;font-size:.9rem}
+.admin-product-info{min-width:0;display:flex;flex-direction:column;gap:7px}
+.admin-product-head{display:flex;align-items:flex-start;gap:8px}
+.admin-product-name{font-size:.98rem;font-weight:900;line-height:1.28;color:var(--color-text);min-width:0;word-break:break-word}
+.admin-product-meta{display:flex;flex-wrap:wrap;gap:6px;color:var(--color-text-secondary);font-size:.78rem;font-weight:700}
+.admin-product-meta span{display:inline-flex;align-items:center;min-height:24px;padding:0 8px;border-radius:8px;background:#f5f8fc}
+.admin-product-tags{display:flex;gap:6px;flex-wrap:wrap}
+.admin-product-tags .tag-pill{height:26px;padding:0 9px;font-size:.74rem}
+.admin-product-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:4px}
+@media (max-width:700px){
+  .admin-product-card{grid-template-columns:86px minmax(0,1fr);gap:10px}
+  .admin-product-thumb{width:86px;height:86px}
+}
 .admin-shell{display:grid;grid-template-columns:220px 1fr;gap:0;min-height:calc(100dvh - 40px);background:rgba(255,255,255,.88);border:1px solid var(--color-border);border-radius:24px;box-shadow:0 24px 80px rgba(16,66,134,.14);overflow:hidden}
 .admin-side{background:linear-gradient(180deg,#fff,#f4f8ff);border-right:1px solid var(--color-border);padding:24px 18px}
 .admin-brand{display:flex;align-items:center;gap:9px;color:var(--color-accent);font-size:1.5rem;font-weight:900;margin-bottom:28px}
@@ -457,10 +473,10 @@ body[data-mode="admin"] .cart-bar{display:none}
     </div>
     <div class="customer-hero">
       <div class="customer-hero-card">
-        <div class="round-line">美好小区团购群 <span style="color:var(--color-text-muted)">›</span></div>
+        <div class="round-line"><span id="site-title-text">美好小区团购群</span> <span style="color:var(--color-text-muted)">›</span></div>
         <div class="deadline-pill" id="customer-deadline-pill">请在截止前下单</div>
       </div>
-      <label class="customer-search">⌕ <input id="customer-search-input" type="search" placeholder="搜索商品名称、规格或标签" oninput="customerSearchQuery=this.value;loadCustomerProducts()"></label>
+      <label class="customer-search">⌕ <input id="customer-search-input" type="search" placeholder="搜索商品名称、规格或标签" oninput="customerSearchQuery=this.value;debouncedSearchLoad()"></label>
       <div class="category-row" id="customer-category-row"></div>
     </div>
 
@@ -511,6 +527,7 @@ body[data-mode="admin"] .cart-bar{display:none}
       <p class="body-text" style="margin-bottom:24px">输入管理密码进入后台</p>
       <div class="form-group" style="align-items:center">
         <input type="password" id="admin-password-input" class="form-input auth-input" maxlength="20" placeholder="****" onkeydown="if(event.key==='Enter')adminLogin()">
+        <input type="password" id="admin-password-confirm" class="form-input auth-input" maxlength="20" placeholder="再输一次" style="margin-top:8px;display:none" onkeydown="if(event.key==='Enter')adminLogin()">
         <span class="form-error" id="login-error" style="display:none;margin-top:8px"></span>
       </div>
       <button class="btn btn-primary btn-lg" style="margin-top:20px;width:200px" onclick="adminLogin()">进入后台</button>
@@ -624,11 +641,33 @@ body[data-mode="admin"] .cart-bar{display:none}
 let sb = null;
 let CONFIG_KEY = 'groupbuy_config';
 let SESSION_KEY = 'groupbuy_admin_session';
+const DEFAULT_SUPABASE_CONFIG = {
+  url: '',
+  key: ''
+};
+function debounce(fn, ms) { let t; return function(...a) { clearTimeout(t); t = setTimeout(() => fn.apply(this, a), ms); }; }
+const debouncedSearchLoad = debounce(() => loadCustomerProducts(), 300);
 
 function getConfig() {
-  try { return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}; } catch(e) { return {}; }
+  try {
+    const saved = JSON.parse(localStorage.getItem(CONFIG_KEY)) || {};
+    return {
+      url: saved.url || DEFAULT_SUPABASE_CONFIG.url,
+      key: saved.key || DEFAULT_SUPABASE_CONFIG.key
+    };
+  } catch(e) {
+    return { ...DEFAULT_SUPABASE_CONFIG };
+  }
 }
 function saveConfig(cfg) { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
+function requireAdminSession() {
+  const token = getSession();
+  if (!token) throw new Error('admin session required');
+  return token;
+}
+async function adminRpc(fn, args = {}) {
+  return sb.rpc(fn, { p_token: requireAdminSession(), ...args });
+}
 
 async function initApp() {
   showLoading();
@@ -641,15 +680,23 @@ async function initApp() {
   try {
     sb = window.supabase.createClient(cfg.url, cfg.key);
     // Test connection
-    const { error } = await sb.from('settings').select('key').limit(1);
+    const { error } = await sb.from('rounds').select('id').limit(1);
     if (error) throw error;
 
     if (window.location.hash === '#admin') {
-      const session = getSession();
-      switchMode(session && session.expires > Date.now() ? 'admin' : 'admin-login');
+      const token = getSession();
+      if (token) {
+        const { data: valid } = await sb.rpc('validate_session', { p_token: token });
+        switchMode(valid ? 'admin' : 'admin-login');
+        if (!valid) { localStorage.removeItem(SESSION_KEY); await prepLoginConfirm(); }
+      } else {
+        switchMode('admin-login');
+        await prepLoginConfirm();
+      }
     } else {
       switchMode('customer');
     }
+    await loadSiteTitle();
   } catch(e) {
     showError('连接失败: ' + e.message);
   }
@@ -671,6 +718,16 @@ function switchMode(mode) {
   if (mode === 'admin') renderAdminTab('products');
   if (mode === 'admin-login') document.getElementById('login-error').style.display = 'none';
 }
+
+async function loadSiteTitle() {
+  try {
+    const { data } = await sb.rpc('get_site_title');
+    const title = (data || '美好小区团购群').trim();
+    const titleEl = document.getElementById('site-title-text');
+    if (titleEl) titleEl.textContent = title;
+    document.title = `${title} - 团购下单`;
+  } catch(_) {}
+}
 function showLoading() {
   hideAll();
   const el = document.getElementById('app-loading');
@@ -690,10 +747,16 @@ function saveSetup() {
   saveConfig({ url, key });
   initApp();
 }
-window.addEventListener('hashchange', () => {
+window.addEventListener('hashchange', async () => {
   if (window.location.hash === '#admin') {
-    const session = getSession();
-    switchMode(session && session.expires > Date.now() ? 'admin' : 'admin-login');
+    const token = getSession();
+    if (token && sb) {
+      const { data: valid } = await sb.rpc('validate_session', { p_token: token });
+      if (valid) { switchMode('admin'); return; }
+      localStorage.removeItem(SESSION_KEY);
+    }
+    switchMode('admin-login');
+    if (sb) await prepLoginConfirm();
   } else {
     switchMode('customer');
   }
@@ -703,12 +766,16 @@ window.addEventListener('hashchange', () => {
 // ADMIN AUTH
 // ============================================================
 function getSession() {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) { return null; }
+  try { return localStorage.getItem(SESSION_KEY) || null; } catch(e) { return null; }
 }
-function setSession() {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ expires: Date.now() + 86400000 }));
+function setSession(token) {
+  localStorage.setItem(SESSION_KEY, token);
 }
-function clearSession() { localStorage.removeItem(SESSION_KEY); }
+function clearSession() {
+  const token = getSession();
+  if (token && sb) sb.rpc('clear_session', { p_token: token }).catch(() => {});
+  localStorage.removeItem(SESSION_KEY);
+}
 
 async function hashPassword(pw) {
   const msgBuffer = new TextEncoder().encode(pw);
@@ -716,26 +783,38 @@ async function hashPassword(pw) {
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
+async function prepLoginConfirm() {
+  try {
+    const { data: needsConfirm } = await sb.rpc('needs_admin_password');
+    const el = document.getElementById('admin-password-confirm');
+    if (el) el.style.display = needsConfirm ? 'block' : 'none';
+  } catch(_) {}
+}
+
 async function adminLogin() {
   const pw = document.getElementById('admin-password-input').value.trim();
+  const confirmEl = document.getElementById('admin-password-confirm');
   const errEl = document.getElementById('login-error');
   if (!pw) { errEl.textContent = '请输入密码'; errEl.style.display = 'block'; return; }
 
-  const { data, error } = await sb.from('settings').select('value').eq('key', 'admin_password').single();
-  if (error) { errEl.textContent = '系统错误，请重试'; errEl.style.display = 'block'; return; }
-
-  const storedHash = data.value;
-  const inputHash = await hashPassword(pw);
-
-  if (!storedHash) {
-    // First time: set password
-    await sb.from('settings').update({ value: inputHash }).eq('key', 'admin_password');
-  } else if (storedHash !== inputHash) {
-    errEl.textContent = '密码错误'; errEl.style.display = 'block'; return;
+  if (confirmEl && confirmEl.style.display !== 'none') {
+    if (pw !== confirmEl.value.trim()) {
+      errEl.textContent = '两次密码不一致'; errEl.style.display = 'block'; return;
+    }
+    if (pw.length < 4) {
+      errEl.textContent = '密码至少 4 位'; errEl.style.display = 'block'; return;
+    }
   }
 
-  setSession();
+  const inputHash = await hashPassword(pw);
+  const { data: token, error } = await sb.rpc('admin_login', { pw_hash: inputHash });
+
+  if (error) { errEl.textContent = '系统错误，请重试'; errEl.style.display = 'block'; return; }
+  if (!token) { errEl.textContent = '密码错误'; errEl.style.display = 'block'; return; }
+
+  setSession(token);
   document.getElementById('admin-password-input').value = '';
+  if (confirmEl) confirmEl.value = '';
   if (window.location.hash !== '#admin') window.location.hash = '#admin';
   switchMode('admin');
   toast('欢迎回来，团长');
@@ -754,7 +833,9 @@ function adminLogout() {
 let currentAdminTab = 'products';
 let adminRoundId = null;
 let lastPurchaseSummaryText = '';
+let lastPurchaseSummaryCopyText = '';
 let customerSearchQuery = '';
+let cutoffCountdownTimer = null;
 let customerSelectedTag = '全部';
 let adminProductTagFilter = '全部';
 
@@ -1008,8 +1089,8 @@ function buildFeeAdjustedPaymentRows(groupedAmounts, fees) {
 }
 
 async function getRoundFeeMap() {
-  const { data } = await sb.from('settings').select('value').eq('key', 'round_fees').single();
-  try { return JSON.parse(data?.value || '{}') || {}; } catch(e) { return {}; }
+  const { data } = await adminRpc('admin_get_round_fee_map');
+  return data || {};
 }
 
 async function getRoundFees(roundId) {
@@ -1025,9 +1106,7 @@ async function saveRoundFees() {
     other: document.getElementById('fee-other')?.value,
     note: document.getElementById('fee-note')?.value
   });
-  const map = await getRoundFeeMap();
-  map[adminRoundId] = fees;
-  const { error } = await sb.from('settings').update({ value: JSON.stringify(map) }).eq('key', 'round_fees');
+  const { error } = await adminRpc('admin_save_round_fees', { p_round_id: adminRoundId, p_fees: fees });
   if (error) { toast('费用保存失败，请确认数据库已更新', 'error'); return; }
   toast('费用已保存');
   renderAdminTab('summary');
@@ -1039,7 +1118,7 @@ async function saveRoundFees() {
 async function renderProductManager(el) {
   el.innerHTML = '<div class="skel-card skeleton"></div><div class="skel-card skeleton"></div>';
 
-  const { data: products, error } = await sb.from('products').select('*').order('created_at', { ascending: false });
+  const { data: products, error } = await adminRpc('admin_get_products');
 
   if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab(\'products\')">重试</button></div>'; return; }
 
@@ -1068,32 +1147,38 @@ async function renderProductManager(el) {
   } else if (visibleProducts.length === 0) {
     html += `<div class="empty-state"><p>当前标签下暂无商品</p></div>`;
   } else {
+    html += '<div class="admin-product-list">';
     visibleProducts.forEach(p => {
       const specs = p.specs || [];
       const specStr = specs.map(s => `${formatUnitLabel(s.name)} / ¥${s.price}`).join(' | ');
       const stockInfo = p.stock !== null ? `库存: ${formatQtyLabel(p.stock)}` : '不限库存';
       const tags = getProductTags(p);
       const statusBadge = p.is_active ? '<span class="badge badge-success">上架</span>' : '<span class="badge badge-muted">已下架</span>';
-      html += `<div class="card" style="margin-bottom:12px">
-        ${p.image ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" style="width:100%;height:140px;object-fit:cover;border-radius:var(--radius-md);margin-bottom:12px" onerror="this.style.display='none'">` : ''}
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-              <span style="font-weight:600;font-size:.9375rem">${escHtml(p.name)}</span>
+      html += `<div class="admin-product-card">
+        ${p.image ? `<img class="admin-product-thumb" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" onerror="this.outerHTML='<div class=&quot;admin-product-thumb placeholder&quot;>邻选</div>'">` : '<div class="admin-product-thumb placeholder">邻选</div>'}
+        <div class="admin-product-info">
+          <div class="admin-product-head">
+            <div class="admin-product-name">${escHtml(p.name)}</div>
+            <div style="flex-shrink:0">
               ${statusBadge}
             </div>
-            <p class="caption">${escHtml(specStr)}</p>
-            <p class="caption">${stockInfo}</p>
-            ${tags.length ? `<div class="tag-list" style="margin:8px 0 0">${tags.map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('')}</div>` : '<p class="caption">未分类</p>'}
           </div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-secondary btn-sm" onclick="openProductForm('${p.id}')">编辑</button>
-          <button class="btn btn-ghost btn-sm" onclick="toggleProduct('${p.id}',${p.is_active})">${p.is_active ? '下架' : '上架'}</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}')">删除</button>
+          <div class="admin-product-meta">
+            <span>${escHtml(specStr || '未设置规格')}</span>
+            <span>${escHtml(stockInfo)}</span>
+          </div>
+          <div class="admin-product-tags">
+            ${tags.length ? tags.map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('') : '<span class="tag-pill">未分类</span>'}
+          </div>
+          <div class="admin-product-actions">
+            <button class="btn btn-secondary btn-sm" data-edit-product="${p.id}">编辑</button>
+            <button class="btn btn-ghost btn-sm" data-toggle-product="${p.id}" data-active="${p.is_active}">${p.is_active ? '下架' : '上架'}</button>
+            <button class="btn btn-danger btn-sm" data-delete-product="${p.id}">删除</button>
+          </div>
         </div>
       </div>`;
     });
+    html += '</div>';
   }
   el.innerHTML = html;
 }
@@ -1117,7 +1202,7 @@ function openProductForm(id) {
           <img id="pf-image-preview-img" src="" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-md);border:1px solid var(--color-border-light)">
           <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px;color:var(--color-danger)" onclick="clearProductImage()">移除图片</button>
         </div>
-        <input type="file" id="pf-image-file" accept="image/*" style="font-family:var(--font-sans);font-size:.875rem" onchange="previewProductImage(this)">
+        <input type="file" id="pf-image-file" accept="image/jpeg,image/png,image/gif,image/webp" style="font-family:var(--font-sans);font-size:.875rem" onchange="previewProductImage(this)">
         <span class="form-hint">支持 JPG/PNG/GIF/WebP，最大 5MB。选填。</span>
         <input type="hidden" id="pf-image-url" value="">
       </div>
@@ -1176,10 +1261,34 @@ function openProductForm(id) {
     if (fileInput.files.length > 0) {
       btn.disabled = true; btn.textContent = '上传图片中...';
       const file = fileInput.files[0];
-      const ext = file.name.split('.').pop();
-      const path = Date.now() + '-' + Math.random().toString(36).slice(2,8) + '.' + ext;
-      const { data: uploadData, error: uploadErr } = await sb.storage.from('product-images').upload(path, file);
-      if (uploadErr) { errEl.textContent = '图片上传失败: ' + uploadErr.message; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品'; return; }
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        errEl.textContent = '只支持 JPG/PNG/GIF/WebP 图片';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品';
+        return;
+      }
+      if (file.size > 5242880) {
+        errEl.textContent = '图片不能超过 5MB';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品';
+        return;
+      }
+      const extMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' };
+      const ext = extMap[file.type] || 'jpg';
+      const randomPart = crypto.getRandomValues(new Uint32Array(2));
+      const path = `products/${Date.now()}-${randomPart[0].toString(36)}${randomPart[1].toString(36)}.${ext}`;
+      const { error: uploadErr } = await sb.storage.from('product-images').upload(path, file, {
+        contentType: file.type,
+        cacheControl: '3600',
+        upsert: false
+      });
+      if (uploadErr) {
+        errEl.textContent = '图片上传失败: ' + uploadErr.message;
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品';
+        return;
+      }
       const { data: urlData } = sb.storage.from('product-images').getPublicUrl(path);
       image = urlData.publicUrl;
     }
@@ -1187,12 +1296,15 @@ function openProductForm(id) {
     const payload = { name, image, specs, tags, stock, is_active: true };
 
     btn.disabled = true; btn.textContent = '保存中...';
-    let result;
-    if (isEdit) {
-      result = await sb.from('products').update(payload).eq('id', id);
-    } else {
-      result = await sb.from('products').insert(payload);
-    }
+    const result = await adminRpc('admin_save_product', {
+      p_id: isEdit ? id : null,
+      p_name: payload.name,
+      p_image: payload.image,
+      p_specs: payload.specs,
+      p_tags: payload.tags,
+      p_stock: payload.stock,
+      p_is_active: payload.is_active
+    });
 
     if (result.error) { errEl.textContent = '保存失败: ' + result.error.message; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品'; return; }
 
@@ -1205,6 +1317,8 @@ function openProductForm(id) {
 function previewProductImage(input) {
   const file = input.files[0];
   if (!file) return;
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) { toast('只支持 JPG/PNG/GIF/WebP 图片', 'error'); input.value = ''; return; }
   if (file.size > 5242880) { toast('图片不能超过 5MB', 'error'); input.value = ''; return; }
   const reader = new FileReader();
   reader.onload = function(e) {
@@ -1239,7 +1353,7 @@ function addSpecRow() {
 }
 
 async function loadProductForEdit(id) {
-  const { data } = await sb.from('products').select('*').eq('id', id).single();
+  const { data } = await adminRpc('admin_get_product', { p_id: id });
   if (!data) return;
   document.getElementById('pf-name').value = data.name || '';
   // Handle image: show preview if exists
@@ -1254,21 +1368,36 @@ async function loadProductForEdit(id) {
   document.getElementById('pf-image-file').value = '';
   document.getElementById('pf-stock').value = data.stock !== null ? data.stock : '';
   document.getElementById('pf-tags').value = getProductTags(data).join(' ');
+
+  // Check if this product has orders in the current round
+  let hasOrders = false;
+  if (activeRoundId) {
+    const { data: allOrders } = await adminRpc('admin_get_orders', { p_round_id: activeRoundId });
+    hasOrders = (allOrders || []).some(o => (o.items || []).some(it => it.product_id === id));
+  }
+
   const specs = data.specs || [];
   const container = document.getElementById('pf-specs');
   container.innerHTML = '';
+  if (hasOrders) {
+    container.innerHTML = '<p class="caption" style="margin-bottom:8px;color:var(--color-warning)">⚠ 本轮已有订单包含此商品，规格名称不可修改（避免汇总时数据不一致）</p>';
+  }
   specs.forEach(s => {
     addSpecRow();
     const rows = container.querySelectorAll('.spec-row');
     const last = rows[rows.length - 1];
     last.querySelector('.spec-name').value = s.name;
     last.querySelector('.spec-price').value = s.price;
+    if (hasOrders) {
+      last.querySelector('.spec-name').disabled = true;
+      last.querySelector('.spec-name').style.opacity = '0.5';
+    }
   });
   if (specs.length === 0) { addSpecRow(); addSpecRow(); }
 }
 
 async function toggleProduct(id, currentActive) {
-  const { error } = await sb.from('products').update({ is_active: !currentActive }).eq('id', id);
+  const { error } = await adminRpc('admin_toggle_product', { p_id: id, p_is_active: !currentActive });
   if (error) { toast('操作失败', 'error'); return; }
   renderAdminTab('products');
   toast(currentActive ? '商品已下架' : '商品已上架');
@@ -1276,7 +1405,7 @@ async function toggleProduct(id, currentActive) {
 
 async function deleteProduct(id) {
   if (!confirm('确定要彻底删除这个商品吗？此操作不可撤销。')) return;
-  const { error } = await sb.from('products').delete().eq('id', id);
+  const { error } = await adminRpc('admin_delete_product', { p_id: id });
   if (error) { toast('删除失败: ' + error.message, 'error'); return; }
   renderAdminTab('products');
   toast('商品已删除');
@@ -1287,6 +1416,8 @@ async function deleteProduct(id) {
 // ============================================================
 let cart = {};
 let activeRoundId = null;
+let cachedProducts = [];
+let cachedSummaryByProduct = {};
 
 async function loadCustomerProducts() {
   const productsEl = document.getElementById('customer-products');
@@ -1347,61 +1478,76 @@ async function loadCustomerProducts() {
   }
   const visibleProducts = products.filter(p => productMatchesFilter(p, customerSearchQuery, customerSelectedTag));
   let currentProductSummary = [];
-  if (activeRoundId) {
-    const { data: activeOrders } = await sb.from('orders').select('*').eq('status', 'active').eq('round_id', activeRoundId);
-    currentProductSummary = buildProductSummary(activeOrders || []);
-  }
-  const summaryByProduct = {};
-  currentProductSummary.forEach(row => { summaryByProduct[row.productId || row.name] = row; });
+  cachedSummaryByProduct = {};
+  currentProductSummary.forEach(row => { cachedSummaryByProduct[row.productId || row.name] = row; });
+  cachedProducts = products;
 
   let html = '';
   visibleProducts.forEach(p => {
-    const specs = p.specs || [];
-    const stockSoldOut = p.stock !== null && p.stock <= 0;
-    const firstSpec = specs[0] || { name: '默认', price: 0 };
-    const selectedKey = Object.keys(cart).find(k => k.startsWith(p.id + '-'));
-    const selected = selectedKey ? cart[selectedKey] : null;
-    const displaySpec = selected ? selected.specName : firstSpec.name;
-    const displayPrice = selected ? selected.specPrice : firstSpec.price;
-    const fillSummary = summaryByProduct[p.id] || summaryByProduct[p.name];
-    const imgHtml = p.image
-      ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
-      : `<div class="shop-product-img placeholder">邻选</div>`;
-    const stockHtml = p.stock !== null && !stockSoldOut ? `<span class="shop-product-stock">剩余 ${formatQtyLabel(p.stock)} 份</span>` : '';
-    const fillHtml = fillSummary && fillSummary.isSplitUnit
-      ? (fillSummary.unfilled
-        ? `<span class="shop-product-fill">未拼满，差 ${escHtml(fillSummary.missingLabel || formatQtyLabel(fillSummary.missingQty))}</span>`
-        : `<span class="shop-product-fill ok">已拼满</span>`)
-      : '';
-    const actionHtml = stockSoldOut
-      ? `<span class="badge badge-muted">已售罄</span>`
-      : selected
-        ? `<div class="qty-ctrl">
-            <button onclick="updateCartItem('${escAttr(selectedKey)}',-1)">−</button>
-            <span class="qty-val">${selected.quantity}</span>
-            <button onclick="updateCartItem('${escAttr(selectedKey)}',1)">+</button>
-          </div>`
-        : `<button class="add-round" onclick="selectSpec('${p.id}','${escAttr(firstSpec.name)}',${firstSpec.price},'${escAttr(p.name)}')">+</button>`;
-    html += `<div class="shop-product" style="opacity:${stockSoldOut ? '.55' : '1'}">
-      ${imgHtml}
-      <div class="shop-product-body">
-        <div class="shop-product-name">${escHtml(p.name)}</div>
-        <div class="shop-product-meta"><span class="shop-product-spec">${escHtml(formatUnitLabel(displaySpec))}</span>${stockHtml}${fillHtml}</div>
-        ${getProductTags(p).length ? `<div class="tag-list" style="margin:0 0 8px">${getProductTags(p).map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('')}</div>` : ''}
-        <div class="shop-product-price">¥${Number(displayPrice || 0).toFixed(2)} <small>/份</small></div>
-        ${specs.length > 1 ? `<div class="spec-grid">${specs.map(s => {
-          const cartKey = `${p.id}-${s.name}`;
-          const inCart = cart[cartKey];
-          return `<div class="spec-option ${inCart ? 'selected' : ''} ${stockSoldOut ? 'disabled' : ''}" onclick="${stockSoldOut ? '' : `selectSpec('${p.id}','${escAttr(s.name)}',${s.price},'${escAttr(p.name)}')`}">${escHtml(formatUnitLabel(s.name))}</div>`;
-        }).join('')}</div>` : ''}
-      </div>
-      <div class="shop-product-action">${actionHtml}</div>
-    </div>`;
+    html += buildProductCardHtml(p);
   });
   if (visibleProducts.length === 0) {
     productsEl.innerHTML = '<div class="empty-state" style="padding:40px 16px"><p style="font-weight:600;color:var(--color-text);margin-bottom:4px">没有找到商品</p><p>换个关键词或标签试试</p></div>';
   } else {
     productsEl.innerHTML = html;
+  }
+  updateCartBar();
+}
+
+function buildProductCardHtml(p) {
+  const specs = p.specs || [];
+  const stockSoldOut = p.stock !== null && p.stock <= 0;
+  const firstSpec = specs[0] || { name: '默认', price: 0 };
+  const selectedKey = Object.keys(cart).find(k => k.startsWith(p.id + '-'));
+  const selected = selectedKey ? cart[selectedKey] : null;
+  const displaySpec = selected ? selected.specName : firstSpec.name;
+  const displayPrice = selected ? selected.specPrice : firstSpec.price;
+  const fillSummary = cachedSummaryByProduct[p.id] || cachedSummaryByProduct[p.name];
+  const imgHtml = p.image
+    ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
+    : `<div class="shop-product-img placeholder">邻选</div>`;
+  const stockHtml = p.stock !== null && !stockSoldOut ? `<span class="shop-product-stock">剩余 ${formatQtyLabel(p.stock)} 份</span>` : '';
+  const fillHtml = fillSummary && fillSummary.isSplitUnit
+    ? (fillSummary.unfilled
+      ? `<span class="shop-product-fill">未拼满，差 ${escHtml(fillSummary.missingLabel || formatQtyLabel(fillSummary.missingQty))}</span>`
+      : `<span class="shop-product-fill ok">已拼满</span>`)
+    : '';
+  const actionHtml = stockSoldOut
+    ? `<span class="badge badge-muted">已售罄</span>`
+    : selected
+      ? `<div class="qty-ctrl">
+          <button data-cart-key="${escAttr(selectedKey)}" data-cart-delta="-1">−</button>
+          <span class="qty-val">${selected.quantity}</span>
+          <button data-cart-key="${escAttr(selectedKey)}" data-cart-delta="1">+</button>
+        </div>`
+      : `<button class="add-round" data-spec='${JSON.stringify({id:p.id,name:firstSpec.name,price:firstSpec.price,pname:p.name})}'>+</button>`;
+  return `<div class="shop-product" data-product-id="${p.id}" style="opacity:${stockSoldOut ? '.55' : '1'}">
+    ${imgHtml}
+    <div class="shop-product-body">
+      <div class="shop-product-name">${escHtml(p.name)}</div>
+      <div class="shop-product-meta"><span class="shop-product-spec">${escHtml(formatUnitLabel(displaySpec))}</span>${stockHtml}${fillHtml}</div>
+      ${getProductTags(p).length ? `<div class="tag-list" style="margin:0 0 8px">${getProductTags(p).map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('')}</div>` : ''}
+      <div class="shop-product-price">¥${Number(displayPrice || 0).toFixed(2)} <small>/份</small></div>
+      ${specs.length > 1 ? `<div class="spec-grid">${specs.map(s => {
+        const cartKey = `${p.id}-${s.name}`;
+        const inCart = cart[cartKey];
+        return stockSoldOut
+          ? `<div class="spec-option disabled">${escHtml(formatUnitLabel(s.name))}</div>`
+          : `<div class="spec-option ${inCart ? 'selected' : ''}" data-spec='${JSON.stringify({id:p.id,name:s.name,price:s.price,pname:p.name})}'>${escHtml(formatUnitLabel(s.name))}</div>`;
+      }).join('')}</div>` : ''}
+    </div>
+    <div class="shop-product-action">${actionHtml}</div>
+  </div>`;
+}
+
+function refreshProduct(productId) {
+  const p = cachedProducts.find(pr => pr.id === productId);
+  if (!p) { loadCustomerProducts(); return; }
+  const card = document.querySelector(`.shop-product[data-product-id="${productId}"]`);
+  if (card) {
+    card.outerHTML = buildProductCardHtml(p);
+  } else {
+    loadCustomerProducts(); return;
   }
   updateCartBar();
 }
@@ -1417,14 +1563,15 @@ function selectSpec(productId, specName, specPrice, productName) {
     });
     cart[cartKey] = { productId, productName, specName, specPrice, quantity: 1 };
   }
-  loadCustomerProducts();
+  refreshProduct(productId);
 }
 
 function updateCartItem(cartKey, delta) {
   if (!cart[cartKey]) return;
+  const productId = cart[cartKey].productId;
   cart[cartKey].quantity += delta;
   if (cart[cartKey].quantity <= 0) delete cart[cartKey];
-  loadCustomerProducts();
+  refreshProduct(productId);
 }
 
 function updateCartBar() {
@@ -1453,9 +1600,9 @@ function buildCartItemsHtml(showControls = true) {
       <span class="item-name"><strong>${escHtml(i.productName)}</strong><br><span class="caption">${escHtml(formatUnitLabel(i.specName))}</span></span>
       <span style="display:flex;align-items:center;gap:8px">
         ${showControls ? `<span class="qty-ctrl" style="border:none">
-          <button onclick="adjustCheckoutQty('${escAttr(cartKey)}',-1)" style="width:28px;height:28px;font-size:.875rem">-</button>
+          <button data-checkout-key="${escAttr(cartKey)}" data-checkout-delta="-1" style="width:28px;height:28px;font-size:.875rem">-</button>
           <span class="qty-val" style="min-width:24px;font-size:.8125rem">${i.quantity}</span>
-          <button onclick="adjustCheckoutQty('${escAttr(cartKey)}',1)" style="width:28px;height:28px;font-size:.875rem">+</button>
+          <button data-checkout-key="${escAttr(cartKey)}" data-checkout-delta="1" style="width:28px;height:28px;font-size:.875rem">+</button>
         </span>` : `<span class="caption">${formatOrderItemQty({ spec_name: i.specName, quantity: i.quantity })}</span>`}
         <span class="item-price">${(i.specPrice * i.quantity).toFixed(2)}</span>
       </span>
@@ -1481,7 +1628,7 @@ function openCartDetails() {
       <span style="font-weight:800">合计</span>
       <span style="font-size:1.25rem;font-weight:700;color:var(--color-accent)">¥${total.toFixed(2)}</span>
     </div>
-    <button class="btn btn-primary btn-block btn-lg" onclick="this.closest('.modal-overlay').remove();openCheckout()">去下单</button>
+    <button class="btn btn-primary btn-block btn-lg" onclick="openCheckout();this.closest('.modal-overlay').remove()">去下单</button>
   </div>`;
   document.body.appendChild(modal);
 }
@@ -1489,6 +1636,7 @@ function openCartDetails() {
 function openCheckout() {
   const items = Object.values(cart);
   if (items.length === 0) return;
+  resetCheckoutSubmit();
 
   const itemsEl = document.getElementById('checkout-items');
   itemsEl.innerHTML = buildCartItemsHtml(true);
@@ -1514,87 +1662,81 @@ function adjustCheckoutQty(cartKey, delta) {
 
 function closeCheckout() {
   document.getElementById('modal-checkout').classList.add('hidden');
+  resetCheckoutSubmit();
 }
 
+let submitting = false;
+function resetCheckoutSubmit() {
+  submitting = false;
+  const btn = document.getElementById('btn-submit-order');
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '提交订单';
+  }
+}
 async function submitOrder() {
+  if (submitting) return;
   const name = document.getElementById('checkout-name').value.trim();
   const note = document.getElementById('checkout-note').value.trim();
   const errEl = document.getElementById('checkout-name-error');
+  const btn = document.getElementById('btn-submit-order');
 
   if (!name) { errEl.textContent = '请填写你的群昵称'; errEl.style.display = 'block'; return; }
 
   const items = Object.values(cart);
   if (items.length === 0) { toast('购物车为空', 'error'); return; }
 
-  // Re-check round is still active and not expired (prevent stale-page submissions)
-  const { data: roundCheck } = await sb.from('rounds').select('is_active, cutoff_time').eq('id', activeRoundId).single();
-  if (!roundCheck || !roundCheck.is_active) {
-    toast('本轮团购已结束，请刷新页面', 'error');
-    cart = {};
-    closeCheckout();
-    loadCustomerProducts();
-    return;
-  }
-  if (roundCheck.cutoff_time && new Date(roundCheck.cutoff_time) <= new Date()) {
-    toast('下单已截止，请刷新页面', 'error');
-    cart = {};
-    closeCheckout();
-    loadCustomerProducts();
-    return;
-  }
+  submitting = true;
+  btn.disabled = true; btn.textContent = '提交中...';
+  let success = false;
 
-  // Re-check stock for all items
-  for (const item of items) {
-    const { data: prod } = await sb.from('products').select('stock').eq('id', item.productId).single();
-    const needQty = getItemStockQty(item);
-    if (prod && prod.stock !== null && Number(prod.stock) < needQty) {
-      toast(`${item.productName}-${formatUnitLabel(item.specName)} 库存不足，仅剩 ${formatQtyLabel(prod.stock)} 份`, 'error');
-      closeCheckout();
-      loadCustomerProducts();
-      return;
+  try {
+    // Re-check round is still active and not expired (prevent stale-page submissions)
+    const { data: roundCheck } = await sb.from('rounds').select('is_active, cutoff_time').eq('id', activeRoundId).single();
+    if (!roundCheck || !roundCheck.is_active) {
+      toast('本轮团购已结束，请刷新页面', 'error');
+      cart = {}; closeCheckout(); loadCustomerProducts(); return;
     }
-  }
-
-  const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
-  const orderItems = items.map(i => ({
-    product_id: i.productId,
-    product_name: i.productName,
-    spec_name: i.specName,
-    spec_price: i.specPrice,
-    quantity: i.quantity,
-    unit_qty: getItemUnitQty(i) || 1,
-    purchase_qty: getItemStockQty(i),
-    subtotal: parseFloat((i.specPrice * i.quantity).toFixed(2))
-  }));
-
-  const { data, error } = await sb.from('orders').insert({
-    customer_name: name,
-    items: orderItems,
-    note,
-    total_amount: parseFloat(total.toFixed(2)),
-    status: 'active',
-    round_id: activeRoundId
-  }).select('id').single();
-
-  if (error) { toast('提交失败: ' + error.message, 'error'); return; }
-
-  localStorage.setItem('groupbuy_last_name', name);
-
-  // Update stock
-  for (const item of items) {
-    const { data: prod } = await sb.from('products').select('stock').eq('id', item.productId).single();
-    if (prod && prod.stock !== null) {
-      const newStock = Math.max(0, Number(prod.stock) - getItemStockQty(item));
-      await sb.from('products').update({ stock: newStock }).eq('id', item.productId);
+    if (roundCheck.cutoff_time && new Date(roundCheck.cutoff_time) <= new Date()) {
+      toast('下单已截止，请刷新页面', 'error');
+      cart = {}; closeCheckout(); loadCustomerProducts(); return;
     }
+
+    const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
+    const orderItems = items.map(i => ({
+      product_id: i.productId,
+      product_name: i.productName,
+      spec_name: i.specName,
+      spec_price: i.specPrice,
+      quantity: i.quantity,
+      unit_qty: getItemUnitQty(i) || 1,
+      purchase_qty: getItemStockQty(i),
+      subtotal: parseFloat((i.specPrice * i.quantity).toFixed(2))
+    }));
+
+    const { data: orderId, error } = await sb.rpc('create_order', {
+      p_customer_name: name,
+      p_items: orderItems,
+      p_note: note,
+      p_total_amount: parseFloat(total.toFixed(2)),
+      p_round_id: activeRoundId
+    });
+
+    if (error) {
+      toast(error.message.includes('insufficient stock') ? '库存不足，请刷新后重试' : '提交失败: ' + error.message, 'error'); return;
+    }
+
+    localStorage.setItem('groupbuy_last_name', name);
+    success = true;
+    closeCheckout();
+    document.getElementById('success-order-id').textContent = String(orderId).slice(0, 8).toUpperCase();
+    document.getElementById('modal-success').classList.remove('hidden');
+
+    cart = {};
+    loadCustomerProducts();
+  } finally {
+    resetCheckoutSubmit();
   }
-
-  closeCheckout();
-  document.getElementById('success-order-id').textContent = data.id.slice(0, 8).toUpperCase();
-  document.getElementById('modal-success').classList.remove('hidden');
-
-  cart = {};
-  loadCustomerProducts();
 }
 
 function closeSuccess() {
@@ -1610,20 +1752,43 @@ function showOrderLookup() {
   document.getElementById('modal-lookup').classList.remove('hidden');
 }
 function closeLookup() { document.getElementById('modal-lookup').classList.add('hidden'); }
+function focusLookupResults() {
+  const sheet = document.querySelector('#modal-lookup .modal-sheet');
+  const resultsEl = document.getElementById('lookup-results');
+  if (sheet && resultsEl) {
+    sheet.scrollTo({ top: Math.max(0, resultsEl.offsetTop - 12), behavior: 'smooth' });
+  }
+}
 
 async function lookupOrders() {
   const name = document.getElementById('lookup-name').value.trim();
   const resultsEl = document.getElementById('lookup-results');
   if (!name) { resultsEl.innerHTML = '<p class="caption" style="text-align:center">请输入昵称</p>'; return; }
+  if (!activeRoundId) {
+    resultsEl.innerHTML = '<div class="empty-state" style="padding:24px"><p>暂无进行中的团购</p><p class="caption">当前没有可查询的本轮订单</p></div>';
+    focusLookupResults();
+    return;
+  }
 
   resultsEl.innerHTML = '<div class="skel-line skeleton"></div><div class="skel-line skeleton"></div>';
+  focusLookupResults();
 
-  const { data: orders, error } = await sb.from('orders').select('*').eq('customer_name', name).eq('status', 'active').order('created_at', { ascending: false });
+  // Only show orders from the current active round
+  const { data: orders, error } = await sb.rpc('lookup_orders', {
+    p_customer_name: name,
+    p_round_id: activeRoundId
+  });
 
   if (error || !orders || orders.length === 0) {
     resultsEl.innerHTML = '<div class="empty-state" style="padding:24px"><p>未找到你的订单</p><p class="caption">请确认昵称是否正确</p></div>';
+    focusLookupResults();
     return;
   }
+
+  // Check if cancellation is still allowed
+  const { data: roundData } = await sb.from('rounds').select('cutoff_time').eq('id', activeRoundId).single();
+  const cutoffTime = roundData?.cutoff_time ? new Date(roundData.cutoff_time) : null;
+  const canCancel = !cutoffTime || new Date() < cutoffTime;
 
   let html = '';
   orders.forEach(order => {
@@ -1642,33 +1807,33 @@ async function lookupOrders() {
     if (order.note) html += `<p class="caption" style="margin-top:4px">备注: ${escHtml(order.note)}</p>`;
     html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border-light)">
       <span style="font-weight:800">实付金额: <span style="color:var(--color-accent);font-size:1.1rem">${order.total_amount.toFixed(2)}</span></span>
-      <button class="btn btn-danger btn-sm" onclick="cancelOrder('${order.id}')">取消订单</button>
+      ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelOrder('${order.id}')">取消订单</button>` : '<span class="badge badge-muted">已截止，不可取消</span>'}
     </div></div>`;
   });
   resultsEl.innerHTML = html;
+  focusLookupResults();
 }
 
+const cancellingOrders = new Set();
 async function cancelOrder(orderId) {
+  if (cancellingOrders.has(orderId)) return;
   if (!confirm('确定要取消这个订单吗？')) return;
+  cancellingOrders.add(orderId);
 
-  // Fetch order to get items for stock restoration
-  const { data: order } = await sb.from('orders').select('*').eq('id', orderId).single();
-
-  const { error } = await sb.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
-  if (error) { toast('取消失败', 'error'); return; }
-
-  // Restore stock
-  if (order && order.items) {
-    for (const item of order.items) {
-      const { data: prod } = await sb.from('products').select('stock').eq('id', item.product_id).single();
-      if (prod && prod.stock !== null) {
-        await sb.from('products').update({ stock: Number(prod.stock) + getItemStockQty(item) }).eq('id', item.product_id);
-      }
+  try {
+    const name = document.getElementById('lookup-name').value.trim();
+    const { data: ok, error } = await sb.rpc('cancel_order', { p_order_id: orderId, p_customer_name: name });
+    if (error) {
+      toast(error.message.includes('round is closed') ? '已截止，无法取消订单' : '取消失败', 'error');
+      return;
     }
-  }
+    if (!ok) { toast('订单不存在或昵称不匹配', 'error'); return; }
 
-  lookupOrders();
-  toast('订单已取消，库存已恢复');
+    lookupOrders();
+    toast('订单已取消，库存已恢复');
+  } finally {
+    cancellingOrders.delete(orderId);
+  }
 }
 
 // ============================================================
@@ -1691,9 +1856,7 @@ async function renderOrderManager(el) {
   }).join('');
 
   // Fetch orders for selected round
-  let query = sb.from('orders').select('*').eq('status', 'active');
-  if (adminRoundId) query = query.eq('round_id', adminRoundId);
-  const { data: orders, error } = await query.order('created_at');
+  const { data: orders, error } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
 
   if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab(\'orders\')">重试</button></div>'; return; }
 
@@ -1788,9 +1951,7 @@ async function renderOrderManager(el) {
 }
 
 async function exportOrders() {
-  let query = sb.from('orders').select('*').eq('status', 'active');
-  if (adminRoundId) query = query.eq('round_id', adminRoundId);
-  const { data: orders } = await query.order('created_at');
+  const { data: orders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
   if (!orders || orders.length === 0) { toast('没有可导出的订单', 'info'); return; }
 
   // Sheet 1: User orders
@@ -1834,9 +1995,7 @@ async function renderPaymentSummary(el) {
     `<option value="${r.id}" ${r.id === adminRoundId ? 'selected' : ''}>${escHtml(r.name)} ${r.is_active ? '(进行中)' : ''}</option>`
   ).join('');
 
-  let query = sb.from('orders').select('*').eq('status', 'active');
-  if (adminRoundId) query = query.eq('round_id', adminRoundId);
-  const { data: orders } = await query.order('created_at');
+  const { data: orders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
   const fees = adminRoundId ? await getRoundFees(adminRoundId) : normalizeFeeConfig({});
 
   const currentRound = allRounds.find(r => r.id === adminRoundId);
@@ -1913,7 +2072,8 @@ async function renderPaymentSummary(el) {
   });
   copyText += `合计：${total.toFixed(2)} 元`;
 
-  html += `<button class="btn btn-primary btn-block" style="margin-top:16px" onclick="copyPaymentSummary(\`${escAttr(copyText)}\`)">一键复制收款清单</button>`;
+  lastPurchaseSummaryCopyText = copyText;
+  html += `<button class="btn btn-primary btn-block" style="margin-top:16px" data-copy-payment>一键复制收款清单</button>`;
   html += '<p class="caption" style="text-align:center;margin-top:8px">复制后可直接粘贴到微信群收款</p>';
 
   el.innerHTML = html;
@@ -1984,12 +2144,10 @@ function copyPageUrl() {
 // SETTINGS
 // ============================================================
 async function renderSettings(el) {
-  const { data: pwData } = await sb.from('settings').select('value').eq('key', 'admin_password').single();
-  const hasPassword = pwData?.value && pwData.value.length > 0;
-
-  // Auto-deactivate expired rounds
-  const now = new Date().toISOString();
-  await sb.from('rounds').update({ is_active: false }).eq('is_active', true).lt('cutoff_time', now).not('cutoff_time', 'is', null);
+  const { data: needsPassword } = await sb.rpc('needs_admin_password');
+  const hasPassword = !needsPassword;
+  const { data: siteTitleData } = await sb.rpc('get_site_title');
+  const siteTitle = (siteTitleData || '美好小区团购群').trim();
 
   // Fetch rounds for management list
   const rounds = await getRounds();
@@ -2008,6 +2166,7 @@ async function renderSettings(el) {
         <span style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-sm" onclick="editRound('${r.id}')">编辑</button>
           ${!r.is_active ? `<button class="btn btn-secondary btn-sm" onclick="activateRound('${r.id}')">启用</button>` : ''}
+          ${!r.is_active ? `<button class="btn btn-danger btn-sm" onclick="deleteRound('${r.id}', '${escAttr(r.name)}')">删除</button>` : ''}
         </span>
       </div>`;
     });
@@ -2021,6 +2180,16 @@ async function renderSettings(el) {
       <p class="body-text" style="margin-bottom:12px">每次团购创建一个新轮次，订单和收款将按轮次分开</p>
       ${roundsHtml}
       <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="createNewRound()">+ 创建新轮次</button>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <h3 class="section-title" style="margin-bottom:12px">顾客端标题</h3>
+      <p class="body-text" style="margin-bottom:12px">显示在顾客下单页顶部，例如小区名或团购群名</p>
+      <div class="form-group" style="margin-bottom:8px">
+        <label class="form-label">标题名称</label>
+        <input type="text" id="site-title-input" class="form-input" value="${escAttr(siteTitle)}" maxlength="30">
+      </div>
+      <button class="btn btn-primary" onclick="saveSiteTitle()">保存标题</button>
     </div>
 
     <div class="card" style="margin-bottom:16px">
@@ -2072,18 +2241,13 @@ function createNewRound() {
     const errEl = document.getElementById('round-error');
     if (!name) { errEl.textContent = '请输入轮次名称'; errEl.style.display = 'block'; return; }
 
-    // Deactivate all existing rounds
-    await sb.from('rounds').update({ is_active: false }).neq('id', '00000000-0000-0000-0000-000000000000');
-
-    const payload = {
-      name,
-      cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null,
-      is_active: true
-    };
-    const { data, error } = await sb.from('rounds').insert(payload).select('id').single();
+    const { data, error } = await adminRpc('admin_create_round', {
+      p_name: name,
+      p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null
+    });
     if (error) { errEl.textContent = '创建失败: ' + error.message; errEl.style.display = 'block'; return; }
 
-    adminRoundId = data.id;
+    adminRoundId = data;
     modal.remove();
     renderAdminTab('settings');
     toast('新轮次已创建并启用');
@@ -2122,10 +2286,11 @@ async function editRound(id) {
     const errEl = document.getElementById('round-error');
     if (!name) { errEl.textContent = '请输入轮次名称'; errEl.style.display = 'block'; return; }
 
-    const { error } = await sb.from('rounds').update({
-      name,
-      cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null
-    }).eq('id', id);
+    const { error } = await adminRpc('admin_update_round', {
+      p_id: id,
+      p_name: name,
+      p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null
+    });
     if (error) { errEl.textContent = '保存失败: ' + error.message; errEl.style.display = 'block'; return; }
 
     modal.remove();
@@ -2136,11 +2301,33 @@ async function editRound(id) {
 
 async function activateRound(id) {
   if (!confirm('启用这个轮次将自动关闭其他轮次。确认吗？')) return;
-  await sb.from('rounds').update({ is_active: false }).neq('id', '00000000-0000-0000-0000-000000000000');
-  await sb.from('rounds').update({ is_active: true }).eq('id', id);
+  const { error } = await adminRpc('admin_activate_round', { p_id: id });
+  if (error) { toast('启用失败', 'error'); return; }
   adminRoundId = id;
   renderAdminTab('settings');
   toast('轮次已启用');
+}
+
+async function deleteRound(id, name) {
+  if (!confirm(`确定删除「${name}」吗？该轮次的所有订单也会一起删除，此操作不可撤销。`)) return;
+  const { error } = await adminRpc('admin_delete_round', { p_id: id });
+  if (error) {
+    toast(error.message.includes('cannot delete active round') ? '不能删除进行中的轮次' : '删除失败', 'error');
+    return;
+  }
+  if (adminRoundId === id) adminRoundId = null;
+  renderAdminTab('settings');
+  toast('轮次和订单已删除');
+}
+
+async function saveSiteTitle() {
+  const input = document.getElementById('site-title-input');
+  const title = input.value.trim();
+  if (!title) { toast('请输入标题名称', 'error'); return; }
+  const { error } = await adminRpc('admin_set_site_title', { p_title: title });
+  if (error) { toast('保存失败', 'error'); return; }
+  await loadSiteTitle();
+  toast('标题已保存');
 }
 
 async function changePassword() {
@@ -2148,7 +2335,7 @@ async function changePassword() {
   if (!pw) { toast('请输入密码', 'error'); return; }
   if (pw.length < 4) { toast('密码至少4位', 'error'); return; }
   const hash = await hashPassword(pw);
-  const { error } = await sb.from('settings').update({ value: hash }).eq('key', 'admin_password');
+  const { error } = await adminRpc('admin_set_password', { p_pw_hash: hash });
   if (error) { toast('修改失败', 'error'); return; }
   document.getElementById('new-password').value = '';
   toast('密码已更新');
@@ -2159,18 +2346,23 @@ async function changePassword() {
 // ============================================================
 function updateCutoffCountdown(cutoffTime) {
   const el = document.getElementById('cutoff-countdown');
+  if (cutoffCountdownTimer) { clearInterval(cutoffCountdownTimer); cutoffCountdownTimer = null; }
   if (!cutoffTime) { el.textContent = ''; return; }
   const update = () => {
     const now = new Date();
     const diff = cutoffTime - now;
-    if (diff <= 0) { el.textContent = '已截止'; el.style.color = 'var(--color-danger)'; loadCustomerProducts(); return; }
+    if (diff <= 0) {
+      el.textContent = '已截止'; el.style.color = 'var(--color-danger)';
+      clearInterval(cutoffCountdownTimer); cutoffCountdownTimer = null;
+      loadCustomerProducts(); return;
+    }
     const h = Math.floor(diff / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     el.textContent = `截止: ${cutoffTime.toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} (剩余${h}时${m}分)`;
     el.style.color = 'var(--color-text-secondary)';
   };
   update();
-  setInterval(update, 60000);
+  cutoffCountdownTimer = setInterval(update, 60000);
 }
 
 // ============================================================
@@ -2195,8 +2387,49 @@ function escHtml(s) {
 }
 function escAttr(s) {
   if (!s) return '';
-  return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+
+// ============================================================
+// EVENT DELEGATION (replaces inline onclick handlers)
+// ============================================================
+document.addEventListener('click', function(e) {
+  // Cart +/- buttons in product list
+  const cartBtn = e.target.closest('[data-cart-key]');
+  if (cartBtn) {
+    updateCartItem(cartBtn.dataset.cartKey, Number(cartBtn.dataset.cartDelta));
+    return;
+  }
+  // Add-to-cart / spec select buttons in product list
+  const specBtn = e.target.closest('[data-spec]');
+  if (specBtn) {
+    try {
+      const d = JSON.parse(specBtn.dataset.spec);
+      selectSpec(d.id, d.name, d.price, d.pname);
+    } catch(_) {}
+    return;
+  }
+  // Checkout modal +/- buttons
+  const checkoutBtn = e.target.closest('[data-checkout-key]');
+  if (checkoutBtn) {
+    adjustCheckoutQty(checkoutBtn.dataset.checkoutKey, Number(checkoutBtn.dataset.checkoutDelta));
+    return;
+  }
+  // Copy payment summary button
+  if (e.target.closest('[data-copy-payment]')) {
+    copyPaymentSummary(lastPurchaseSummaryCopyText);
+    return;
+  }
+  // Admin: edit product
+  const editBtn = e.target.closest('[data-edit-product]');
+  if (editBtn) { openProductForm(editBtn.dataset.editProduct); return; }
+  // Admin: toggle product
+  const toggleBtn = e.target.closest('[data-toggle-product]');
+  if (toggleBtn) { toggleProduct(toggleBtn.dataset.toggleProduct, toggleBtn.dataset.active === 'true'); return; }
+  // Admin: delete product
+  const deleteBtn = e.target.closest('[data-delete-product]');
+  if (deleteBtn) { deleteProduct(deleteBtn.dataset.deleteProduct); return; }
+});
 
 // ============================================================
 // BOOT
