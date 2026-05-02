@@ -257,6 +257,22 @@ body{
 .copyable{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--color-border-light);border-radius:var(--radius-sm);margin-bottom:8px}
 .copyable .amount{font-weight:700;font-size:1.0625rem;flex:1}
 .copyable .name{font-size:.875rem;color:var(--color-text-secondary)}
+.purchase-summary-card{background:linear-gradient(145deg,#fff,#f2f7ff);border:1px solid var(--color-border);border-radius:18px;padding:18px;margin-bottom:18px;box-shadow:0 12px 28px rgba(20,74,132,.08)}
+.purchase-summary-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.purchase-summary-head h3{font-size:1.05rem;margin:0 0 4px;color:var(--color-accent);font-weight:900}
+.purchase-summary-head p{margin:0;color:var(--color-text-secondary);font-size:.82rem}
+.purchase-list{display:grid;gap:8px;margin-bottom:14px}
+.purchase-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:11px 12px;background:#fff;border:1px solid var(--color-border-light);border-radius:12px}
+.purchase-name{font-weight:850;font-size:.92rem;min-width:0}
+.purchase-spec{display:block;color:var(--color-text-secondary);font-size:.76rem;font-weight:500;margin-top:2px}
+.purchase-qty{font-weight:900;color:var(--color-accent);white-space:nowrap}
+.purchase-amount{font-weight:800;white-space:nowrap;color:var(--color-text)}
+.purchase-badge{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;background:var(--color-warning-light);color:#b45309;font-size:.72rem;font-weight:850;margin-left:6px;vertical-align:middle}
+.purchase-badge.ok{background:var(--color-accent-light);color:var(--color-accent)}
+.fee-config-card{background:linear-gradient(145deg,#fff,#f2f7ff);border:1px solid var(--color-border);border-radius:16px;padding:16px;margin-bottom:18px;box-shadow:0 10px 24px rgba(20,74,132,.06)}
+.fee-config-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+.fee-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:10px 12px;background:#fff;border:1px solid var(--color-border-light);border-radius:12px;margin-bottom:8px}
+.fee-row .amount{font-weight:900;color:var(--color-accent);white-space:nowrap}
 
 /* Responsive */
 @media (min-width:481px){
@@ -353,6 +369,9 @@ body[data-mode="admin"] .cart-bar{display:none}
   .admin-nav{display:flex;gap:8px;overflow-x:auto;padding:4px 0 16px;margin-bottom:0;-webkit-overflow-scrolling:touch}
   .admin-nav button{width:auto;flex-shrink:0;justify-content:center;padding:0 16px;border:1px solid var(--color-border);background:#fff;border-radius:999px;height:38px;font-size:.82rem}
   .stat-row{grid-template-columns:1fr 1fr}
+  .purchase-summary-head{display:block}.purchase-summary-head .btn{margin-top:12px;width:100%}
+  .purchase-row{grid-template-columns:minmax(0,1fr) auto}.purchase-amount{grid-column:1 / -1;color:var(--color-text-secondary);font-size:.82rem}
+  .fee-config-grid{grid-template-columns:1fr}.fee-row{grid-template-columns:1fr auto}
   .shop-product{grid-template-columns:104px 1fr auto}
   .shop-product-img{width:104px;height:98px}
 }
@@ -700,6 +719,7 @@ function adminLogout() {
 // ============================================================
 let currentAdminTab = 'products';
 let adminRoundId = null;
+let lastPurchaseSummaryText = '';
 
 async function getActiveRound() {
   const { data } = await sb.from('rounds').select('*').eq('is_active', true).limit(1);
@@ -735,6 +755,130 @@ async function renderAdminTab(tab) {
     case 'qr': renderQRCode(el); break;
     case 'settings': await renderSettings(el); break;
   }
+}
+
+function buildProductSummary(orders) {
+  const productSales = {};
+  (orders || []).forEach(o => {
+    (o.items || []).forEach(it => {
+      const name = it.product_name || '';
+      const spec = it.spec_name || '';
+      const unit = parsePurchaseUnit(spec);
+      const isSplitUnit = unit !== null;
+      const key = isSplitUnit ? (it.product_id || name) : `${it.product_id || name}::${spec}`;
+      if (!productSales[key]) {
+        productSales[key] = {
+          name,
+          spec,
+          specs: new Set(),
+          qty: 0,
+          orderQty: 0,
+          amount: 0,
+          isSplitUnit,
+          unfilled: false,
+          missingQty: 0
+        };
+      }
+      const quantity = Number(it.quantity) || 0;
+      productSales[key].specs.add(spec);
+      productSales[key].qty += (isSplitUnit ? unit : 1) * quantity;
+      productSales[key].orderQty += quantity;
+      productSales[key].amount += Number(it.subtotal) || 0;
+    });
+  });
+  return Object.values(productSales).map(ps => {
+    const rounded = Math.round(ps.qty * 1000) / 1000;
+    const nextInt = Math.ceil(rounded);
+    ps.qty = rounded;
+    ps.spec = ps.isSplitUnit ? `拼单规格：${Array.from(ps.specs).sort((a, b) => Number(a) - Number(b)).join('、')}` : ps.spec;
+    ps.unfilled = ps.isSplitUnit && Math.abs(rounded - Math.round(rounded)) > 0.0001;
+    ps.missingQty = ps.unfilled ? Math.round((nextInt - rounded) * 1000) / 1000 : 0;
+    return ps;
+  }).sort((a, b) => {
+    const nameCmp = String(a.name).localeCompare(String(b.name), 'zh-CN');
+    return nameCmp || String(a.spec).localeCompare(String(b.spec), 'zh-CN');
+  });
+}
+
+function parsePurchaseUnit(specName) {
+  const raw = String(specName || '').trim();
+  if (!/^\d+(?:\.\d+)?$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function formatQty(n) {
+  return Number(n).toFixed(3).replace(/\.?0+$/, '');
+}
+
+function buildPurchaseSummaryText(roundLabel, productSummary) {
+  const totalQty = productSummary.reduce((s, ps) => s + ps.qty, 0);
+  const totalAmount = productSummary.reduce((s, ps) => s + ps.amount, 0);
+  let text = `${roundLabel || '本轮团购'} 商品采购清单：\n`;
+  productSummary.forEach((ps, index) => {
+    const status = ps.unfilled ? `，未拼满，差 ${formatQty(ps.missingQty)}` : '';
+    text += `${index + 1}. ${ps.name}（${ps.spec}） x${formatQty(ps.qty)}${status}，销售额 ${ps.amount.toFixed(2)} 元\n`;
+  });
+  text += `合计：${productSummary.length} 种商品，${formatQty(totalQty)} 件，${totalAmount.toFixed(2)} 元`;
+  return text;
+}
+
+function normalizeFeeConfig(fees) {
+  return {
+    shipping: Math.max(0, Number(fees?.shipping) || 0),
+    packing: Math.max(0, Number(fees?.packing) || 0),
+    other: Math.max(0, Number(fees?.other) || 0),
+    note: String(fees?.note || '').trim()
+  };
+}
+
+function getFeeTotal(fees) {
+  const cfg = normalizeFeeConfig(fees);
+  return cfg.shipping + cfg.packing + cfg.other;
+}
+
+function buildFeeAdjustedPaymentRows(groupedAmounts, fees) {
+  const names = Object.keys(groupedAmounts || {});
+  const feeTotalCents = Math.round(getFeeTotal(fees) * 100);
+  const baseShareCents = names.length ? Math.floor(feeTotalCents / names.length) : 0;
+  const remainder = names.length ? feeTotalCents % names.length : 0;
+  return names.map((name, index) => {
+    const productAmount = Number(groupedAmounts[name]) || 0;
+    const shareCents = baseShareCents + (index < remainder ? 1 : 0);
+    const feeShare = shareCents / 100;
+    return {
+      name,
+      productAmount,
+      feeShare,
+      total: Math.round((productAmount + feeShare) * 100) / 100
+    };
+  });
+}
+
+async function getRoundFeeMap() {
+  const { data } = await sb.from('settings').select('value').eq('key', 'round_fees').single();
+  try { return JSON.parse(data?.value || '{}') || {}; } catch(e) { return {}; }
+}
+
+async function getRoundFees(roundId) {
+  const map = await getRoundFeeMap();
+  return normalizeFeeConfig(map[roundId]);
+}
+
+async function saveRoundFees() {
+  if (!adminRoundId) { toast('请先选择团购轮次', 'error'); return; }
+  const fees = normalizeFeeConfig({
+    shipping: document.getElementById('fee-shipping')?.value,
+    packing: document.getElementById('fee-packing')?.value,
+    other: document.getElementById('fee-other')?.value,
+    note: document.getElementById('fee-note')?.value
+  });
+  const map = await getRoundFeeMap();
+  map[adminRoundId] = fees;
+  const { error } = await sb.from('settings').update({ value: JSON.stringify(map) }).eq('key', 'round_fees');
+  if (error) { toast('费用保存失败，请确认数据库已更新', 'error'); return; }
+  toast('费用已保存');
+  renderAdminTab('summary');
 }
 
 // ============================================================
@@ -1325,6 +1469,7 @@ async function renderOrderManager(el) {
   if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab(\'orders\')">重试</button></div>'; return; }
 
   const currentRound = allRounds.find(r => r.id === adminRoundId);
+  const roundLabel = currentRound ? currentRound.name : '本轮团购';
   const totalOrders = orders?.length || 0;
   const totalAmount = orders?.reduce((s, o) => s + parseFloat(o.total_amount), 0) || 0;
 
@@ -1354,6 +1499,36 @@ async function renderOrderManager(el) {
     return;
   }
 
+  const productSummary = buildProductSummary(orders);
+  const totalProductQty = productSummary.reduce((s, ps) => s + ps.qty, 0);
+  const unfilledCount = productSummary.filter(ps => ps.unfilled).length;
+  lastPurchaseSummaryText = buildPurchaseSummaryText(roundLabel, productSummary);
+
+  html += `<div class="purchase-summary-card">
+    <div class="purchase-summary-head">
+      <div>
+        <h3>本轮商品汇总</h3>
+        <p>用于团长到外部平台统一下采购单 · ${productSummary.length} 种商品 / ${formatQty(totalProductQty)} 件${unfilledCount ? ` · ${unfilledCount} 个未拼满` : ''}</p>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="copyPurchaseSummary()">复制采购清单</button>
+    </div>
+    <div class="purchase-list">`;
+  productSummary.forEach(ps => {
+    const statusBadge = ps.unfilled
+      ? `<span class="purchase-badge">未拼满，差 ${formatQty(ps.missingQty)}</span>`
+      : (ps.isSplitUnit ? '<span class="purchase-badge ok">已拼满</span>' : '');
+    html += `<div class="purchase-row">
+      <div class="purchase-name">${escHtml(ps.name)}${statusBadge}<span class="purchase-spec">${escHtml(ps.spec)}</span></div>
+      <div class="purchase-qty">x${formatQty(ps.qty)}</div>
+      <div class="purchase-amount">${ps.amount.toFixed(2)} 元</div>
+    </div>`;
+  });
+  html += `</div>
+    <p class="caption">复制后可直接粘贴到美团优选、多多买菜、盒马等平台备货记录里。</p>
+  </div>`;
+
+  html += '<h3 class="section-title" style="margin:20px 0 12px">按人订单明细</h3>';
+
   // Group by customer
   const grouped = {};
   orders.forEach(o => {
@@ -1380,24 +1555,6 @@ async function renderOrderManager(el) {
     html += '</div>';
   });
 
-  // Product sales summary
-  html += '<h3 class="section-title" style="margin:20px 0 12px">商品销量统计</h3>';
-  const productSales = {};
-  orders.forEach(o => {
-    (o.items || []).forEach(it => {
-      const key = `${it.product_name} - ${it.spec_name}`;
-      if (!productSales[key]) productSales[key] = { name: it.product_name, spec: it.spec_name, qty: 0, amount: 0 };
-      productSales[key].qty += it.quantity;
-      productSales[key].amount += it.subtotal;
-    });
-  });
-  Object.values(productSales).forEach(ps => {
-    html += `<div class="order-item-row" style="padding:6px 0">
-      <span class="item-name">${escHtml(ps.name)} - ${escHtml(ps.spec)}</span>
-      <span class="item-price">x${ps.qty} / ${ps.amount.toFixed(2)}</span>
-    </div>`;
-  });
-
   el.innerHTML = html;
 }
 
@@ -1416,17 +1573,15 @@ async function exportOrders() {
   });
 
   // Sheet 2: Product summary
-  const productSales = {};
-  orders.forEach(o => {
-    (o.items || []).forEach(it => {
-      const key = `${it.product_name}-${it.spec_name}`;
-      if (!productSales[key]) productSales[key] = { name: it.product_name, spec: it.spec_name, qty: 0, amount: 0 };
-      productSales[key].qty += it.quantity;
-      productSales[key].amount += it.subtotal;
-    });
-  });
-  const rows2 = [['商品名称', '规格', '总销量', '总金额']];
-  Object.values(productSales).forEach(ps => rows2.push([ps.name, ps.spec, ps.qty, ps.amount.toFixed(2)]));
+  const productSales = buildProductSummary(orders);
+  const rows2 = [['商品名称', '规格/拼单说明', '采购数量', '总金额', '拼单状态']];
+  productSales.forEach(ps => rows2.push([
+    ps.name,
+    ps.spec,
+    formatQty(ps.qty),
+    ps.amount.toFixed(2),
+    ps.unfilled ? `未拼满，差 ${formatQty(ps.missingQty)}` : (ps.isSplitUnit ? '已拼满' : '')
+  ]));
 
   const wb = XLSX.utils.book_new();
   const ws1 = XLSX.utils.aoa_to_sheet(rows1);
@@ -1453,6 +1608,7 @@ async function renderPaymentSummary(el) {
   let query = sb.from('orders').select('*').eq('status', 'active');
   if (adminRoundId) query = query.eq('round_id', adminRoundId);
   const { data: orders } = await query.order('created_at');
+  const fees = adminRoundId ? await getRoundFees(adminRoundId) : normalizeFeeConfig({});
 
   const currentRound = allRounds.find(r => r.id === adminRoundId);
   let roundLabel = currentRound ? currentRound.name : '';
@@ -1462,6 +1618,24 @@ async function renderPaymentSummary(el) {
       ${roundOpts}
     </select>
     <button class="btn btn-secondary btn-sm" onclick="renderAdminTab('summary')">刷新</button>
+  </div>`;
+
+  const feeTotal = getFeeTotal(fees);
+  html += `<div class="fee-config-card">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+      <div>
+        <h3 class="section-title" style="margin-bottom:4px">本轮费用设置</h3>
+        <p class="caption">仅团长后台可见，会按下单人数均摊到收款清单。</p>
+      </div>
+      <div style="font-weight:900;color:var(--color-accent)">费用合计 ${feeTotal.toFixed(2)} 元</div>
+    </div>
+    <div class="fee-config-grid">
+      <div class="form-group"><label class="form-label">运费</label><input id="fee-shipping" class="form-input" type="number" min="0" step="0.01" value="${fees.shipping || ''}" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">包装费</label><input id="fee-packing" class="form-input" type="number" min="0" step="0.01" value="${fees.packing || ''}" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">其他费用</label><input id="fee-other" class="form-input" type="number" min="0" step="0.01" value="${fees.other || ''}" placeholder="0.00"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px"><label class="form-label">费用说明（选填）</label><input id="fee-note" class="form-input" maxlength="80" value="${escAttr(fees.note)}" placeholder="如：山姆配送费、保温袋、停车费"></div>
+    <button class="btn btn-primary btn-sm" onclick="saveRoundFees()">保存费用设置</button>
   </div>`;
 
   if (!orders || orders.length === 0) {
@@ -1476,22 +1650,37 @@ async function renderPaymentSummary(el) {
     grouped[o.customer_name] += parseFloat(o.total_amount);
   });
 
-  const total = Object.values(grouped).reduce((s, v) => s + v, 0);
+  const paymentRows = buildFeeAdjustedPaymentRows(grouped, fees);
+  const productTotal = paymentRows.reduce((s, row) => s + row.productAmount, 0);
+  const total = paymentRows.reduce((s, row) => s + row.total, 0);
+  const perPersonHint = paymentRows.length ? `${paymentRows[0].feeShare.toFixed(2)} 元/人起` : '0.00 元/人';
 
   html += `<div class="stat-row">
     <div class="stat-card"><div class="stat-value" style="color:var(--color-accent)">${Object.keys(grouped).length}</div><div class="stat-label">${escHtml(roundLabel)} · 下单人数</div></div>
-    <div class="stat-card"><div class="stat-value">${total.toFixed(2)}</div><div class="stat-label">收款总额 (元)</div></div>
+    <div class="stat-card"><div class="stat-value">${total.toFixed(2)}</div><div class="stat-label">含均摊费用收款总额 (元)</div></div>
   </div>`;
+
+  if (feeTotal > 0) {
+    html += `<div class="card" style="margin-bottom:16px;background:#fff">
+      <div class="order-item-row"><span class="item-name">商品金额合计</span><span class="item-price">${productTotal.toFixed(2)} 元</span></div>
+      <div class="order-item-row"><span class="item-name">运费</span><span class="item-price">${fees.shipping.toFixed(2)} 元</span></div>
+      <div class="order-item-row"><span class="item-name">包装费</span><span class="item-price">${fees.packing.toFixed(2)} 元</span></div>
+      <div class="order-item-row"><span class="item-name">其他费用</span><span class="item-price">${fees.other.toFixed(2)} 元</span></div>
+      <div class="order-item-row" style="border-top:1px solid var(--color-border-light);margin-top:8px;padding-top:10px"><span class="item-name">均摊说明</span><span class="item-price">${perPersonHint}</span></div>
+      ${fees.note ? `<p class="caption" style="margin-top:8px">说明：${escHtml(fees.note)}</p>` : ''}
+    </div>`;
+  }
 
   html += '<h3 class="section-title" style="margin-bottom:12px">收款清单</h3>';
 
   let copyText = `${roundLabel} 收款汇总：\n`;
-  Object.entries(grouped).forEach(([name, amount]) => {
+  if (feeTotal > 0) copyText += `费用：运费 ${fees.shipping.toFixed(2)} 元，包装费 ${fees.packing.toFixed(2)} 元，其他 ${fees.other.toFixed(2)} 元，按 ${paymentRows.length} 人均摊\n`;
+  paymentRows.forEach(row => {
     html += `<div class="copyable">
-      <span class="name">${escHtml(name)}</span>
-      <span class="amount">${amount.toFixed(2)} 元</span>
+      <span class="name">${escHtml(row.name)}</span>
+      <span class="amount">${row.productAmount.toFixed(2)} + ${row.feeShare.toFixed(2)} = ${row.total.toFixed(2)} 元</span>
     </div>`;
-    copyText += `${name} — ${amount.toFixed(2)} 元\n`;
+    copyText += `${row.name} — 商品 ${row.productAmount.toFixed(2)} + 均摊 ${row.feeShare.toFixed(2)} = ${row.total.toFixed(2)} 元\n`;
   });
   copyText += `合计：${total.toFixed(2)} 元`;
 
@@ -1503,17 +1692,26 @@ async function renderPaymentSummary(el) {
 
 function copyPaymentSummary(text) {
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(() => toast('已复制，可粘贴到微信群收款')).catch(() => fallbackCopy(text));
+    navigator.clipboard.writeText(text).then(() => toast('已复制，可粘贴到微信群收款')).catch(() => fallbackCopy(text, '已复制，可粘贴到微信群收款'));
   } else {
-    fallbackCopy(text);
+    fallbackCopy(text, '已复制，可粘贴到微信群收款');
   }
 }
-function fallbackCopy(text) {
+
+function copyPurchaseSummary() {
+  if (!lastPurchaseSummaryText) { toast('暂无可复制的商品汇总', 'info'); return; }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(lastPurchaseSummaryText).then(() => toast('已复制采购清单')).catch(() => fallbackCopy(lastPurchaseSummaryText, '已复制采购清单'));
+  } else {
+    fallbackCopy(lastPurchaseSummaryText, '已复制采购清单');
+  }
+}
+function fallbackCopy(text, message = '已复制') {
   const ta = document.createElement('textarea');
   ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
   document.body.appendChild(ta); ta.select();
   document.execCommand('copy'); document.body.removeChild(ta);
-  toast('已复制，可粘贴到微信群收款');
+  toast(message);
 }
 
 // ============================================================
@@ -1549,7 +1747,7 @@ function copyPageUrl() {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(url).then(() => toast('下单链接已复制'));
   } else {
-    fallbackCopy(url);
+    fallbackCopy(url, '下单链接已复制');
   }
 }
 
