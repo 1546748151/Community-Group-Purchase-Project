@@ -1776,7 +1776,7 @@ function openCartDetails() {
       <span style="font-weight:800">合计</span>
       <span id="cart-detail-total" style="font-size:1.25rem;font-weight:700;color:var(--color-accent)">¥${total.toFixed(2)}</span>
     </div>
-    <button class="btn btn-primary btn-block btn-lg" id="btn-checkout" onclick="openCheckout();this.closest('.modal-overlay').remove()">去下单</button>
+    <button class="btn btn-primary btn-block btn-lg" id="btn-checkout" onclick="unlockScroll();openCheckout();this.closest('.modal-overlay').remove()">去下单</button>
   </div>`;
   document.body.appendChild(modal);
 }
