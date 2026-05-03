@@ -87,7 +87,7 @@ ALTER TABLE rounds ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT t
 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 COMMENT ON TABLE rounds IS '团购轮次表，每次团购为一个轮次';
-COMMENT ON COLUMN rounds.is_active IS '是否为当前活跃轮次，同一时间只有一个轮次为 active';
+COMMENT ON COLUMN rounds.is_active IS '是否为活跃轮次，允许多轮次同时 active';
 
 -- 为 orders 表增加轮次关联（如果列不存在）
 DO $$ BEGIN
@@ -633,9 +633,9 @@ BEGIN
   FOR item IN SELECT * FROM jsonb_array_elements(COALESCE(p_items, '[]'::jsonb))
   LOOP
     product_id := (item->>'product_id')::uuid;
-    SELECT * INTO product_row FROM products WHERE id = product_id AND is_active = true;
+    SELECT * INTO product_row FROM products WHERE id = product_id AND round_id = p_round_id AND is_active = true;
     IF product_row.id IS NULL THEN
-      RAISE EXCEPTION 'product is not active';
+      RAISE EXCEPTION 'product is not in this round or not active';
     END IF;
     SELECT spec.value INTO spec_row
       FROM jsonb_array_elements(product_row.specs) AS spec(value)
