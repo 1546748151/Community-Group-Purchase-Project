@@ -1574,13 +1574,25 @@ async function loadCustomerProducts() {
 }
 
 let stockPollTimer = null;
+let stockPollFailures = 0;
 function startStockPolling() {
   clearInterval(stockPollTimer);
+  stockPollFailures = 0;
   stockPollTimer = setInterval(async () => {
     if (!document.getElementById('mode-customer')?.classList.contains('active')) return;
     const { data: fresh, error } = await sb.from('products').select('id, stock, is_active').eq('is_active', true);
-    if (error || !fresh) return;
+    if (error || !fresh) {
+      stockPollFailures++;
+      if (stockPollFailures >= 3) toast('库存同步异常，请刷新页面', 'error');
+      return;
+    }
+    stockPollFailures = 0;
     let changed = false;
+    const freshIds = new Set(fresh.map(fp => fp.id));
+    // 检测下架商品：缓存有但 fresh 没有 → 被下架
+    cachedProducts.forEach(cp => {
+      if (cp.is_active && !freshIds.has(cp.id)) { cp.is_active = false; changed = true; }
+    });
     fresh.forEach(fp => {
       const cached = cachedProducts.find(cp => cp.id === fp.id);
       if (cached && (cached.stock !== fp.stock || cached.is_active !== fp.is_active)) {
@@ -1621,7 +1633,7 @@ function buildProductCardHtml(p) {
           <span class="qty-val">${selected.quantity}</span>
           <button data-cart-key="${escAttr(selectedKey)}" data-cart-delta="1" ${atStockLimit ? 'disabled' : ''}>+</button>
         </div>`
-      : `<button class="add-round" data-spec='${JSON.stringify({id:p.id,name:firstSpec.name,price:firstSpec.price,pname:p.name})}'>+</button>`;
+      : `<button class="add-round" data-spec='${escAttr(JSON.stringify({id:p.id,name:firstSpec.name,price:firstSpec.price,pname:p.name}))}'>+</button>`;
   return `<div class="shop-product" data-product-id="${p.id}" style="opacity:${stockSoldOut ? '.55' : '1'}">
     ${imgHtml}
     <div class="shop-product-body">
@@ -1634,7 +1646,7 @@ function buildProductCardHtml(p) {
         const inCart = cart[cartKey];
         return stockSoldOut
           ? `<div class="spec-option disabled">${escHtml(formatUnitLabel(s.name))}</div>`
-          : `<div class="spec-option ${inCart ? 'selected' : ''}" data-spec='${JSON.stringify({id:p.id,name:s.name,price:s.price,pname:p.name})}'>${escHtml(formatUnitLabel(s.name))}</div>`;
+          : `<div class="spec-option ${inCart ? 'selected' : ''}" data-spec='${escAttr(JSON.stringify({id:p.id,name:s.name,price:s.price,pname:p.name}))}'>${escHtml(formatUnitLabel(s.name))}</div>`;
       }).join('')}</div>` : ''}
     </div>
     <div class="shop-product-action">${actionHtml}</div>
