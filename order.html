@@ -650,6 +650,11 @@ body[data-mode="admin"] .cart-bar{display:none}
 // ============================================================
 let sb = null;
 let CONFIG_KEY = 'groupbuy_config';
+
+// 弹窗栈计数器：开 +1 关 -1，归零才解锁 body 滚动
+let modalDepth = 0;
+function lockScroll() { if (!modalDepth++) lockScroll(); }
+function unlockScroll() { if (modalDepth > 0 && !--modalDepth) unlockScroll(); }
 let SESSION_KEY = 'groupbuy_admin_session';
 const DEFAULT_SUPABASE_CONFIG = {
   url: '',
@@ -1693,7 +1698,7 @@ function adjustCartDetailsQty(cartKey, delta) {
   if (items.length === 0) {
     const overlay = document.querySelector('[data-modal="cart"]');
     if (overlay) overlay.remove();
-    document.body.style.overflow = '';
+    unlockScroll();
     return;
   }
   const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
@@ -1722,7 +1727,7 @@ function openCartDetails() {
   const items = Object.values(cart);
   if (items.length === 0) return;
 
-  document.body.style.overflow = 'hidden';
+  lockScroll();
 
   // 防御：先清除可能残留的旧购物车弹窗
   const old = document.querySelector('[data-modal="cart"]');
@@ -1751,7 +1756,7 @@ function openCartDetails() {
   }).join('');
 
   const closeCartDetails = () => {
-    document.body.style.overflow = '';
+    unlockScroll();
     modal.remove();
     updateCartBar();
   };
@@ -1779,7 +1784,7 @@ function openCartDetails() {
 function openCheckout() {
   const items = Object.values(cart);
   if (items.length === 0) return;
-  document.body.style.overflow = 'hidden';
+  lockScroll();
   resetCheckoutSubmit();
 
   const itemsEl = document.getElementById('checkout-items');
@@ -1805,7 +1810,7 @@ function adjustCheckoutQty(cartKey, delta) {
 }
 
 function closeCheckout() {
-  document.body.style.overflow = '';
+  unlockScroll();
   document.getElementById('modal-checkout').classList.add('hidden');
   updateCartBar();
   resetCheckoutSubmit();
@@ -1898,13 +1903,13 @@ function closeSuccess() {
 // ORDER LOOKUP & MODIFY
 // ============================================================
 function showOrderLookup() {
-  document.body.style.overflow = 'hidden';
+  lockScroll();
   document.getElementById('lookup-name').value = localStorage.getItem('groupbuy_last_name') || '';
   document.getElementById('lookup-results').innerHTML = '';
   document.getElementById('modal-lookup').classList.remove('hidden');
 }
 function closeLookup() {
-  document.body.style.overflow = '';
+  unlockScroll();
   document.getElementById('modal-lookup').classList.add('hidden');
 }
 function focusLookupResults() {
@@ -2000,7 +2005,6 @@ async function cancelOrder(orderId) {
 // ADMIN ORDER MANAGER
 // ============================================================
 async function renderOrderManager(el) {
-  el.innerHTML = '<div class="skel-card skeleton"></div><div class="skel-card skeleton"></div>';
 
   // Fetch rounds for selector
   const allRounds = await getRounds();
@@ -2154,7 +2158,6 @@ async function exportOrders() {
 // PAYMENT SUMMARY
 // ============================================================
 async function renderPaymentSummary(el) {
-  el.innerHTML = '<div class="skel-line skeleton"></div><div class="skel-line skeleton"></div>';
 
   const allRounds = await getRounds();
   if (lastRoundsError) {
