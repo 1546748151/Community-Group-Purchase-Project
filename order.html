@@ -879,10 +879,14 @@ async function renderAdminTab(tab) {
   if (!el) return;
   el.style.display = 'block';
 
-  // For orders/payment tabs, always sync to current active round
+  // For orders/payment tabs: validate adminRoundId, only auto-correct if invalid
   if (tab === 'orders' || tab === 'summary') {
     const active = await getActiveRound();
-    adminRoundId = active ? active.id : null;
+    const allRounds = await getRounds();
+    const validIds = new Set(allRounds.map(r => r.id));
+    if (!adminRoundId || !validIds.has(adminRoundId)) {
+      adminRoundId = active ? active.id : (allRounds[0]?.id || null);
+    }
   }
   switch(tab) {
     case 'products': await renderProductManager(el); break;
@@ -2027,10 +2031,10 @@ async function renderOrderManager(el) {
   const totalAmount = orders?.reduce((s, o) => s + parseFloat(o.total_amount), 0) || 0;
 
   let html = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-    <select class="form-input" style="flex:1;min-width:120px" onchange="adminRoundId=this.value;renderAdminTab('orders')">
+    <select class="form-input" style="flex:1;min-width:120px" onchange="adminRoundId=this.value;renderOrderManager(document.getElementById('admin-tab-orders'))">
       ${roundOpts}
     </select>
-    <button class="btn btn-secondary btn-sm" onclick="renderAdminTab('orders')">刷新</button>
+    <button class="btn btn-secondary btn-sm" onclick="renderOrderManager(document.getElementById('admin-tab-orders'))">刷新</button>
   </div>`;
 
   html += `<div class="stat-row">
@@ -2171,10 +2175,10 @@ async function renderPaymentSummary(el) {
   let roundLabel = currentRound ? currentRound.name : '';
 
   let html = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-    <select class="form-input" style="flex:1;min-width:120px" onchange="adminRoundId=this.value;renderAdminTab('summary')">
+    <select class="form-input" style="flex:1;min-width:120px" onchange="adminRoundId=this.value;renderPaymentSummary(document.getElementById('admin-tab-summary'))">
       ${roundOpts}
     </select>
-    <button class="btn btn-secondary btn-sm" onclick="renderAdminTab('summary')">刷新</button>
+    <button class="btn btn-secondary btn-sm" onclick="renderPaymentSummary(document.getElementById('admin-tab-summary'))">刷新</button>
   </div>`;
 
   const feeTotal = getFeeTotal(fees);
