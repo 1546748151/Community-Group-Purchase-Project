@@ -794,7 +794,7 @@ function setSession(token) {
 }
 function clearSession() {
   const token = getSession();
-  if (token && sb) sb.rpc('clear_session', { p_token: token }).catch(() => {});
+  if (token && sb) Promise.resolve(sb.rpc('clear_session', { p_token: token })).catch(() => {});
   localStorage.removeItem(SESSION_KEY);
 }
 
