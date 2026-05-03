@@ -1689,6 +1689,7 @@ function adjustCartDetailsQty(cartKey, delta) {
   if (items.length === 0) {
     const overlay = document.querySelector('[data-modal="cart"]');
     if (overlay) overlay.remove();
+    document.body.style.overflow = '';
     return;
   }
   const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
