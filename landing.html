@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Geist:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 :root{
   --blue:#064da8;
@@ -74,9 +75,10 @@ h1 span{color:var(--blue)}
 .pname{font-size:12px;font-weight:800}.spec{font-size:11px;color:var(--muted);margin-top:2px}.price{font-size:13px;color:var(--red);font-weight:900;margin-top:4px}
 .qty{height:34px;border:1px solid #d8e2f0;border-radius:8px;display:flex;align-items:center;justify-content:space-around;font-weight:900}
 .submit{height:44px;background:linear-gradient(135deg,var(--blue),#075fcb);border-radius:9px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;margin-top:18px}
-.qr-float{position:absolute;right:-24px;top:392px;width:146px;height:224px;background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:2}
-.hand{font-family:KaiTi,serif;font-size:18px;line-height:1.6;color:#21314d;text-align:center;transform:rotate(-7deg)}
-.qr{width:110px;height:110px;background:linear-gradient(90deg,#111 8px,transparent 8px) 0 0/16px 16px,linear-gradient(#111 8px,transparent 8px) 0 0/16px 16px,#fff;border:10px solid #fff;box-shadow:0 0 0 1px #d8e2f0;border-radius:10px}
+.qr-float{position:absolute;right:-12px;top:420px;width:110px;height:auto;background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px;z-index:2}
+.hand{font-family:KaiTi,serif;font-size:13px;line-height:1.5;color:#21314d;text-align:center;transform:rotate(-5deg)}
+.qr{width:70px;height:70px;border:6px solid #fff;box-shadow:0 0 0 1px #d8e2f0;border-radius:8px;box-sizing:content-box}
+.qr canvas,.qr img{width:70px!important;height:70px!important;border-radius:4px;display:block}
 .section{margin:0 38px 22px;background:rgba(255,255,255,.78);border:1px solid var(--line);border-radius:22px;padding:34px;box-shadow:0 18px 50px rgba(20,74,132,.06)}
 .section-title{text-align:center;font-family:var(--serif);font-size:30px;font-weight:800;margin-bottom:22px}
 .section-title .vs{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:999px;background:var(--blue);color:#fff;font-family:var(--sans);font-size:16px;margin:0 14px}
@@ -107,7 +109,7 @@ h1 span{color:var(--blue)}
 .mock-phone{position:relative;justify-self:end;width:132px;height:242px;border:5px solid #111827;border-radius:25px;background:#fff;padding:14px 8px;box-shadow:0 16px 34px rgba(15,23,42,.16)}.mock-phone .product{grid-template-columns:30px 1fr;padding:6px 0}.mock-phone .thumb{width:30px;height:30px;background-size:220px auto}.mock-phone .pname{font-size:11px}.mock-phone .price{font-size:12px}.mock-phone .submit{height:28px;margin-top:10px}
 .bottom-cta{margin:0 38px 38px;background:linear-gradient(135deg,#064da8,#003b86);border-radius:18px;padding:34px 48px;color:#fff;display:grid;grid-template-columns:1fr auto auto auto;gap:20px;align-items:center}
 .bottom-cta h2{font-size:32px;margin:0 0 8px;font-family:var(--serif)}.bottom-cta p{margin:0;color:#dbeafe}.bottom-cta .btn-outline{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.38);color:#fff}
-.bottom-qr{width:110px;height:110px;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 28px rgba(0,0,0,.12)}.bottom-qr .qr{width:88px;height:88px;border-width:8px;border-radius:8px}
+.bottom-qr{width:88px;height:88px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(0,0,0,.12)}.bottom-qr .qr{width:70px;height:70px;border-width:5px;border-radius:6px;box-sizing:content-box}
 .footer{padding:34px 38px 44px;text-align:center;color:#7890ad;font-size:13px}.footer-links{display:flex;justify-content:center;gap:54px;margin-bottom:28px;color:#355173;font-weight:700}
 @media(max-width:980px){.shell{width:calc(100vw - 16px);margin:8px}.nav{padding:0 24px}.links{display:none}.hero{grid-template-columns:1fr;padding:24px;min-height:auto}.hero-copy{padding-top:24px}h1{font-size:48px}.trust{width:auto;flex-wrap:wrap}.compare,.roles,.bottom-cta{grid-template-columns:1fr}.steps{grid-template-columns:1fr}.arrow{display:none}.qr-float{display:none}.dessert{display:none}.section,.bottom-cta{margin-left:18px;margin-right:18px}.phone{width:100%;max-width:330px}.visual{justify-content:flex-start;padding-left:0}.relay-sheet{display:none}.bottom-qr{display:none}}
 @media(max-width:560px){.nav-actions a:first-child{display:none}.brand{font-size:22px}.hero{padding:20px 16px}.section{padding:22px}.section-title{font-size:23px}.compare .mini-card{position:static;margin-top:18px}.steps{grid-template-columns:1fr}.role{grid-template-columns:1fr;min-height:260px;padding:24px}.mock-laptop,.mock-phone{justify-self:center;margin-top:8px;width:100%;max-width:270px}.mock-phone{max-width:210px}.cta-row{flex-direction:column}.btn-lg{width:100%;justify-content:flex-start}.bottom-cta{padding:26px 22px}.footer-links{flex-direction:column;gap:12px}}
@@ -240,5 +242,16 @@ h1 span{color:var(--blue)}
     <p>© 2026 邻选。社区团购下单工具。</p>
   </footer>
 </main>
+<script>
+// 生成真实下单二维码，指向 order.html
+(function(){
+  var url = window.location.origin + window.location.pathname.replace(/landing\.html$/, 'order.html');
+  if (typeof QRCode !== 'undefined') {
+    document.querySelectorAll('.qr').forEach(function(el) {
+      new QRCode(el, { text: url, width: 70, height: 70, colorDark: '#1c1917', colorLight: '#ffffff' });
+    });
+  }
+})();
+</script>
 </body>
 </html>
