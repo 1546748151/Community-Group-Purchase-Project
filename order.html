@@ -854,8 +854,16 @@ async function getActiveRound() {
   return data && data.length > 0 ? data[0] : null;
 }
 
+let lastRoundsError = null;
+
 async function getRounds() {
-  const { data } = await sb.from('rounds').select('*').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('rounds').select('*').order('created_at', { ascending: false });
+  if (error) {
+    lastRoundsError = error;
+    console.error('getRounds 查询失败:', error.message, error.details, error.hint, error.code);
+    return [];
+  }
+  lastRoundsError = null;
   return data || [];
 }
 
@@ -1903,6 +1911,10 @@ async function renderOrderManager(el) {
 
   // Fetch rounds for selector
   const allRounds = await getRounds();
+  if (lastRoundsError) {
+    el.innerHTML = `<div class="empty-state"><p>查询轮次失败：${escHtml(lastRoundsError.message || '未知错误')}</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab('orders')">重试</button></div>`;
+    return;
+  }
   if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : (allRounds[0]?.id || null); }
 
   // Build round selector
@@ -2052,6 +2064,10 @@ async function renderPaymentSummary(el) {
   el.innerHTML = '<div class="skel-line skeleton"></div><div class="skel-line skeleton"></div>';
 
   const allRounds = await getRounds();
+  if (lastRoundsError) {
+    el.innerHTML = `<div class="empty-state"><p>查询轮次失败：${escHtml(lastRoundsError.message || '未知错误')}</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab('summary')">重试</button></div>`;
+    return;
+  }
   if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : (allRounds[0]?.id || null); }
 
   let roundOpts = allRounds.map(r =>
@@ -2234,6 +2250,8 @@ async function renderSettings(el) {
         </span>
       </div>`;
     });
+  } else if (lastRoundsError) {
+    roundsHtml = `<p class="caption" style="color:var(--color-danger);text-align:center;padding:16px">查询轮次失败：${escHtml(lastRoundsError.message || '未知错误')}</p>`;
   } else {
     roundsHtml = '<p class="caption" style="text-align:center;padding:16px">暂无团购轮次，请创建第一个</p>';
   }
