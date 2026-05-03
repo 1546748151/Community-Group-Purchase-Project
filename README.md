@@ -4,6 +4,8 @@
 
 **无需服务器、无需 App、无需注册、免费使用。**
 
+![邻选下单页面](assets/f597082430629682ed1068c349179fd2.png)
+
 ---
 
 ## 给邻居（扫码下单）
@@ -60,6 +62,8 @@ UPDATE settings SET value = '' WHERE key = 'admin_password';
 | `order.html` | 核心工具，包含团长后台 + 顾客下单端 |
 | `landing.html` | 项目宣传页面，可分享给其他团长 |
 | `setup-guide.html` | 图文部署教程 |
+| `admin-guide.html` | 团长操作手册 |
+| `customer-guide.html` | 邻居下单指南 |
 | `supabase-schema.sql` | 数据库初始化脚本 |
 | `README.md` | 本文件 |
 
