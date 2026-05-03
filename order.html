@@ -653,8 +653,8 @@ let CONFIG_KEY = 'groupbuy_config';
 
 // 弹窗栈计数器：开 +1 关 -1，归零才解锁 body 滚动
 let modalDepth = 0;
-function lockScroll() { if (!modalDepth++) lockScroll(); }
-function unlockScroll() { if (modalDepth > 0 && !--modalDepth) unlockScroll(); }
+function lockScroll() { if (!modalDepth++) document.body.style.overflow = 'hidden'; }
+function unlockScroll() { if (modalDepth > 0 && !--modalDepth) document.body.style.overflow = ''; }
 let SESSION_KEY = 'groupbuy_admin_session';
 const DEFAULT_SUPABASE_CONFIG = {
   url: '',
