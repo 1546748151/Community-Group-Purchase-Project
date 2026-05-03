@@ -941,7 +941,7 @@ function buildProductSummary(orders) {
     const rounded = Math.round(ps.qty * 1000) / 1000;
     const nextInt = Math.ceil(rounded);
     ps.qty = rounded;
-    ps.spec = ps.isSplitUnit ? `拼单规格：${Array.from(ps.specs).sort((a, b) => (parsePurchaseUnit(a) || 0) - (parsePurchaseUnit(b) || 0)).map(formatUnitLabel).join('、')}` : formatUnitLabel(ps.spec);
+    ps.spec = ps.isSplitUnit ? `拼单规格：${Array.from(ps.specs).sort((a, b) => (parsePurchaseUnit(a) || 0) - (parsePurchaseUnit(b) || 0)).map(formatUnitLabel).join(' 、 ')}` : formatUnitLabel(ps.spec);
     ps.unfilled = ps.isSplitUnit && Math.abs(rounded - Math.round(rounded)) > 0.0001;
     ps.missingQty = ps.unfilled ? Math.round((nextInt - rounded) * 1000) / 1000 : 0;
     ps.qtyLabel = formatQtyLabel(ps.qty);
@@ -1193,7 +1193,7 @@ async function renderProductManager(el) {
     html += '<div class="admin-product-list">';
     visibleProducts.forEach(p => {
       const specs = p.specs || [];
-      const specStr = specs.map(s => `${formatUnitLabel(s.name)} / ¥${s.price}`).join(' | ');
+      const specStr = specs.map(s => `${formatUnitLabel(s.name)} / ¥${s.price}`).join(' 、 ');
       const stockInfo = p.stock !== null ? `库存: ${formatQtyLabel(p.stock)}` : '不限库存';
       const tags = getProductTags(p);
       const statusBadge = p.is_active ? '<span class="badge badge-success">上架</span>' : '<span class="badge badge-muted">已下架</span>';
@@ -1234,7 +1234,9 @@ async function openProductForm(id) {
   const isEdit = !!id;
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
-  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  let modalReady = false;
+  setTimeout(() => { modalReady = true; }, 200);
+  modal.onclick = function(e) { if (e.target === modal && modalReady) modal.remove(); };
   modal.innerHTML = `<div class="modal-sheet">
     <div class="modal-handle"></div>
     <h3 class="section-title" style="margin-bottom:20px">${isEdit ? '编辑商品' : '添加商品'}</h3>
