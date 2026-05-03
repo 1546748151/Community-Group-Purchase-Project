@@ -24,6 +24,7 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::
 ALTER TABLE products ADD COLUMN IF NOT EXISTS stock NUMERIC(10,3);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE products ADD COLUMN IF NOT EXISTS round_id UUID REFERENCES rounds(id);
 ALTER TABLE products ALTER COLUMN stock TYPE NUMERIC(10,3) USING stock::numeric;
 
 COMMENT ON TABLE products IS '商品表';
@@ -143,6 +144,7 @@ CREATE POLICY "Anyone can read rounds"
 -- 索引
 -- ============================================================================
 CREATE INDEX IF NOT EXISTS idx_products_active ON products (is_active);
+CREATE INDEX IF NOT EXISTS idx_products_round ON products (round_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_name);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders (created_at DESC);
@@ -272,11 +274,13 @@ RETURNS TEXT AS $$
   SELECT COALESCE((SELECT value FROM settings WHERE key = 'site_title'), '美好小区团购群');
 $$ LANGUAGE sql SECURITY DEFINER;
 
-CREATE OR REPLACE FUNCTION admin_get_products(p_token TEXT)
+CREATE OR REPLACE FUNCTION admin_get_products(p_token TEXT, p_round_id UUID DEFAULT NULL)
 RETURNS SETOF products AS $$
 BEGIN
   PERFORM require_admin(p_token);
-  RETURN QUERY SELECT * FROM products ORDER BY created_at DESC;
+  RETURN QUERY SELECT * FROM products
+    WHERE (p_round_id IS NULL OR round_id = p_round_id)
+    ORDER BY created_at DESC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -323,7 +327,8 @@ CREATE OR REPLACE FUNCTION admin_save_product(
   p_specs JSONB,
   p_tags JSONB,
   p_stock NUMERIC,
-  p_is_active BOOLEAN
+  p_is_active BOOLEAN,
+  p_round_id UUID DEFAULT NULL
 )
 RETURNS UUID AS $$
 DECLARE
@@ -341,8 +346,8 @@ BEGIN
     RAISE EXCEPTION 'each spec must have a name and a positive price';
   END IF;
   IF p_id IS NULL THEN
-    INSERT INTO products (name, image, specs, tags, stock, is_active)
-    VALUES (p_name, p_image, COALESCE(p_specs, '[]'::jsonb), COALESCE(p_tags, '[]'::jsonb), p_stock, COALESCE(p_is_active, true))
+    INSERT INTO products (name, image, specs, tags, stock, is_active, round_id)
+    VALUES (p_name, p_image, COALESCE(p_specs, '[]'::jsonb), COALESCE(p_tags, '[]'::jsonb), p_stock, COALESCE(p_is_active, true), p_round_id)
     RETURNING id INTO new_id;
   ELSE
     UPDATE products
@@ -351,7 +356,8 @@ BEGIN
            specs = COALESCE(p_specs, '[]'::jsonb),
            tags = COALESCE(p_tags, '[]'::jsonb),
            stock = p_stock,
-           is_active = COALESCE(p_is_active, true)
+           is_active = COALESCE(p_is_active, true),
+           round_id = COALESCE(p_round_id, round_id)
      WHERE id = p_id
     RETURNING id INTO new_id;
   END IF;
@@ -545,7 +551,6 @@ DECLARE
   new_id UUID;
 BEGIN
   PERFORM require_admin(p_token);
-  UPDATE rounds SET is_active = false WHERE is_active = true;
   INSERT INTO rounds (name, cutoff_time, is_active)
   VALUES (p_name, p_cutoff_time, true)
   RETURNING id INTO new_id;
@@ -565,7 +570,6 @@ CREATE OR REPLACE FUNCTION admin_activate_round(p_token TEXT, p_id UUID)
 RETURNS VOID AS $$
 BEGIN
   PERFORM require_admin(p_token);
-  UPDATE rounds SET is_active = false WHERE is_active = true;
   UPDATE rounds SET is_active = true WHERE id = p_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
