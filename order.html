@@ -1676,14 +1676,72 @@ function buildCartItemsHtml(showControls = true) {
   }).join('');
 }
 
+function adjustCartDetailsQty(cartKey, delta) {
+  if (!cart[cartKey]) return;
+  const productId = cart[cartKey].productId;
+  cart[cartKey].quantity += delta;
+  if (cart[cartKey].quantity <= 0) delete cart[cartKey];
+  refreshProduct(productId);
+  updateCartBar();
+
+  // 原地更新购物车明细弹窗，不拆 DOM 避免闪动
+  const items = Object.values(cart);
+  if (items.length === 0) {
+    const overlay = document.querySelector('[data-modal="cart"]');
+    if (overlay) overlay.remove();
+    return;
+  }
+  const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
+  const listEl = document.getElementById('cart-detail-list');
+  const totalEl = document.getElementById('cart-detail-total');
+  if (listEl) {
+    listEl.innerHTML = items.map(i => {
+      const ck = `${i.productId}-${i.specName}`;
+      return `<div class="order-item-row" style="padding:12px;border:1px solid var(--color-border);border-radius:var(--radius-md);margin-bottom:10px;align-items:center;background:#fff">
+        <span class="item-name"><strong>${escHtml(i.productName)}</strong><br><span class="caption">${escHtml(formatUnitLabel(i.specName))}</span></span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="qty-ctrl" style="border:none">
+            <button onclick="adjustCartDetailsQty('${escAttr(ck)}',-1)" style="width:28px;height:28px;font-size:.875rem">-</button>
+            <span class="qty-val" style="min-width:24px;font-size:.8125rem">${i.quantity}</span>
+            <button onclick="adjustCartDetailsQty('${escAttr(ck)}',1)" style="width:28px;height:28px;font-size:.875rem">+</button>
+          </span>
+          <span class="item-price">${(i.specPrice * i.quantity).toFixed(2)}</span>
+        </span>
+      </div>`;
+    }).join('');
+  }
+  if (totalEl) totalEl.textContent = '¥' + total.toFixed(2);
+}
+
 function openCartDetails() {
   const items = Object.values(cart);
   if (items.length === 0) return;
+
+  // 防御：先清除可能残留的旧购物车弹窗
+  const old = document.querySelector('[data-modal="cart"]');
+  if (old) old.remove();
+
   const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
 
   // 隐藏底部购物车栏，避免 z-index 遮罩挡住弹窗按钮
   const cartBar = document.getElementById('cart-bar');
   cartBar.classList.add('hidden');
+
+  // 购物车明细的商品列表（用 onclick 绕过 checkout 的 adjustCheckoutQty）
+  const itemsHtml = items.map(i => {
+    const ck = `${i.productId}-${i.specName}`;
+    return `<div class="order-item-row" style="padding:12px;border:1px solid var(--color-border);border-radius:var(--radius-md);margin-bottom:10px;align-items:center;background:#fff">
+      <span class="item-name"><strong>${escHtml(i.productName)}</strong><br><span class="caption">${escHtml(formatUnitLabel(i.specName))}</span></span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <span class="qty-ctrl" style="border:none">
+          <button onclick="adjustCartDetailsQty('${escAttr(ck)}',-1)" style="width:28px;height:28px;font-size:.875rem">-</button>
+          <span class="qty-val" style="min-width:24px;font-size:.8125rem">${i.quantity}</span>
+          <button onclick="adjustCartDetailsQty('${escAttr(ck)}',1)" style="width:28px;height:28px;font-size:.875rem">+</button>
+        </span>
+        <span class="item-price">${(i.specPrice * i.quantity).toFixed(2)}</span>
+      </span>
+    </div>`;
+  }).join('');
 
   const closeCartDetails = () => {
     modal.remove();
@@ -1692,6 +1750,7 @@ function openCartDetails() {
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
+  modal.setAttribute('data-modal', 'cart');
   modal.onclick = function(e) { if (e.target === modal) closeCartDetails(); };
   modal.innerHTML = `<div class="modal-sheet">
     <div class="modal-handle"></div>
@@ -1699,10 +1758,10 @@ function openCartDetails() {
       <h3 class="section-title">购物车明细</h3>
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cart-bar').classList.remove('hidden');this.closest('.modal-overlay').remove()">关闭</button>
     </div>
-    <div style="margin-bottom:16px">${buildCartItemsHtml(true)}</div>
+    <div id="cart-detail-list" style="margin-bottom:16px">${itemsHtml}</div>
     <div style="display:flex;justify-content:space-between;padding:14px 0;border-top:1.5px solid var(--color-border);margin-bottom:16px">
       <span style="font-weight:800">合计</span>
-      <span style="font-size:1.25rem;font-weight:700;color:var(--color-accent)">¥${total.toFixed(2)}</span>
+      <span id="cart-detail-total" style="font-size:1.25rem;font-weight:700;color:var(--color-accent)">¥${total.toFixed(2)}</span>
     </div>
     <button class="btn btn-primary btn-block btn-lg" id="btn-checkout" onclick="openCheckout();this.closest('.modal-overlay').remove()">去下单</button>
   </div>`;
