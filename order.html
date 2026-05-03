@@ -1189,14 +1189,14 @@ async function renderProductManager(el) {
         ${p.image ? `<img class="admin-product-thumb" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" onerror="this.outerHTML='<div class=&quot;admin-product-thumb placeholder&quot;>邻选</div>'">` : '<div class="admin-product-thumb placeholder">邻选</div>'}
         <div class="admin-product-info">
           <div class="admin-product-head">
-            <div class="admin-product-name">${escHtml(p.name)}</div>
+            <div class="admin-product-name product-name">${escHtml(p.name)}</div>
             <div style="flex-shrink:0">
               ${statusBadge}
             </div>
           </div>
           <div class="admin-product-meta">
-            <span>${escHtml(specStr || '未设置规格')}</span>
-            <span>${escHtml(stockInfo)}</span>
+            <span class="product-price">${escHtml(specStr || '未设置规格')}</span>
+            <span class="stock-info">${escHtml(stockInfo)}</span>
           </div>
           <div class="admin-product-tags">
             ${tags.length ? tags.map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('') : '<span class="tag-pill">未分类</span>'}
@@ -1215,6 +1215,10 @@ async function renderProductManager(el) {
 }
 
 function openProductForm(id) {
+  // 防御：确保初始化设置表单不会残留在页面上
+  const setupEl = document.getElementById('mode-setup');
+  if (setupEl) setupEl.style.display = 'none';
+
   const isEdit = !!id;
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
