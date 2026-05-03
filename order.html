@@ -1717,6 +1717,8 @@ function openCartDetails() {
   const items = Object.values(cart);
   if (items.length === 0) return;
 
+  document.body.style.overflow = 'hidden';
+
   // 防御：先清除可能残留的旧购物车弹窗
   const old = document.querySelector('[data-modal="cart"]');
   if (old) old.remove();
@@ -1744,6 +1746,7 @@ function openCartDetails() {
   }).join('');
 
   const closeCartDetails = () => {
+    document.body.style.overflow = '';
     modal.remove();
     updateCartBar();
   };
@@ -1756,7 +1759,7 @@ function openCartDetails() {
     <div class="modal-handle"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <h3 class="section-title">购物车明细</h3>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cart-bar').classList.remove('hidden');this.closest('.modal-overlay').remove()">关闭</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.body.style.overflow='';document.getElementById('cart-bar').classList.remove('hidden');this.closest('.modal-overlay').remove()">关闭</button>
     </div>
     <div id="cart-detail-list" style="margin-bottom:16px">${itemsHtml}</div>
     <div style="display:flex;justify-content:space-between;padding:14px 0;border-top:1.5px solid var(--color-border);margin-bottom:16px">
@@ -1771,6 +1774,7 @@ function openCartDetails() {
 function openCheckout() {
   const items = Object.values(cart);
   if (items.length === 0) return;
+  document.body.style.overflow = 'hidden';
   resetCheckoutSubmit();
 
   const itemsEl = document.getElementById('checkout-items');
@@ -1796,6 +1800,7 @@ function adjustCheckoutQty(cartKey, delta) {
 }
 
 function closeCheckout() {
+  document.body.style.overflow = '';
   document.getElementById('modal-checkout').classList.add('hidden');
   updateCartBar();
   resetCheckoutSubmit();
@@ -1888,11 +1893,15 @@ function closeSuccess() {
 // ORDER LOOKUP & MODIFY
 // ============================================================
 function showOrderLookup() {
+  document.body.style.overflow = 'hidden';
   document.getElementById('lookup-name').value = localStorage.getItem('groupbuy_last_name') || '';
   document.getElementById('lookup-results').innerHTML = '';
   document.getElementById('modal-lookup').classList.remove('hidden');
 }
-function closeLookup() { document.getElementById('modal-lookup').classList.add('hidden'); }
+function closeLookup() {
+  document.body.style.overflow = '';
+  document.getElementById('modal-lookup').classList.add('hidden');
+}
 function focusLookupResults() {
   const sheet = document.querySelector('#modal-lookup .modal-sheet');
   const resultsEl = document.getElementById('lookup-results');
@@ -2623,6 +2632,12 @@ document.addEventListener('click', function(e) {
 // BOOT
 // ============================================================
 document.addEventListener('DOMContentLoaded', initApp);
+
+// 滚动时给 sticky header 加下边框
+window.addEventListener('scroll', function() {
+  const header = document.querySelector('.app-header');
+  if (header) header.classList.toggle('scrolled', window.scrollY > 0);
+}, { passive: true });
 </script>
 </body>
 </html>
