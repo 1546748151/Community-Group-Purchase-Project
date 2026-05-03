@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>邻选 · 团长操作手册</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{
+  font-family:'Geist',-apple-system,BlinkMacSystemFont,sans-serif;
+  background:radial-gradient(circle at 50% 0,#fff 0,#eaf4ff 44%,#f8fbff 100%);
+  color:#101828;line-height:1.7;
+  -webkit-font-smoothing:antialiased;max-width:860px;margin:0 auto;padding:36px 24px 56px;
+}
+h1{font-size:2.25rem;font-weight:900;letter-spacing:0;margin-bottom:8px}
+h2{font-size:1.45rem;font-weight:850;letter-spacing:0;margin-top:48px;margin-bottom:12px;padding-top:32px;border-top:1px solid #d8e4f5;color:#064da8}
+h3{font-size:1.0625rem;font-weight:800;margin-top:28px;margin-bottom:8px}
+p{margin-bottom:14px;color:#667085;font-size:.9375rem}
+ul,ol{margin-bottom:14px;padding-left:20px;color:#667085;font-size:.9375rem}
+li{margin-bottom:6px}
+code{
+  background:#e8f2ff;padding:2px 6px;border-radius:6px;font-size:.875rem;
+  font-family:'SF Mono','Cascadia Code',monospace;color:#064da8;
+}
+pre{
+  background:#101828;color:#eaf4ff;padding:16px 20px;border-radius:14px;
+  overflow-x:auto;font-size:.8125rem;line-height:1.6;margin-bottom:16px;
+  font-family:'SF Mono','Cascadia Code',monospace;
+}
+.step{
+  background:rgba(255,255,255,.86);border:1px solid #d8e4f5;border-radius:18px;padding:24px;margin-bottom:20px;
+  box-shadow:0 12px 32px rgba(20,74,132,.07);
+}
+.step-num{
+  display:inline-flex;width:30px;height:30px;border-radius:50%;background:#064da8;color:#fff;
+  align-items:center;justify-content:center;font-size:.8125rem;font-weight:800;margin-bottom:8px;
+}
+.note{
+  background:#eef5ff;border:1px solid #b9d3f4;border-radius:12px;padding:14px 18px;margin:16px 0;
+  font-size:.875rem;color:#064da8;
+}
+.warn{
+  background:#fff1f1;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;margin:16px 0;
+  font-size:.875rem;color:#b42318;
+}
+img{max-width:100%;border-radius:12px;border:1px solid #d8e4f5;margin:12px 0}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;background:rgba(255,255,255,.84);border:1px solid #d8e4f5;border-radius:18px;padding:14px 18px;box-shadow:0 12px 32px rgba(20,74,132,.07)}
+.brand{display:flex;align-items:center;gap:9px;color:#064da8;font-size:1.35rem;font-weight:900;text-decoration:none}
+.mark{width:26px;height:26px;border:3px solid currentColor;border-radius:9px 9px 9px 3px}
+.home-link{color:#064da8;text-decoration:none;font-size:.875rem;font-weight:800}
+.toc{background:rgba(255,255,255,.86);border:1px solid #d8e4f5;border-radius:18px;padding:20px;margin:24px 0;box-shadow:0 12px 32px rgba(20,74,132,.07)}
+.toc a{color:#064da8;text-decoration:none;font-size:.9375rem;font-weight:700}
+.toc a:hover{text-decoration:underline}
+.toc ol{margin-bottom:0}
+@media (max-width:600px){body{padding:24px 16px}h1{font-size:1.5rem}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="brand" href="landing.html"><span class="mark"></span>邻选</a>
+  <a class="home-link" href="order.html">进入下单工具</a>
+</div>
+<h1>团长操作手册</h1>
+<p>本手册适合已经完成首次部署的团长，介绍每次团购的完整操作流程。</p>
+
+<div class="toc">
+  <strong style="font-size:.9375rem">目录</strong>
+  <ol style="margin-top:8px">
+    <li><a href="#s1">登录后台</a></li>
+    <li><a href="#s2">创建团购轮次</a></li>
+    <li><a href="#s3">添加商品</a></li>
+    <li><a href="#s4">生成下单二维码</a></li>
+    <li><a href="#s5">查看订单</a></li>
+    <li><a href="#s6">收款</a></li>
+    <li><a href="#s7">常见操作</a></li>
+    <li><a href="#s8">小贴士</a></li>
+  </ol>
+</div>
+
+<h2 id="s1">一、登录后台</h2>
+<div class="step">
+  <p>浏览器打开 <code>你的网址#admin</code>，输入管理密码进入后台。</p>
+  <p>后台左侧有五个功能标签：商品管理、订单汇总、收款清单、下单二维码、轮次设置。</p>
+</div>
+
+<h2 id="s2">二、创建团购轮次</h2>
+<div class="step">
+  <div class="step-num">1</div>
+  <p>左侧菜单 → <strong>轮次设置</strong> → 点击「创建新轮次」</p>
+  <ul>
+    <li>填写轮次名称（如「5月第一周团购」）</li>
+    <li>设置下单截止时间（选填，到期自动关闭下单）</li>
+    <li>点击「创建」</li>
+  </ul>
+  <div class="note">
+    新轮次创建后自动启用，之前的历史轮次会自动归档。每次团购创建一个新轮次，订单和收款按轮次分开管理。
+  </div>
+</div>
+
+<h2 id="s3">三、添加商品</h2>
+<div class="step">
+  <div class="step-num">2</div>
+  <p>左侧菜单 → <strong>商品管理</strong> → 点击「添加商品」</p>
+  <ul>
+    <li><strong>商品名称</strong>（必填）— 如「烟台红富士苹果」</li>
+    <li><strong>商品图片</strong>（选填）— 支持 JPG/PNG/GIF/WebP，最大 5MB</li>
+    <li><strong>规格与价格</strong>（至少一个）— 如「500g / 15 元」「1kg / 28 元」</li>
+    <li><strong>商品标签</strong>（选填）— 如「蛋糕」「冷藏」，用空格分隔</li>
+    <li><strong>库存数量</strong>（选填）— 不填则不限库存，卖完自动显示「已售罄」</li>
+    <li>点击「添加商品」</li>
+  </ul>
+  <div class="note">商品默认上架，可在列表中点击「下架」暂时隐藏。</div>
+</div>
+
+<h2 id="s4">四、生成下单二维码</h2>
+<div class="step">
+  <div class="step-num">3</div>
+  <p>左侧菜单 → <strong>下单二维码</strong></p>
+  <p>二维码自动生成，指向顾客下单页面。长按保存后发到业主微信群，邻居扫码即可下单。也可点击「复制下单链接」直接分享。</p>
+</div>
+
+<h2 id="s5">五、查看订单</h2>
+<div class="step">
+  <div class="step-num">4</div>
+  <p>左侧菜单 → <strong>订单汇总</strong></p>
+  <ul>
+    <li>顶部下拉可选择不同轮次的订单</li>
+    <li>按人分组显示订单明细和金额</li>
+    <li>底部「本轮商品汇总」列出所有商品的总量</li>
+    <li>可「复制采购清单」粘贴到美团优选等平台统一采购</li>
+    <li>点击「导出 Excel」下载订单表格用于备货对账</li>
+  </ul>
+</div>
+
+<h2 id="s6">六、收款</h2>
+<div class="step">
+  <div class="step-num">5</div>
+  <p>左侧菜单 → <strong>收款清单</strong></p>
+  <ul>
+    <li>设置本轮费用（运费、包装费等），系统自动按人数均摊</li>
+    <li>底部「收款清单」列出每人应付金额，可逐条复制</li>
+    <li>截止后按清单发起群收款</li>
+  </ul>
+</div>
+
+<h2 id="s7">七、常见操作</h2>
+
+<h3>编辑商品</h3>
+<div class="step">
+  <p>商品管理 → 点击商品右侧「编辑」→ 修改后点「保存修改」。已下架商品编辑后不会自动上架。</p>
+</div>
+
+<h3>上下架商品</h3>
+<div class="step">
+  <p>商品管理 → 点击「下架」隐藏商品，顾客端不可见。再点击「上架」恢复。</p>
+</div>
+
+<h3>删除商品</h3>
+<div class="step">
+  <p>商品管理 → 点击「删除」→ 确认。该商品会从本轮所有订单中移除并重新计算金额。</p>
+</div>
+
+<h3>停用 / 归档轮次</h3>
+<div class="step">
+  <p>轮次设置 → 点击历史轮次的「启用」可切换活动轮次。点击「删除」可删除非活动轮次及其所有订单。</p>
+</div>
+
+<h3>修改站点标题</h3>
+<div class="step">
+  <p>轮次设置 → 站点标题输入框 → 输入新标题 → 保存。顾客端顶部会显示。</p>
+</div>
+
+<h3>修改管理密码</h3>
+<div class="step">
+  <p>轮次设置 → 管理密码区域 → 输入新密码 → 保存。</p>
+</div>
+
+<h3>忘记密码</h3>
+<div class="step">
+  <p>在 Supabase → SQL Editor 执行：</p>
+  <pre>UPDATE settings SET value = '' WHERE key = 'admin_password';</pre>
+  <p>然后重新打开 <code>#admin</code> 设置新密码。</p>
+</div>
+
+<h2 id="s8">八、小贴士</h2>
+<div class="step">
+  <ul>
+    <li>售罄商品会自动沉到列表底部，显示「已售罄」标记，顾客无法加购</li>
+    <li>库存会每 10 秒自动刷新，多设备同时下单不会超卖</li>
+    <li>顾客下单后在页面顶部「查/改订单」可自行查询和取消</li>
+    <li>后台商品编辑时不会改变上下架状态</li>
+    <li>历史轮次可在订单汇总下拉中查看，不会丢失</li>
+  </ul>
+</div>
+
+<div class="note" style="margin-top:32px">
+  <strong>还没完成首次部署？</strong> 请先查看 <a href="setup-guide.html">部署使用指南</a>，大约 15 分钟即可完成全部设置。
+</div>
+</body>
+</html>
