@@ -1828,7 +1828,11 @@ async function submitOrder() {
 
   try {
     // Re-check round is still active and not expired (prevent stale-page submissions)
-    const { data: roundCheck } = await sb.from('rounds').select('is_active, cutoff_time').eq('id', activeRoundId).single();
+    const { data: roundCheck, error: roundErr } = await sb.from('rounds').select('is_active, cutoff_time').eq('id', activeRoundId).single();
+    if (roundErr) {
+      toast('网络异常，请检查网络后重试', 'error');
+      return;
+    }
     if (!roundCheck || !roundCheck.is_active) {
       toast('本轮团购已结束，请刷新页面', 'error');
       cart = {}; closeCheckout(); loadCustomerProducts(); return;
@@ -1871,7 +1875,8 @@ async function submitOrder() {
     cart = {};
     loadCustomerProducts();
   } finally {
-    resetCheckoutSubmit();
+    // 延迟重置让浏览器有机会渲染 disabled 状态，避免瞬间恢复导致用户感知不到
+    setTimeout(() => resetCheckoutSubmit(), 300);
   }
 }
 
