@@ -349,6 +349,8 @@ body[data-mode="admin"] .cart-bar{display:none}
 .category-row{display:flex;gap:10px;overflow-x:auto;padding:2px 0 4px;margin-bottom:12px;-webkit-overflow-scrolling:touch}
 .category-chip{height:40px;padding:0 18px;border-radius:16px;border:0;background:#f2f5fa;display:flex;align-items:center;white-space:nowrap;font:inherit;font-weight:800;color:#344054;cursor:pointer}
 .category-chip.active{background:linear-gradient(135deg,var(--color-accent),#0b63c7);color:#fff}
+.round-chip{height:36px;padding:0 16px;border-radius:12px;border:1px solid var(--color-border);background:var(--color-surface);font:inherit;font-size:.85rem;font-weight:700;color:var(--color-text-secondary);cursor:pointer;transition:all .15s ease}
+.round-chip.active{background:var(--color-accent);color:#fff;border-color:var(--color-accent)}
 .shop-product{position:relative;background:#fff;border:1px solid var(--color-border);border-radius:20px;display:grid;grid-template-columns:102px minmax(0,1fr);gap:13px;align-items:start;padding:12px 14px;margin-bottom:12px;box-shadow:0 10px 28px rgba(20,74,132,.065)}
 .shop-product-img{width:102px;height:100px;border-radius:15px;background:linear-gradient(135deg,#f8d493,#fff4da);object-fit:cover}
 .shop-product-img.placeholder{display:flex;align-items:center;justify-content:center;color:#9b5a1d;font-weight:900}
@@ -488,6 +490,7 @@ body[data-mode="admin"] .cart-bar{display:none}
         <div class="round-line"><span id="site-title-text">美好小区团购群</span> <span style="color:var(--color-text-muted)">›</span></div>
         <div class="deadline-pill" id="customer-deadline-pill">请在截止前下单</div>
       </div>
+      <div class="round-picker" id="customer-round-picker" style="display:none;gap:6px;flex-wrap:wrap;margin-top:-4px;margin-bottom:8px"></div>
       <label class="customer-search">⌕ <input id="customer-search-input" type="search" placeholder="搜索商品名称、规格或标签" oninput="customerSearchQuery=this.value;debouncedSearchLoad()"></label>
       <div class="category-row" id="customer-category-row"></div>
     </div>
@@ -1161,7 +1164,12 @@ async function saveRoundFees() {
 async function renderProductManager(el) {
   el.innerHTML = '<div class="skel-card skeleton"></div><div class="skel-card skeleton"></div>';
 
-  const { data: products, error } = await adminRpc('admin_get_products');
+  // Fetch active rounds for selector
+  const rounds = await getRounds();
+  const activeRounds = rounds.filter(r => r.is_active);
+  if (!adminProductRoundId && activeRounds.length > 0) adminProductRoundId = activeRounds[0].id;
+
+  const { data: products, error } = await adminRpc('admin_get_products', { p_round_id: adminProductRoundId });
 
   if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab(\'products\')">重试</button></div>'; return; }
 
@@ -1169,15 +1177,28 @@ async function renderProductManager(el) {
   const activeCount = (products || []).filter(p => p.is_active).length;
   const allTags = collectTags(products || []);
   const visibleProducts = (products || []).filter(p => productMatchesFilter(p, '', adminProductTagFilter));
-  let html = `<div class="stat-row">
+  const currentRound = activeRounds.find(r => r.id === adminProductRoundId);
+
+  let html = '';
+  // 轮次选择器
+  if (activeRounds.length > 1) {
+    html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">`;
+    activeRounds.forEach(r => {
+      html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId='${escAttr(r.id)}';renderAdminTab('products')">${escHtml(r.name)}</button>`;
+    });
+    html += `</div>`;
+  }
+  html += `<div class="stat-row">
     <div class="stat-card"><div class="stat-value" style="color:var(--color-accent)">${productCount}</div><div class="stat-label">全部商品</div></div>
     <div class="stat-card"><div class="stat-value">${activeCount}</div><div class="stat-label">已上架商品</div></div>
-  </div>
-  <button class="btn btn-primary btn-block" onclick="openProductForm()" style="margin-bottom:16px">
+  </div>`;
+  if (currentRound) {
+    html += `<button class="btn btn-primary btn-block" onclick="openProductForm()" style="margin-bottom:16px">
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3v12M3 9h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    添加商品
-  </button>
-  <div class="tag-list">
+    添加商品到「${escHtml(currentRound.name)}」
+  </button>`;
+  }
+  html += `<div class="tag-list">
     ${['全部', ...allTags].map(tag => `<button class="tag-pill ${adminProductTagFilter === tag ? 'active' : ''}" onclick="adminProductTagFilter='${escAttr(tag)}';renderAdminTab('products')">${escHtml(tag)}</button>`).join('')}
   </div>`;
 
@@ -1353,7 +1374,8 @@ async function openProductForm(id) {
         p_specs: payload.specs,
         p_tags: payload.tags,
         p_stock: payload.stock,
-        p_is_active: payload.is_active
+        p_is_active: payload.is_active,
+        p_round_id: adminProductRoundId
       });
 
       if (result.error) { errEl.textContent = '保存失败: ' + result.error.message; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品'; return; }
@@ -1481,6 +1503,8 @@ async function deleteProduct(id) {
 // ============================================================
 let cart = {};
 let activeRoundId = null;
+let customerRoundId = null;
+let adminProductRoundId = null;
 let cachedProducts = [];
 let cachedSummaryByProduct = {};
 let editingProductActiveState = true; // 编辑商品时保留原上下架状态
@@ -1490,12 +1514,12 @@ async function loadCustomerProducts() {
   const emptyEl = document.getElementById('customer-empty');
   const overlay = document.getElementById('cutoff-overlay');
 
-  // Check active round
-  const { data: roundData } = await sb.from('rounds').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(1);
-  const activeRound = roundData && roundData.length > 0 ? roundData[0] : null;
-  activeRoundId = activeRound ? activeRound.id : null;
+  // Fetch all active rounds, filter out expired ones
+  const { data: allRounds } = await sb.from('rounds').select('*').eq('is_active', true).order('created_at', { ascending: false });
+  const now = new Date();
+  const availableRounds = (allRounds || []).filter(r => !r.cutoff_time || new Date(r.cutoff_time) > now);
 
-  if (!activeRound) {
+  if (availableRounds.length === 0) {
     overlay.innerHTML = `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" style="margin-bottom:20px"><circle cx="32" cy="32" r="28" stroke="var(--color-text-muted)" stroke-width="2"/><path d="M32 20v12l-6 6" stroke="var(--color-text-muted)" stroke-width="2.5" stroke-linecap="round"/></svg><h2 style="font-size:1.25rem;font-weight:600;margin-bottom:8px">暂无团购活动</h2><p class="body-text">团长还没有发起团购，请等待通知</p>`;
     overlay.style.display = 'block';
     productsEl.style.display = 'none';
@@ -1504,15 +1528,14 @@ async function loadCustomerProducts() {
     return;
   }
 
-  const cutoffTime = activeRound.cutoff_time ? new Date(activeRound.cutoff_time) : null;
-  if (cutoffTime && new Date() >= cutoffTime) {
-    overlay.innerHTML = `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" style="margin-bottom:20px"><circle cx="32" cy="32" r="28" stroke="var(--color-text-muted)" stroke-width="2"/><path d="M32 16v18l10 6" stroke="var(--color-text-muted)" stroke-width="2.5" stroke-linecap="round"/></svg><h2 style="font-size:1.25rem;font-weight:600;margin-bottom:8px">下单已结束</h2><p class="body-text">本期「${escHtml(activeRound.name)}」已截止</p>`;
-    overlay.style.display = 'block';
-    productsEl.style.display = 'none';
-    emptyEl.style.display = 'none';
-    document.getElementById('cart-bar').classList.add('hidden');
-    return;
+  // Auto-select first available round if current selection invalid
+  if (!customerRoundId || !availableRounds.some(r => r.id === customerRoundId)) {
+    customerRoundId = availableRounds[0].id;
   }
+  const activeRound = availableRounds.find(r => r.id === customerRoundId);
+  activeRoundId = customerRoundId;
+  const cutoffTime = activeRound.cutoff_time ? new Date(activeRound.cutoff_time) : null;
+
   overlay.style.display = 'none';
   updateCutoffCountdown(cutoffTime);
   const deadlinePill = document.getElementById('customer-deadline-pill');
@@ -1521,11 +1544,23 @@ async function loadCustomerProducts() {
       ? `请在 ${cutoffTime.toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })} 前下单`
       : '本期团购正在进行中';
   }
+
+  // 多轮次选择器 — 只有超过 1 个可选轮次才显示
+  const roundPicker = document.getElementById('customer-round-picker');
+  if (roundPicker && availableRounds.length > 1) {
+    roundPicker.style.display = 'flex';
+    roundPicker.innerHTML = availableRounds.map(r =>
+      `<button class="round-chip ${r.id === customerRoundId ? 'active' : ''}" onclick="customerRoundId='${escAttr(r.id)}';cart={};loadCustomerProducts()">${escHtml(r.name)}</button>`
+    ).join('');
+  } else if (roundPicker) {
+    roundPicker.style.display = 'none';
+  }
+
   const searchInput = document.getElementById('customer-search-input');
   if (searchInput && searchInput.value !== customerSearchQuery) searchInput.value = customerSearchQuery;
 
   productsEl.innerHTML = '<div class="skel-card skeleton"></div><div class="skel-card skeleton"></div>';
-  const { data: products, error } = await sb.from('products').select('*').eq('is_active', true).order('created_at');
+  const { data: products, error } = await sb.from('products').select('*').eq('is_active', true).eq('round_id', customerRoundId).order('created_at');
 
   if (error || !products || products.length === 0) {
     productsEl.style.display = 'none';
@@ -1582,7 +1617,7 @@ function startStockPolling() {
   stockPollFailures = 0;
   stockPollTimer = setInterval(async () => {
     if (!document.getElementById('mode-customer')?.classList.contains('active')) return;
-    const { data: fresh, error } = await sb.from('products').select('id, stock, is_active').eq('is_active', true);
+    const { data: fresh, error } = await sb.from('products').select('id, stock, is_active').eq('is_active', true).eq('round_id', customerRoundId);
     if (error || !fresh) {
       stockPollFailures++;
       if (stockPollFailures >= 3) toast('库存同步异常，请刷新页面', 'error');
