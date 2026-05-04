@@ -1524,7 +1524,7 @@ async function loadCustomerProducts() {
     overlay.style.display = 'block';
     productsEl.style.display = 'none';
     emptyEl.style.display = 'none';
-    document.getElementById('cart-bar').classList.add('hidden');
+    cart = {}; updateCartBar();
     return;
   }
 
@@ -1565,7 +1565,7 @@ async function loadCustomerProducts() {
   if (error || !products || products.length === 0) {
     productsEl.style.display = 'none';
     emptyEl.style.display = 'block';
-    document.getElementById('cart-bar').classList.add('hidden');
+    updateCartBar();
     return;
   }
 
