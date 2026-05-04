@@ -558,11 +558,11 @@ body[data-mode="admin"] .cart-bar{display:none}
       <aside class="admin-side">
         <div class="admin-brand"><span class="brand-mark"></span>邻选</div>
         <div class="admin-nav" id="admin-nav">
-          <button class="active" onclick="switchAdminTab('products')">商品管理</button>
-          <button onclick="switchAdminTab('orders')">订单汇总</button>
-          <button onclick="switchAdminTab('summary')">收款清单</button>
-          <button onclick="switchAdminTab('qr')">下单二维码</button>
-          <button onclick="switchAdminTab('settings')">轮次设置</button>
+          <button class="active" data-tab="products" onclick="switchAdminTab('products')">商品管理</button>
+          <button data-tab="orders" onclick="switchAdminTab('orders')">订单汇总</button>
+          <button data-tab="summary" onclick="switchAdminTab('summary')">收款清单</button>
+          <button data-tab="qr" onclick="switchAdminTab('qr')">下单二维码</button>
+          <button data-tab="settings" onclick="switchAdminTab('settings')">轮次设置</button>
         </div>
       </aside>
       <div class="admin-main">
@@ -904,7 +904,7 @@ async function getRounds() {
 function switchAdminTab(tab) {
   currentAdminTab = tab;
   document.querySelectorAll('#admin-nav button').forEach(b => b.classList.remove('active'));
-  document.querySelector(`#admin-nav button[onclick*="${tab}"]`)?.classList.add('active');
+  document.querySelector(`#admin-nav button[data-tab="${tab}"]`)?.classList.add('active');
   renderAdminTab(tab);
 }
 async function renderAdminTab(tab) {
@@ -913,14 +913,20 @@ async function renderAdminTab(tab) {
   if (!el) return;
   el.style.display = 'block';
 
-  // For orders/payment tabs: validate adminRoundId, only auto-correct if invalid
+  // For orders/payment tabs: validate adminRoundId, prefer adminProductRoundId
   if (tab === 'orders' || tab === 'summary') {
     const active = await getActiveRound();
     const allRounds = await getRounds();
     const validIds = new Set(allRounds.map(r => r.id));
     if (!adminRoundId || !validIds.has(adminRoundId)) {
-      adminRoundId = active ? active.id : (allRounds[0]?.id || null);
+      adminRoundId = (adminProductRoundId && validIds.has(adminProductRoundId))
+        ? adminProductRoundId
+        : (active ? active.id : (allRounds[0]?.id || null));
     }
+  }
+  // For products tab: prefer adminRoundId if product round not yet set
+  if (tab === 'products' && !adminProductRoundId && adminRoundId) {
+    adminProductRoundId = adminRoundId;
   }
   switch(tab) {
     case 'products': await renderProductManager(el); break;
@@ -1734,7 +1740,7 @@ async function loadCustomerProducts() {
   if (roundPicker && availableRounds.length > 1) {
     roundPicker.style.display = 'flex';
     roundPicker.innerHTML = availableRounds.map(r =>
-      `<button class="round-chip ${r.id === customerRoundId ? 'active' : ''}" onclick="customerRoundId='${escAttr(r.id)}';cart=Object.create(null);loadCustomerProducts()">${escHtml(r.name)}</button>`
+      `<button class="round-chip ${r.id === customerRoundId ? 'active' : ''}" onclick="customerRoundId='${escAttr(r.id)}';cart=Object.create(null);customerSearchQuery='';customerSelectedTag='全部';document.getElementById('customer-search-input').value='';loadCustomerProducts()">${escHtml(r.name)}</button>`
     ).join('');
   } else if (roundPicker) {
     roundPicker.style.display = 'none';
@@ -2253,7 +2259,7 @@ async function lookupOrders() {
     else if (r.is_active && (!r.cutoff_time || new Date(r.cutoff_time) > now)) status = '进行中';
     else if (r.is_active && r.cutoff_time && new Date(r.cutoff_time) <= now) status = '已截止';
     else status = '已停止';
-    roundInfo[r.id] = { name: r.name, status };
+    roundInfo[r.id] = { name: r.name, status, cutoff_time: r.cutoff_time };
   });
 
   if (error) {
@@ -2267,14 +2273,12 @@ async function lookupOrders() {
     return;
   }
 
-  // Check if cancellation is still allowed
-  const { data: roundData } = await sb.from('rounds').select('cutoff_time').eq('id', activeRoundId).single();
-  const cutoffTime = roundData?.cutoff_time ? new Date(roundData.cutoff_time) : null;
-  const canCancel = !cutoffTime || new Date() < cutoffTime;
-
   let html = '';
   orders.forEach(order => {
     const items = order.items || [];
+    const orderRound = roundInfo[order.round_id];
+    const orderCutoff = orderRound?.cutoff_time ? new Date(orderRound.cutoff_time) : null;
+    const canCancel = !orderCutoff || new Date() < orderCutoff;
     const isAdminCancelled = order.status === 'cancelled' && order.note && order.note.includes('[团长砍单]');
     const statusText = order.status === 'cancelled' ? (isAdminCancelled ? '已砍单' : '已取消') : '已提交';
     const statusClass = order.status === 'cancelled' ? (isAdminCancelled ? 'badge-danger' : 'badge-muted') : 'badge-success';
@@ -2631,18 +2635,19 @@ function renderQRCode(el) {
       <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="copyPageUrl()">复制下单链接</button>
     </div>`;
 
-  // 延迟到下一帧确保容器已完成布局，否则 canvas 尺寸为 0
+  // 延迟确保容器已完成布局，否则 canvas 尺寸为 0
   requestAnimationFrame(() => {
-    const container = document.getElementById('qr-container');
-    if (!container) return;
-    if (typeof QRCode !== 'undefined') {
-      container.innerHTML = '';
-      new QRCode(container, { text: url, width: 200, height: 200, colorDark: '#1c1917', colorLight: '#ffffff' });
-    } else {
-      // Fallback: show URL if QR library failed to load
-      container.innerHTML = `<div style="padding:40px 20px;background:var(--color-border-light);border-radius:var(--radius-md);word-break:break-all;font-size:.8125rem;color:var(--color-text-secondary)">${url}</div>`;
-    }
-  }, 200);
+    setTimeout(() => {
+      const container = document.getElementById('qr-container');
+      if (!container) return;
+      if (typeof QRCode !== 'undefined') {
+        container.innerHTML = '';
+        new QRCode(container, { text: url, width: 200, height: 200, colorDark: '#1c1917', colorLight: '#ffffff' });
+      } else {
+        container.innerHTML = `<div style="padding:40px 20px;background:var(--color-border-light);border-radius:var(--radius-md);word-break:break-all;font-size:.8125rem;color:var(--color-text-secondary)">${url}</div>`;
+      }
+    }, 100);
+  });
 }
 
 function copyPageUrl() {
@@ -2681,7 +2686,7 @@ async function renderSettings(el) {
         actionBtn = `<button class="btn btn-primary btn-sm" onclick="activateRound('${r.id}')">开团</button>`;
       } else if (r.is_active && !isExpired) {
         statusBadge = '<span class="badge badge-success" style="margin-left:6px">进行中</span>';
-        actionBtn = `<button class="btn btn-warning btn-sm" onclick="stopRound('${r.id}', '${escAttr(r.name)}')">停止</button>`;
+        actionBtn = `<button class="btn btn-danger btn-sm" onclick="stopRound('${r.id}', '${escAttr(r.name)}')">停止</button>`;
       } else if (isExpired) {
         statusBadge = '<span class="badge badge-danger" style="margin-left:6px">已截止</span>';
         actionBtn = `<button class="btn btn-secondary btn-sm" onclick="activateRound('${r.id}')">启用</button>`;
