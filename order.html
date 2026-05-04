@@ -1742,6 +1742,8 @@ function updateCartBar() {
 
   if (count === 0) {
     bar.classList.add('hidden');
+    const badge = document.getElementById('cart-badge');
+    if (badge) badge.textContent = 0;
   } else {
     bar.classList.remove('hidden');
     document.getElementById('cart-total-amount').textContent = total.toFixed(2);
