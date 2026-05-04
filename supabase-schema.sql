@@ -313,11 +313,25 @@ BEGIN
   RETURN QUERY
     SELECT * FROM orders
      WHERE customer_name = p_customer_name
-       AND status = 'active'
        AND (p_round_id IS NULL OR round_id = p_round_id)
      ORDER BY created_at DESC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 公开：返回某轮次各商品的汇总数量（用于前端显示"已拼满/未拼满"）
+CREATE OR REPLACE FUNCTION get_round_order_stats(p_round_id UUID)
+RETURNS JSONB AS $$
+SELECT COALESCE(jsonb_agg(s), '[]'::jsonb) FROM (
+  SELECT it->>'product_id' as product_id,
+    SUM(COALESCE((it->>'purchase_qty')::numeric, (it->>'quantity')::numeric, 0)) as qty,
+    COUNT(*)::int as order_count
+  FROM orders o, jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) it
+  WHERE o.round_id = p_round_id AND o.status = 'active'
+    AND (it->>'deleted') IS DISTINCT FROM 'true'
+    AND (it->>'product_id') IS NOT NULL
+  GROUP BY it->>'product_id'
+) s;
+$$ LANGUAGE sql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION admin_save_product(
   p_token TEXT,
@@ -379,58 +393,50 @@ DECLARE
   active_round_id UUID;
 BEGIN
   PERFORM require_admin(p_token);
-  SELECT id INTO active_round_id
-    FROM rounds
-   WHERE is_active = true
-   ORDER BY created_at DESC
-   LIMIT 1;
-
-  IF active_round_id IS NOT NULL THEN
-    WITH rebuilt AS (
-      SELECT
-        o.id,
-        jsonb_agg(
+  -- 标记所有活动订单中该商品的记录为已删除（跨所有轮次）
+  WITH rebuilt AS (
+    SELECT
+      o.id,
+      jsonb_agg(
+        CASE
+          WHEN item->>'product_id' = p_id::text THEN
+            item
+            || jsonb_build_object(
+              'product_name', '商品已删除',
+              'spec_price', 0,
+              'subtotal', 0,
+              'purchase_qty', 0,
+              'deleted', true
+            )
+          ELSE item
+        END
+      ) AS new_items,
+      COALESCE(
+        SUM(
           CASE
-            WHEN item->>'product_id' = p_id::text THEN
-              item
-              || jsonb_build_object(
-                'product_name', '商品已删除',
-                'spec_price', 0,
-                'subtotal', 0,
-                'purchase_qty', 0,
-                'deleted', true
-              )
-            ELSE item
+            WHEN item->>'product_id' <> p_id::text
+            THEN COALESCE((item->>'subtotal')::numeric, 0)
+            ELSE 0
           END
-        ) AS new_items,
-        COALESCE(
-          SUM(
-            CASE
-              WHEN item->>'product_id' <> p_id::text
-              THEN COALESCE((item->>'subtotal')::numeric, 0)
-              ELSE 0
-            END
-          ),
-          0
-        ) AS new_total
-      FROM orders o
-      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) AS item
-      WHERE o.status = 'active'
-        AND o.round_id = active_round_id
-        AND EXISTS (
-          SELECT 1
-            FROM jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) AS existing_item
-           WHERE existing_item->>'product_id' = p_id::text
-        )
-      GROUP BY o.id
-    )
-    UPDATE orders o
-       SET items = rebuilt.new_items,
-           total_amount = ROUND(rebuilt.new_total, 2),
-           updated_at = now()
-      FROM rebuilt
-     WHERE o.id = rebuilt.id;
-  END IF;
+        ),
+        0
+      ) AS new_total
+    FROM orders o
+    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) AS item
+    WHERE o.status = 'active'
+      AND EXISTS (
+        SELECT 1
+          FROM jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) AS existing_item
+         WHERE existing_item->>'product_id' = p_id::text
+      )
+    GROUP BY o.id
+  )
+  UPDATE orders o
+     SET items = rebuilt.new_items,
+         total_amount = ROUND(rebuilt.new_total, 2),
+         updated_at = now()
+    FROM rebuilt
+   WHERE o.id = rebuilt.id;
 
   DELETE FROM products WHERE id = p_id;
 END;
@@ -552,7 +558,7 @@ DECLARE
 BEGIN
   PERFORM require_admin(p_token);
   INSERT INTO rounds (name, cutoff_time, is_active)
-  VALUES (p_name, p_cutoff_time, true)
+  VALUES (p_name, p_cutoff_time, false)
   RETURNING id INTO new_id;
   RETURN new_id;
 END;
@@ -571,6 +577,45 @@ RETURNS VOID AS $$
 BEGIN
   PERFORM require_admin(p_token);
   UPDATE rounds SET is_active = true WHERE id = p_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 管理员砍单（不受截止时间限制，支持备注砍单原因）
+CREATE OR REPLACE FUNCTION admin_cancel_order(p_token TEXT, p_order_id UUID, p_note TEXT DEFAULT NULL)
+RETURNS BOOLEAN AS $$
+DECLARE
+  order_row orders;
+  item JSONB;
+  qty NUMERIC;
+BEGIN
+  PERFORM require_admin(p_token);
+  SELECT * INTO order_row FROM orders WHERE id = p_order_id AND status = 'active' FOR UPDATE;
+  IF order_row.id IS NULL THEN RETURN false; END IF;
+  UPDATE orders SET
+    status = 'cancelled',
+    note = CASE
+      WHEN p_note IS NOT NULL AND p_note <> '' THEN
+        CASE WHEN COALESCE(note, '') <> '' THEN note || ' | ' || p_note ELSE p_note END
+      ELSE note
+    END
+  WHERE id = p_order_id;
+  FOR item IN SELECT * FROM jsonb_array_elements(COALESCE(order_row.items, '[]'::jsonb))
+  LOOP
+    qty := COALESCE((item->>'purchase_qty')::numeric, (item->>'quantity')::numeric, 0);
+    IF qty > 0 THEN
+      UPDATE products SET stock = stock + qty
+       WHERE id = (item->>'product_id')::uuid AND stock IS NOT NULL;
+    END IF;
+  END LOOP;
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION admin_stop_round(p_token TEXT, p_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  PERFORM require_admin(p_token);
+  UPDATE rounds SET is_active = false, cutoff_time = now() WHERE id = p_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
