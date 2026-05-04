@@ -1550,7 +1550,7 @@ async function loadCustomerProducts() {
   if (roundPicker && availableRounds.length > 1) {
     roundPicker.style.display = 'flex';
     roundPicker.innerHTML = availableRounds.map(r =>
-      `<button class="round-chip ${r.id === customerRoundId ? 'active' : ''}" onclick="customerRoundId='${escAttr(r.id)}';cart={};loadCustomerProducts()">${escHtml(r.name)}</button>`
+      `<button class="round-chip ${r.id === customerRoundId ? 'active' : ''}" onclick="customerRoundId='${escAttr(r.id)}';cart=Object.create(null);loadCustomerProducts()">${escHtml(r.name)}</button>`
     ).join('');
   } else if (roundPicker) {
     roundPicker.style.display = 'none';
