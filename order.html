@@ -1477,7 +1477,11 @@ async function openProductForm(id) {
     });
 
     if (!name) { errEl.textContent = '请输入商品名称'; errEl.style.display = 'block'; return; }
-    if (specs.length === 0) { errEl.textContent = '请至少添加一个规格'; errEl.style.display = 'block'; return; }
+    if (specs.length === 0) {
+      const hasAnyRow = document.querySelectorAll('.spec-row').length > 0;
+      errEl.textContent = hasAnyRow ? '每个规格的价格必须大于 0' : '请至少添加一个规格';
+      errEl.style.display = 'block'; return;
+    }
 
     // Handle image upload
     let image = document.getElementById('pf-image-url').value || null;
@@ -2458,7 +2462,7 @@ async function renderOrderManager(el) {
         </div>`;
       });
       if (o.note) html += `<p class="caption">备注: ${escHtml(o.note)}</p>`;
-      html += `<div style="text-align:right;margin-top:6px"><button class="btn btn-danger btn-sm" onclick="adminCancelOrder('${o.id}','${escAttr(name)}')">砍单 · ¥${o.total_amount.toFixed(2)}</button></div>`;
+      html += `<div style="text-align:right;margin-top:6px"><button class="btn btn-danger btn-sm" data-customer-name="${escAttr(name)}" onclick="adminCancelOrder('${o.id}','${escAttr(name)}')">砍单 · ¥${o.total_amount.toFixed(2)}</button></div>`;
     });
     html += '</div>';
   });

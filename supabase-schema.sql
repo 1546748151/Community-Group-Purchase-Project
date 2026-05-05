@@ -623,7 +623,7 @@ CREATE OR REPLACE FUNCTION admin_delete_round(p_token TEXT, p_id UUID)
 RETURNS VOID AS $$
 BEGIN
   PERFORM require_admin(p_token);
-  IF EXISTS (SELECT 1 FROM rounds WHERE id = p_id AND is_active = true) THEN
+  IF EXISTS (SELECT 1 FROM rounds WHERE id = p_id AND is_active = true AND (cutoff_time IS NULL OR cutoff_time > now())) THEN
     RAISE EXCEPTION 'cannot delete active round';
   END IF;
   DELETE FROM orders WHERE round_id = p_id;
@@ -678,7 +678,7 @@ BEGIN
   FOR item IN SELECT * FROM jsonb_array_elements(COALESCE(p_items, '[]'::jsonb))
   LOOP
     product_id := (item->>'product_id')::uuid;
-    SELECT * INTO product_row FROM products WHERE id = product_id AND round_id = p_round_id AND is_active = true;
+    SELECT * INTO product_row FROM products WHERE id = product_id AND round_id = p_round_id AND is_active = true FOR UPDATE;
     IF product_row.id IS NULL THEN
       RAISE EXCEPTION 'product is not in this round or not active';
     END IF;
