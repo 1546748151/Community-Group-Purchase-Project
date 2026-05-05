@@ -743,7 +743,7 @@ function switchMode(mode) {
   if (el) { el.classList.add('active'); el.style.display = (mode === 'admin-login' ? 'flex' : 'block'); }
 
   if (mode !== 'customer') clearInterval(stockPollTimer);
-  if (mode === 'customer') loadCustomerProducts();
+  if (mode === 'customer') { customerRoundId = null; loadCustomerProducts(); }
   if (mode === 'admin') renderAdminTab('products');
   if (mode === 'admin-login') document.getElementById('login-error').style.display = 'none';
   if (mode === 'setup') showSetup();
