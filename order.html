@@ -884,7 +884,12 @@ let customerSelectedTag = '全部';
 let adminProductTagFilter = '全部';
 
 async function getActiveRound() {
-  const { data } = await sb.from('rounds').select('*').eq('is_active', true).limit(1);
+  // Prefer active rounds that haven't expired (no cutoff, or cutoff still in the future)
+  const { data } = await sb.from('rounds').select('*')
+    .eq('is_active', true)
+    .or('cutoff_time.is.null,cutoff_time.gt.now()')
+    .order('created_at', { ascending: false })
+    .limit(1);
   return data && data.length > 0 ? data[0] : null;
 }
 
