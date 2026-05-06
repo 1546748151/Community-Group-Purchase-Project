@@ -1861,7 +1861,9 @@ async function loadCustomerProducts() {
     return 0;
   });
   // Fetch order stats for "已拼满/未拼满" display
-  const { data: orderStats } = await sb.rpc('get_round_order_stats', { p_round_id: customerRoundId });
+  const { data: orderStats, error: statsError } = await sb.rpc('get_round_order_stats', { p_round_id: customerRoundId });
+  if (statsError) console.error('get_round_order_stats error:', statsError);
+  console.log('orderStats:', orderStats);
   const orderStatsMap = {};
   (orderStats || []).forEach(s => { orderStatsMap[s.product_id] = { qty: s.qty, orders: s.order_count }; });
   cachedSummaryByProduct = {};
@@ -1882,6 +1884,7 @@ async function loadCustomerProducts() {
     }
   });
   cachedProducts = products;
+  console.log('cachedSummaryByProduct keys:', Object.keys(cachedSummaryByProduct), 'products:', products.map(p => p.id));
 
   let html = '';
   let hitSoldOut = false;
@@ -1943,6 +1946,7 @@ function buildProductCardHtml(p) {
   const displaySpec = selected ? selected.specName : firstSpec.name;
   const displayPrice = selected ? selected.specPrice : firstSpec.price;
   const fillSummary = cachedSummaryByProduct[p.id] || cachedSummaryByProduct[p.name];
+  if (fillSummary) console.log('fillSummary for', p.name, ':', fillSummary);
   const imgHtml = p.image
     ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" style="cursor:pointer" onclick="openImagePreview('${escAttr(p.image)}')" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
     : `<div class="shop-product-img placeholder">邻选</div>`;
