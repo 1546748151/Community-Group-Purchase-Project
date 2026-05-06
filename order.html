@@ -151,7 +151,7 @@ body{
 }
 .qty-ctrl button:active{background:var(--color-border-light)}
 .qty-ctrl button:disabled{opacity:.3;pointer-events:none}
-.qty-ctrl .qty-val{min-width:36px;text-align:center;font-size:.9375rem;font-weight:600}
+.qty-ctrl .qty-val{min-width:36px;text-align:center;font-size:.9375rem;font-weight:600;cursor:text}
 
 /* --- Modal --- */
 .modal-overlay{
@@ -495,6 +495,7 @@ body[data-mode="admin"] .cart-bar{display:none}
       <div class="customer-hero-card">
         <div class="round-line"><span id="site-title-text">美好小区团购群</span> <span style="color:var(--color-text-muted)">›</span></div>
         <div class="deadline-pill" id="customer-deadline-pill">请在截止前下单</div>
+        <span id="customer-leader-name" class="caption" style="display:none;margin-top:6px"></span>
       </div>
       <div class="round-picker" id="customer-round-picker" style="display:none;gap:6px;flex-wrap:wrap;margin-top:-4px;margin-bottom:8px"></div>
       <label class="customer-search">⌕ <input id="customer-search-input" type="search" placeholder="搜索商品名称、规格或标签" oninput="customerSearchQuery=this.value;debouncedSearchLoad()"></label>
@@ -602,6 +603,7 @@ body[data-mode="admin"] .cart-bar{display:none}
         截止前可修改订单
         <div class="caption" style="margin-top:4px">如需调整商品、数量或备注，请在截止时间前操作。</div>
       </div>
+      <div id="checkout-weight-note" style="display:none;background:var(--color-warning-light);border:1px solid #fcd34d;border-radius:var(--radius-md);padding:10px 14px;margin-bottom:16px;color:#92400e;font-size:.8125rem">含称重商品，价格为预估，到货后团长确认实际重量后更新最终价格</div>
       <div style="display:flex;justify-content:space-between;padding:14px 0;border-top:1.5px solid var(--color-border);margin-bottom:16px">
         <span style="font-weight:800">应付总额</span>
         <span style="font-size:1.25rem;font-weight:700;color:var(--color-accent)" id="checkout-total"></span>
@@ -616,6 +618,7 @@ body[data-mode="admin"] .cart-bar{display:none}
         <input type="text" id="checkout-note" class="form-input" placeholder="如：不要葱、多放辣（选填）" maxlength="100">
       </div>
       <button class="btn btn-primary btn-block btn-lg" onclick="submitOrder()" id="btn-submit-order">提交订单</button>
+      <button class="btn btn-ghost btn-block btn-sm" onclick="closeCheckout()">返回修改</button>
       <p class="caption" style="text-align:center;margin-top:8px">提交后可在团长处查看订单</p>
     </div>
   </div>
@@ -1062,8 +1065,27 @@ function formatQtyLabel(n) {
   return toDisplayFraction(n) || formatQty(n);
 }
 
+function parseWeightEstimateGrams(estimate) {
+  // 从 "约800g" "800g/份" "约 800g" 中提取克重数字
+  if (!estimate) return null;
+  const m = String(estimate).match(/(\d+)\s*g/);
+  return m ? parseInt(m[1]) : null;
+}
+
+function parseSpecShare(specName) {
+  // 称重商品份额解析: "1/2份"→0.5, "1份"→1, "1/3份"→0.333
+  const raw = String(specName || '').trim();
+  const match = raw.match(/^(\d+)(?:\/(\d+))?份$/);
+  if (!match) return null;
+  const num = parseInt(match[1]);
+  const den = match[2] ? parseInt(match[2]) : 1;
+  return den > 0 ? num / den : null;
+}
+
 function formatUnitLabel(specName) {
   const raw = String(specName || '').trim();
+  // 纯份额格式 (如 1/2份, 1份) → 原样保留
+  if (/^\d+(?:\/\d+)?份$/.test(raw)) return raw;
   // "5/30个/份" → 显示 "5个/份"，"30/30个/份" → 显示 "30个/份"
   const match = raw.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)(.+)$/);
   if (match) return match[1] + match[3];
@@ -1210,7 +1232,7 @@ function buildPurchaseSummaryText(roundLabel, productSummary) {
   const totalAmount = productSummary.reduce((s, ps) => s + ps.amount, 0);
   let text = `${roundLabel || '本轮团购'} 商品采购清单：\n`;
   productSummary.forEach((ps, index) => {
-    const status = ps.unfilled ? `，未拼满，差 ${formatQtyLabel(ps.missingQty)}` : '';
+    const status = ps.unfilled ? `，未拼满，差 ${toDisplayFraction(ps.missingQty, 40) || formatQtyLabel(ps.missingQty)}` : '';
     text += `${index + 1}. ${ps.name}（${ps.spec}） x${formatQtyLabel(ps.qty)}${status}，销售额 ${ps.amount.toFixed(2)} 元\n`;
   });
   text += `合计：${productSummary.length} 种商品，${formatQtyLabel(totalQty)} 件，${totalAmount.toFixed(2)} 元`;
@@ -1428,23 +1450,33 @@ async function renderProductManager(el) {
   } else {
     html += '<div class="admin-product-list">';
     visibleProducts.forEach(p => {
-      const specs = p.specs || [];
+      const specs = (p.specs || []).slice().sort((a, b) => {
+        const aPU = parsePurchaseUnit(a.name);
+        const bPU = parsePurchaseUnit(b.name);
+        const aInt = aPU !== null && aPU % 1 === 0;
+        const bInt = bPU !== null && bPU % 1 === 0;
+        if (aInt && !bInt) return -1;
+        if (!aInt && bInt) return 1;
+        return 0;
+      });
       const specStr = specs.map(s => `${formatUnitLabel(s.name)} / ¥${s.price}`).join(' 、 ');
       const stockInfo = p.stock !== null ? `库存: ${formatQtyLabel(p.stock)}` : '不限库存';
       const tags = getProductTags(p);
       const statusBadge = p.is_active ? '<span class="badge badge-success">上架</span>' : '<span class="badge badge-muted">已下架</span>';
+      const weightedBadge = p.is_weighted ? '<span class="badge badge-muted" style="margin-left:4px">称重</span>' : '';
       html += `<div class="admin-product-card">
         ${p.image ? `<img class="admin-product-thumb" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" style="cursor:pointer" onclick="openImagePreview('${escAttr(p.image)}')" onerror="this.outerHTML='<div class=&quot;admin-product-thumb placeholder&quot;>邻选</div>'">` : '<div class="admin-product-thumb placeholder">邻选</div>'}
         <div class="admin-product-info">
           <div class="admin-product-head">
             <div class="admin-product-name product-name">${escHtml(p.name)}</div>
             <div style="flex-shrink:0">
-              ${statusBadge}
+              ${statusBadge}${weightedBadge}
             </div>
           </div>
           <div class="admin-product-meta">
             <span class="product-price">${escHtml(specStr || '未设置规格')}</span>
             <span class="stock-info">${escHtml(stockInfo)}</span>
+            ${p.weight_estimate ? `<span class="caption" style="display:block;margin-top:2px">预估: ${escHtml(p.weight_estimate)}</span>` : ''}
           </div>
           <div class="admin-product-tags">
             ${tags.length ? tags.map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('') : '<span class="tag-pill">未分类</span>'}
@@ -1460,6 +1492,42 @@ async function renderProductManager(el) {
     html += '</div>';
   }
   el.innerHTML = html;
+}
+
+function toggleWeightedForm() {
+  const isWeighted = document.getElementById('pf-is-weighted').checked;
+  const weightedFields = document.getElementById('pf-weighted-fields');
+  const specsGroup = document.getElementById('pf-specs').parentElement;
+  const stockGroup = document.getElementById('pf-stock-group');
+  const calcToggle = document.getElementById('pf-calc-toggle');
+
+  weightedFields.style.display = isWeighted ? 'flex' : 'none';
+  specsGroup.style.display = isWeighted ? 'none' : 'block';
+  stockGroup.style.display = isWeighted ? 'none' : 'block';
+  if (calcToggle) calcToggle.style.display = isWeighted ? 'none' : '';
+
+  if (isWeighted) {
+    // 首次切换时填充默认规格区
+    const container = document.getElementById('pf-specs-weighted');
+    if (container && container.children.length === 0) {
+      addWeightedSpecRow();
+    }
+  }
+}
+
+function addWeightedSpecRow() {
+  const container = document.getElementById('pf-specs-weighted');
+  if (!container) return;
+  const row = document.createElement('div');
+  row.className = 'spec-row';
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+  row.innerHTML = `
+    <input type="text" class="form-input" placeholder="如：1/3份" style="flex:1">
+    <input type="number" class="form-input" placeholder="份额" min="0.01" max="1" step="0.01" style="width:70px">
+    <button class="btn btn-ghost btn-sm" style="padding:8px;color:var(--color-danger);flex-shrink:0" onclick="this.closest('.spec-row').remove()">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>`;
+  container.appendChild(row);
 }
 
 async function openProductForm(id) {
@@ -1515,10 +1583,38 @@ async function openProductForm(id) {
         <input type="text" id="pf-tags" class="form-input" placeholder="如：蛋糕 冷藏 山姆，可用空格或逗号分隔" maxlength="80">
         <span class="form-hint">顾客端和团长后台会按这些标签分类筛选</span>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="pf-stock-group">
         <label class="form-label">库存数量</label>
         <input type="number" id="pf-stock" class="form-input" placeholder="留空表示不限库存" min="0" step="0.001">
         <span class="form-hint">设置后库存卖完自动停止下单</span>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="pf-is-weighted" style="accent-color:var(--color-accent);width:18px;height:18px" onchange="toggleWeightedForm()">
+        <label for="pf-is-weighted" class="form-label" style="margin:0">称重商品</label>
+        <span class="form-hint" style="margin:0">（在线只有单价，到货后称重确认价格）</span>
+      </div>
+      <div id="pf-weighted-fields" style="display:none;flex-direction:column;gap:14px">
+        <div class="form-group">
+          <label class="form-label">预估克重（选填，不计入金额）</label>
+          <input type="text" id="pf-weight-estimate" class="form-input" placeholder="如：约 800g/份（仅供顾客参考）" maxlength="30">
+        </div>
+        <div class="form-group">
+          <label class="form-label">单位价格 *</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" id="pf-unit-price" class="form-input" placeholder="如：75" min="0.01" step="0.01" style="flex:1">
+            <select id="pf-weight-unit" class="form-input" style="width:80px">
+              <option value="kg">/kg</option>
+              <option value="份">/份</option>
+            </select>
+          </div>
+          <span class="form-hint">填入单价，系统将自动生成 1/2份 和 1份 规格</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">补充规格</label>
+          <div id="pf-specs-weighted"></div>
+          <button class="btn btn-secondary btn-sm" onclick="addWeightedSpecRow()" style="margin-top:8px">+ 补充其他份额</button>
+          <span class="form-hint">格式：1/3份 = 顾客要三分之一份，系统按单价×重量×份额计算</span>
+        </div>
       </div>
       <span class="form-error" id="pf-error" style="display:none"></span>
       <button class="btn btn-primary btn-block btn-lg" id="pf-submit">${isEdit ? '保存修改' : '添加商品'}</button>
@@ -1540,20 +1636,36 @@ async function openProductForm(id) {
     const errEl = document.getElementById('pf-error');
 
     const name = document.getElementById('pf-name').value.trim();
+    const isWeighted = document.getElementById('pf-is-weighted').checked;
     const stockVal = document.getElementById('pf-stock').value.trim();
     const stock = stockVal === '' ? null : parseFloat(stockVal);
     const tags = normalizeTags(document.getElementById('pf-tags').value);
     const specs = [];
-    document.querySelectorAll('.spec-row').forEach(row => {
-      const sname = row.querySelector('.spec-name').value.trim();
-      const sprice = parseFloat(row.querySelector('.spec-price').value);
-      if (sname && !isNaN(sprice) && sprice > 0) specs.push({ name: sname, price: sprice });
-    });
+
+    if (isWeighted) {
+      const unitPrice = parseFloat(document.getElementById('pf-unit-price').value);
+      if (!unitPrice || unitPrice <= 0) { errEl.textContent = '请输入单位价格（¥/kg）'; errEl.style.display = 'block'; return; }
+      // 自动生成默认规格 + 补充规格
+      specs.push({ name: '1/2份', price: unitPrice }, { name: '1份', price: unitPrice });
+      document.querySelectorAll('#pf-specs-weighted .spec-row').forEach(row => {
+        const inputs = row.querySelectorAll('input');
+        const sname = inputs[0]?.value?.trim();
+        const sshare = parseFloat(inputs[1]?.value);
+        if (sname && !isNaN(sshare) && sshare > 0 && sshare <= 1) {
+          specs.push({ name: sname, price: unitPrice });
+        }
+      });
+    } else {
+      document.querySelectorAll('#pf-specs .spec-row').forEach(row => {
+        const sname = row.querySelector('.spec-name').value.trim();
+        const sprice = parseFloat(row.querySelector('.spec-price').value);
+        if (sname && !isNaN(sprice) && sprice > 0) specs.push({ name: sname, price: sprice });
+      });
+    }
 
     if (!name) { errEl.textContent = '请输入商品名称'; errEl.style.display = 'block'; return; }
     if (specs.length === 0) {
-      const hasAnyRow = document.querySelectorAll('.spec-row').length > 0;
-      errEl.textContent = hasAnyRow ? '每个规格的价格必须大于 0' : '请至少添加一个规格';
+      errEl.textContent = isWeighted ? '请输入单位价格' : '请至少添加一个规格';
       errEl.style.display = 'block'; return;
     }
 
@@ -1595,7 +1707,7 @@ async function openProductForm(id) {
       image = urlData.publicUrl;
     }
 
-    const payload = { name, image, specs, tags, stock, is_active: isEdit ? editingProductActiveState : true };
+    const payload = { name, image, specs, tags, stock, is_active: isEdit ? editingProductActiveState : true, is_weighted: isWeighted };
 
     btn.disabled = true; btn.textContent = '保存中...';
     try {
@@ -1607,7 +1719,10 @@ async function openProductForm(id) {
         p_tags: payload.tags,
         p_stock: payload.stock,
         p_is_active: payload.is_active,
-        p_round_id: adminProductRoundId
+        p_round_id: adminProductRoundId,
+        p_is_weighted: payload.is_weighted,
+        p_weight_estimate: payload.is_weighted ? (document.getElementById('pf-weight-estimate')?.value?.trim() || null) : null,
+        p_weight_unit: payload.is_weighted ? (document.getElementById('pf-weight-unit')?.value || 'kg') : null
       });
 
       if (result.error) { errEl.textContent = '保存失败: ' + result.error.message; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品'; return; }
@@ -1706,8 +1821,36 @@ function addSpecRow() {
 async function loadProductForEdit(id) {
   const { data } = await adminRpc('admin_get_product', { p_id: id });
   if (!data) return;
-  editingProductActiveState = data.is_active !== false; // 捕获当前上下架状态
+  editingProductActiveState = data.is_active !== false;
   document.getElementById('pf-name').value = data.name || '';
+  document.getElementById('pf-is-weighted').checked = data.is_weighted === true;
+
+  if (data.is_weighted) {
+    // 称重商品：取第一个规格价格作为单位价格
+    const firstPrice = (data.specs && data.specs[0]) ? data.specs[0].price : '';
+    document.getElementById('pf-unit-price').value = firstPrice;
+    const estEl = document.getElementById('pf-weight-estimate');
+    if (estEl) estEl.value = data.weight_estimate || '';
+    const unitSelect = document.getElementById('pf-weight-unit');
+    if (unitSelect) unitSelect.value = data.weight_unit || 'kg';
+    const weightContainer = document.getElementById('pf-specs-weighted');
+    if (weightContainer) weightContainer.innerHTML = '';
+    const defaultSpecs = ['1/2份', '1份'];
+    (data.specs || []).forEach(s => {
+      if (!defaultSpecs.includes(s.name)) {
+        const share = parseSpecShare(s.name);
+        if (share !== null && weightContainer) {
+          const row = document.createElement('div');
+          row.className = 'spec-row';
+          row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+          row.innerHTML = `<input type="text" class="form-input" value="${escHtml(s.name)}" style="flex:1"><input type="number" class="form-input" value="${share}" min="0.01" max="1" step="0.01" style="width:70px"><button class="btn btn-ghost btn-sm" style="padding:8px;color:var(--color-danger);flex-shrink:0" onclick="this.closest('.spec-row').remove()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>`;
+          weightContainer.appendChild(row);
+        }
+      }
+    });
+    toggleWeightedForm();
+  }
+
   // Handle image: show preview if exists
   if (data.image) {
     document.getElementById('pf-image-url').value = data.image;
@@ -1818,6 +1961,11 @@ async function loadCustomerProducts() {
       ? `请在 ${cutoffTime.toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })} 前下单`
       : '本期团购正在进行中';
   }
+  const leaderEl = document.getElementById('customer-leader-name');
+  if (leaderEl) {
+    leaderEl.textContent = activeRound.leader_name ? `本期团长: ${activeRound.leader_name}` : '';
+    leaderEl.style.display = activeRound.leader_name ? 'block' : 'none';
+  }
 
   // 多轮次选择器 — 只有超过 1 个可选轮次才显示
   const roundPicker = document.getElementById('customer-round-picker');
@@ -1861,9 +2009,7 @@ async function loadCustomerProducts() {
     return 0;
   });
   // Fetch order stats for "已拼满/未拼满" display
-  const { data: orderStats, error: statsError } = await sb.rpc('get_round_order_stats', { p_round_id: customerRoundId });
-  if (statsError) console.error('get_round_order_stats error:', statsError);
-  console.log('orderStats:', orderStats);
+  const { data: orderStats } = await sb.rpc('get_round_order_stats', { p_round_id: customerRoundId });
   const orderStatsMap = {};
   (orderStats || []).forEach(s => { orderStatsMap[s.product_id] = { qty: s.qty, orders: s.order_count }; });
   cachedSummaryByProduct = {};
@@ -1872,19 +2018,21 @@ async function loadCustomerProducts() {
     if (stats) {
       const spec = (p.specs || [])[0] || {};
       const pu = parsePurchaseUnit(spec.name);
+      const hasFractional = stats.qty % 1 > 1e-9;
+      const isSplit = pu !== null || hasFractional;
       cachedSummaryByProduct[p.id] = {
         productId: p.id, name: p.name, spec: spec.name || '',
         qty: stats.qty, orderQty: stats.orders, amount: 0,
-        isSplitUnit: pu !== null,
-        unfilled: pu !== null ? (stats.qty % 1 > 1e-9) : false,
-        missingQty: pu !== null ? Math.max(0, Math.ceil(stats.qty) - stats.qty) : 0,
-        missingLabel: pu !== null ? formatQtyLabel(Math.max(0, Math.round((Math.ceil(stats.qty) - stats.qty) * 1000) / 1000)) : '',
+        isSplitUnit: isSplit,
+        unfilled: isSplit ? hasFractional : false,
+        missingQty: isSplit ? Math.max(0, Math.ceil(stats.qty) - stats.qty) : 0,
+        missingLabel: isSplit ? (toDisplayFraction(stats.qty % 1 === 0 ? 0 : Math.ceil(stats.qty) - stats.qty, 40) || formatQty(Math.ceil(stats.qty) - stats.qty)) : '',
+        fillLabel: isSplit && !hasFractional && stats.qty > 0 ? '已拼满' : '',
         qtyLabel: formatQtyLabel(stats.qty)
       };
     }
   });
   cachedProducts = products;
-  console.log('cachedSummaryByProduct keys:', Object.keys(cachedSummaryByProduct), 'products:', products.map(p => p.id));
 
   let html = '';
   let hitSoldOut = false;
@@ -1938,7 +2086,18 @@ function startStockPolling() {
 }
 
 function buildProductCardHtml(p) {
-  const specs = p.specs || [];
+  const isWeighted = p.is_weighted === true;
+  // 整装规格优先显示，避免拆分占比价误导（如 30/30个/份 优先于 5/30个/份）
+  const rawSpecs = p.specs || [];
+  const specs = rawSpecs.slice().sort((a, b) => {
+    const aPU = parsePurchaseUnit(a.name);
+    const bPU = parsePurchaseUnit(b.name);
+    const aInt = aPU !== null && aPU % 1 === 0;
+    const bInt = bPU !== null && bPU % 1 === 0;
+    if (aInt && !bInt) return -1;
+    if (!aInt && bInt) return 1;
+    return 0;
+  });
   const stockSoldOut = p.stock !== null && p.stock <= 0;
   const firstSpec = specs[0] || { name: '默认', price: 0 };
   const selectedKey = Object.keys(cart).find(k => k.startsWith(p.id + '-'));
@@ -1946,14 +2105,13 @@ function buildProductCardHtml(p) {
   const displaySpec = selected ? selected.specName : firstSpec.name;
   const displayPrice = selected ? selected.specPrice : firstSpec.price;
   const fillSummary = cachedSummaryByProduct[p.id] || cachedSummaryByProduct[p.name];
-  if (fillSummary) console.log('fillSummary for', p.name, ':', fillSummary);
   const imgHtml = p.image
     ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" style="cursor:pointer" onclick="openImagePreview('${escAttr(p.image)}')" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
     : `<div class="shop-product-img placeholder">邻选</div>`;
   const stockHtml = p.stock !== null && !stockSoldOut ? `<span class="shop-product-stock">剩余 ${formatQtyLabel(p.stock)} 份</span>` : '';
   const fillHtml = fillSummary && fillSummary.isSplitUnit
     ? (fillSummary.unfilled
-      ? `<span class="shop-product-fill">未拼满，差 ${escHtml(fillSummary.missingLabel || formatQtyLabel(fillSummary.missingQty))}</span>`
+      ? `<span class="shop-product-fill">未拼满，差 ${escHtml(fillSummary.missingLabel)}</span>`
       : `<span class="shop-product-fill ok">已拼满</span>`)
     : '';
   const sameProductTotalQty = Object.values(cart).filter(i => i.productId === p.id).reduce((s, i) => s + (parsePurchaseUnit(i.specName) || 1) * i.quantity, 0);
@@ -1972,8 +2130,19 @@ function buildProductCardHtml(p) {
     <div class="shop-product-body">
       <div class="shop-product-name">${escHtml(p.name)}</div>
       <div class="shop-product-meta"><span class="shop-product-spec">${escHtml(formatUnitLabel(displaySpec))}</span>${stockHtml}${fillHtml}</div>
-      ${getProductTags(p).length ? `<div class="tag-list" style="margin:0 0 8px">${getProductTags(p).map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('')}</div>` : ''}
-      <div class="shop-product-price">¥${Number(displayPrice || 0).toFixed(2)} <small>/份</small></div>
+      ${(getProductTags(p).length || (isWeighted && p.weight_estimate)) ? `<div class="tag-list" style="margin:0 0 8px">${getProductTags(p).map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('')}${isWeighted && p.weight_estimate ? `<span class="tag-pill" style="background:var(--color-warning-light);color:#92400e;font-weight:600">预估: ${escHtml(p.weight_estimate)}</span>` : ''}</div>` : ''}
+      <div class="shop-product-price">¥${Number(displayPrice || 0).toFixed(2)} <small>${isWeighted ? '/' + (p.weight_unit || 'kg') : '/份'}</small></div>
+      ${(() => {
+        if (isWeighted && selected) {
+          const grams = parseWeightEstimateGrams(p.weight_estimate);
+          const share = parseSpecShare(selected.specName);
+          if (grams && share) {
+            const estPrice = selected.specPrice * (grams / 1000) * share;
+            return `<div class="caption" style="color:var(--color-accent);font-weight:600">约 ¥${estPrice.toFixed(2)}（预估）</div>`;
+          }
+        }
+        return '';
+      })()}
       ${specs.length > 1 ? `<div class="spec-grid">${specs.map(s => {
         const cartKey = `${p.id}-${s.name}`;
         const inCart = cart[cartKey];
@@ -1981,6 +2150,7 @@ function buildProductCardHtml(p) {
           ? `<div class="spec-option disabled">${escHtml(formatUnitLabel(s.name))}</div>`
           : `<div class="spec-option ${inCart ? 'selected' : ''}" data-spec='${escAttr(JSON.stringify({id:p.id,name:s.name,price:s.price,pname:p.name}))}'>${escHtml(formatUnitLabel(s.name))}</div>`;
       }).join('')}</div>` : ''}
+      ${isWeighted ? `<p class="caption" style="margin-top:4px;color:var(--color-warning)">规格不对？联系团长自定义</p>` : ''}
     </div>
     <div class="shop-product-action">${actionHtml}</div>
   </div>`;
@@ -2030,11 +2200,21 @@ function updateCartItem(cartKey, delta) {
   refreshProduct(productId);
 }
 
+function getCartItemPrice(i) {
+  const product = cachedProducts.find(p => p.id === i.productId);
+  if (product && product.is_weighted) {
+    const grams = parseWeightEstimateGrams(product.weight_estimate);
+    const share = parseSpecShare(i.specName);
+    if (grams && share) return i.specPrice * (grams / 1000) * share * i.quantity;
+  }
+  return i.specPrice * i.quantity;
+}
+
 function updateCartBar() {
   const bar = document.getElementById('cart-bar');
   const items = Object.values(cart);
   const count = items.reduce((s, i) => s + i.quantity, 0);
-  const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
+  const total = items.reduce((s, i) => s + getCartItemPrice(i), 0);
 
   if (count === 0) {
     bar.classList.add('hidden');
@@ -2053,6 +2233,17 @@ function buildCartItemsHtml(showControls = true) {
   const items = Object.values(cart);
   return items.map(i => {
     const cartKey = `${i.productId}-${i.specName}`;
+    const product = cachedProducts.find(p => p.id === i.productId);
+    const isW = product && product.is_weighted;
+    let estPrice = null;
+    if (isW) {
+      const grams = parseWeightEstimateGrams(product.weight_estimate);
+      const share = parseSpecShare(i.specName);
+      if (grams && share) {
+        estPrice = i.specPrice * (grams / 1000) * share * i.quantity;
+      }
+    }
+    const displayPrice = estPrice != null ? estPrice : (i.specPrice * i.quantity);
     return `
     <div class="order-item-row" style="padding:12px;border:1px solid var(--color-border);border-radius:var(--radius-md);margin-bottom:10px;align-items:center;background:#fff">
       <span class="item-name"><strong>${escHtml(i.productName)}</strong><br><span class="caption">${escHtml(formatUnitLabel(i.specName))}</span></span>
@@ -2062,7 +2253,7 @@ function buildCartItemsHtml(showControls = true) {
           <span class="qty-val" style="min-width:24px;font-size:.8125rem">${i.quantity}</span>
           <button data-checkout-key="${escAttr(cartKey)}" data-checkout-delta="1" style="width:28px;height:28px;font-size:.875rem">+</button>
         </span>` : `<span class="caption">${formatOrderItemQty({ spec_name: i.specName, quantity: i.quantity })}</span>`}
-        <span class="item-price">${(i.specPrice * i.quantity).toFixed(2)}</span>
+        <span class="item-price">${displayPrice.toFixed(2)}</span>
       </span>
     </div>`;
   }).join('');
@@ -2091,7 +2282,7 @@ function adjustCartDetailsQty(cartKey, delta) {
     unlockScroll();
     return;
   }
-  const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
+  const total = items.reduce((s, i) => s + getCartItemPrice(i), 0);
   const listEl = document.getElementById('cart-detail-list');
   const totalEl = document.getElementById('cart-detail-total');
   if (listEl) {
@@ -2123,7 +2314,7 @@ function openCartDetails() {
   const old = document.querySelector('[data-modal="cart"]');
   if (old) old.remove();
 
-  const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
+  const total = items.reduce((s, i) => s + getCartItemPrice(i), 0);
 
   // 隐藏底部购物车栏，避免 z-index 遮罩挡住弹窗按钮
   const cartBar = document.getElementById('cart-bar');
@@ -2179,9 +2370,14 @@ function openCheckout() {
   const itemsEl = document.getElementById('checkout-items');
   itemsEl.innerHTML = buildCartItemsHtml(true);
 
-  const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
+  const total = items.reduce((s, i) => s + getCartItemPrice(i), 0);
   document.getElementById('checkout-total').textContent = total.toFixed(2);
 
+  const hasWeighted = items.some(i => { const p = cachedProducts.find(cp => cp.id === i.productId); return p && p.is_weighted; });
+  const totalLabel = document.querySelector('#modal-checkout span[style*="font-weight:800"]');
+  if (totalLabel) totalLabel.textContent = hasWeighted ? '预估总额（称重待确认）' : '应付总额';
+  const weightNote = document.getElementById('checkout-weight-note');
+  if (weightNote) weightNote.style.display = hasWeighted ? 'block' : 'none';
 
   document.getElementById('checkout-name').value = localStorage.getItem('groupbuy_last_name') || '';
   document.getElementById('checkout-note').value = '';
@@ -2254,10 +2450,12 @@ async function submitOrder() {
       cart = {}; closeCheckout(); loadCustomerProducts(); return;
     }
 
-    const total = items.reduce((s, i) => s + i.specPrice * i.quantity, 0);
+    const total = items.reduce((s, i) => s + getCartItemPrice(i), 0);
     const orderItems = items.map(i => {
       const parsedUnit = parsePurchaseUnit(i.specName);
       const unitQty = parsedUnit || 1;
+      const product = cachedProducts.find(p => p.id === i.productId);
+      const share = product && product.is_weighted ? (parseSpecShare(i.specName) || 1) : null;
       return {
         product_id: i.productId,
         product_name: i.productName,
@@ -2266,7 +2464,8 @@ async function submitOrder() {
         quantity: i.quantity,
         unit_qty: unitQty,
         purchase_qty: unitQty * i.quantity,
-        subtotal: parseFloat((i.specPrice * i.quantity).toFixed(2))
+        subtotal: parseFloat((i.specPrice * i.quantity).toFixed(2)),
+        share: share
       };
     });
 
@@ -2360,46 +2559,82 @@ async function lookupOrders() {
     return;
   }
 
-  let html = '';
+  // 按轮次分组，合并同类商品
+  const roundGroups = {};
   orders.forEach(order => {
-    const items = order.items || [];
-    const orderRound = roundInfo[order.round_id];
-    const orderCutoff = orderRound?.cutoff_time ? new Date(orderRound.cutoff_time) : null;
-    const canCancel = !orderCutoff || new Date() < orderCutoff;
-    const isAdminCancelled = order.status === 'cancelled' && order.note && order.note.includes('[团长砍单]');
-    const statusText = order.status === 'cancelled' ? (isAdminCancelled ? '已砍单' : '已取消') : '已提交';
-    const statusClass = order.status === 'cancelled' ? (isAdminCancelled ? 'badge-danger' : 'badge-muted') : 'badge-success';
-    const ri = roundInfo[order.round_id] || { name: '历史轮次', status: '' };
+    const rid = order.round_id || '__no_round__';
+    if (!roundGroups[rid]) roundGroups[rid] = { orders: [], merged: {}, totalAmount: 0, notes: [], hasActive: false, hasPendingWeight: false, hasCancelled: false, isAdminCancelled: false };
+    const g = roundGroups[rid];
+    g.orders.push(order);
+    if (order.status === 'pending_weight') {
+      g.hasPendingWeight = true;
+      g.hasActive = true; // 算作活跃状态但不计金额
+    } else if (order.status !== 'cancelled') {
+      g.hasActive = true;
+      (order.items || []).forEach(it => {
+        if (it.deleted) return;
+        const key = `${it.product_id || ''}|${it.spec_name || ''}`;
+        if (!g.merged[key]) g.merged[key] = { product_name: it.product_name, spec_name: it.spec_name, quantity: 0, subtotal: 0, unit_qty: it.unit_qty };
+        g.merged[key].quantity += it.quantity || 0;
+        g.merged[key].subtotal += Number(it.subtotal) || 0;
+      });
+      g.totalAmount += Number(order.total_amount) || 0;
+    } else {
+      g.hasCancelled = true;
+      if (order.note && order.note.includes('[团长砍单]')) g.isAdminCancelled = true;
+    }
+    if (order.note) g.notes.push(order.note);
+  });
+
+  let html = '';
+  Object.entries(roundGroups).forEach(([rid, g]) => {
+    const ri = roundInfo[rid] || { name: '历史轮次', status: '' };
     const roundLabel = escHtml(ri.name);
+    const roundCutoff = ri.cutoff_time ? new Date(ri.cutoff_time) : null;
+    const canCancel = g.hasActive && (!roundCutoff || new Date() < roundCutoff);
     const statusColor = ri.status === '进行中' ? 'badge-success' : ri.status === '已截止' || ri.status === '已停止' ? 'badge-danger' : 'badge-muted';
     const roundStatusTag = ri.status ? `<span class="badge ${statusColor}" style="margin-left:6px;font-size:.72rem">${escHtml(ri.status)}</span>` : '';
-    html += `<div class="card" style="margin-bottom:12px;border:1.5px solid var(--color-accent);border-radius:var(--radius-lg);opacity:${order.status === 'cancelled' ? '.6' : '1'}">
+
+    // 状态标签
+    let statusBadge = '';
+    if (g.hasCancelled && !g.hasActive) {
+      statusBadge = `<span class="badge ${g.isAdminCancelled ? 'badge-danger' : 'badge-muted'}">${g.isAdminCancelled ? '已砍单' : '已取消'}</span>`;
+    } else if (g.hasPendingWeight) {
+      statusBadge = `<span class="badge badge-muted">待称重确认</span>`;
+    } else if (g.hasActive && g.hasCancelled) {
+      statusBadge = `<span class="badge badge-success">进行中</span>`;
+    } else if (g.hasActive) {
+      statusBadge = `<span class="badge badge-success">已提交</span>`;
+    }
+
+    html += `<div class="card" style="margin-bottom:12px;border:1.5px solid var(--color-accent);border-radius:var(--radius-lg);opacity:${!g.hasActive ? '.6' : '1'}">
       <div style="text-align:center;font-weight:900;color:var(--color-accent);font-size:.9rem;padding:8px 0 4px">${roundLabel}${roundStatusTag}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 12px">
-        <span class="badge ${statusClass}">${statusText}</span>
-        <span class="caption">${new Date(order.created_at).toLocaleString('zh-CN')}</span>
+        ${statusBadge}
       </div>`;
-    items.forEach(it => {
-      const isDeleted = !!it.deleted;
-      const itemName = isDeleted ? '商品已删除' : (it.product_name || '');
-      const specLabel = isDeleted ? '已从本轮团购移除' : formatUnitLabel(it.spec_name);
-      const qtyLabel = isDeleted ? '' : ` ${formatOrderItemQty(it)}`;
-      const itemAmount = Number(it.subtotal) || 0;
+
+    // 合并后的商品列表
+    Object.values(g.merged).forEach(it => {
+      const specLabel = formatUnitLabel(it.spec_name);
       html += `<div class="order-item-row">
-        <span class="item-name">${escHtml(itemName)} - ${escHtml(specLabel)}${qtyLabel}${isDeleted ? ' <span class="badge badge-muted" style="margin-left:6px">已删除</span>' : ''}</span>
-        <span class="item-price">${itemAmount.toFixed(2)}</span>
+        <span class="item-name">${escHtml(it.product_name)} ${escHtml(specLabel)} <strong>×${formatQtyLabel(it.quantity)}</strong></span>
+        <span class="item-price">${it.subtotal.toFixed(2)}</span>
       </div>`;
     });
-    if (order.note) {
-      const noteStyle = isAdminCancelled
+
+    // 备注
+    g.notes.filter(Boolean).forEach(note => {
+      const isAdminNote = note.includes('[团长砍单]');
+      const noteStyle = isAdminNote
         ? 'margin-top:4px;background:var(--color-danger-light);color:var(--color-danger);padding:6px 10px;border-radius:var(--radius-sm);font-size:.82rem'
         : 'margin-top:4px';
-      const noteLabel = isAdminCancelled ? '砍单原因: ' : '备注: ';
-      html += `<p class="caption" style="${noteStyle}">${noteLabel}${escHtml(order.note)}</p>`;
-    }
+      const noteLabel = isAdminNote ? '砍单原因: ' : '备注: ';
+      html += `<p class="caption" style="${noteStyle}">${noteLabel}${escHtml(note)}</p>`;
+    });
+
     html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border-light)">
-      <span style="font-weight:800">实付金额: <span style="color:var(--color-accent);font-size:1.1rem">${order.total_amount.toFixed(2)}</span></span>
-      ${order.status === 'cancelled' ? '' : canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelOrder('${order.id}')">取消订单</button>` : '<span class="badge badge-muted">已截止，不可取消</span>'}
+      <span style="font-weight:800">合计: <span style="color:var(--color-accent);font-size:1.1rem">${g.totalAmount.toFixed(2)}</span></span>
+      ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelAllRoundOrders('${rid}', this)">取消本轮订单</button>` : (!g.hasActive ? '' : '<span class="badge badge-muted">已截止</span>')}
     </div></div>`;
   });
   resultsEl.innerHTML = html;
@@ -2425,6 +2660,62 @@ async function cancelOrder(orderId) {
     toast('订单已取消，库存已恢复');
   } finally {
     cancellingOrders.delete(orderId);
+  }
+}
+
+async function cancelAllRoundOrders(roundId, btn) {
+  if (!confirm('确定要取消本轮所有订单吗？商品将回到购物车，库存会恢复。')) return;
+  const name = document.getElementById('lookup-name').value.trim();
+  if (!name) return;
+  btn.disabled = true;
+  btn.textContent = '取消中...';
+
+  try {
+    const { data: orders } = await sb.rpc('lookup_orders', { p_customer_name: name, p_round_id: roundId });
+    const activeOrders = (orders || []).filter(o => o.status === 'active');
+    if (activeOrders.length === 0) { toast('本轮没有可取消的订单'); return; }
+
+    // 收集所有商品，准备迁回购物车
+    const cartAdditions = {};
+    for (const o of activeOrders) {
+      (o.items || []).forEach(it => {
+        if (it.deleted) return;
+        const key = `${it.product_id}-${it.spec_name}`;
+        if (!cartAdditions[key]) {
+          cartAdditions[key] = { productId: it.product_id, productName: it.product_name, specName: it.spec_name, specPrice: it.spec_price, quantity: 0 };
+        }
+        cartAdditions[key].quantity += it.quantity || 0;
+      });
+    }
+
+    let cancelled = 0;
+    for (const o of activeOrders) {
+      if (cancellingOrders.has(o.id)) continue;
+      cancellingOrders.add(o.id);
+      const { error } = await sb.rpc('cancel_order', { p_order_id: o.id, p_customer_name: name });
+      cancellingOrders.delete(o.id);
+      if (!error) cancelled++;
+    }
+
+    if (cancelled > 0) {
+      // 迁回购物车
+      Object.values(cartAdditions).forEach(it => {
+        cart[`${it.productId}-${it.specName}`] = it;
+      });
+      // 切到该轮次并刷新顾客端
+      customerRoundId = roundId;
+      closeLookup();
+      updateCartBar();
+      loadCustomerProducts();
+      toast(`本轮已取消 ${cancelled} 笔订单，商品已回到购物车`);
+      return;
+    }
+    lookupOrders();
+  } catch (e) {
+    toast('操作失败，请重试', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '取消本轮订单';
   }
 }
 
@@ -2503,7 +2794,7 @@ async function renderOrderManager(el) {
     <div class="purchase-list">`;
   productSummary.forEach(ps => {
     const statusBadge = ps.unfilled
-      ? `<span class="purchase-badge">未拼满，差 ${escHtml(ps.missingLabel || formatQtyLabel(ps.missingQty))}</span>`
+      ? `<span class="purchase-badge">未拼满，差 ${escHtml(toDisplayFraction(ps.missingQty, 40) || ps.missingLabel || formatQtyLabel(ps.missingQty))}</span>`
       : (ps.isSplitUnit ? '<span class="purchase-badge ok">已拼满</span>' : '');
     html += `<div class="purchase-row">
       <div class="purchase-name">${escHtml(ps.name)}${statusBadge}<span class="purchase-spec">${escHtml(ps.spec)}</span></div>
@@ -2515,34 +2806,49 @@ async function renderOrderManager(el) {
     <p class="caption">复制后可直接粘贴到美团优选、多多买菜、盒马等平台备货记录里。</p>
   </div>`;
 
+  const hasPendingWeight = orders.some(o => o.status === 'pending_weight');
+  if (hasPendingWeight) {
+    html += `<div style="margin:16px 0"><button class="btn btn-warning btn-block" onclick="showWeightAllocation()" style="background:var(--color-warning-light);color:#92400e;border:1px solid #fcd34d">称重分配 · ${orders.filter(o => o.status === 'pending_weight').length} 单待确认</button></div>`;
+  }
+
   html += '<h3 class="section-title" style="margin:20px 0 12px">按人订单明细</h3>';
 
-  // Group by customer
+  // Group by customer + round
   const grouped = {};
   orders.forEach(o => {
-    if (!grouped[o.customer_name]) grouped[o.customer_name] = [];
-    grouped[o.customer_name].push(o);
+    const key = `${o.customer_name}||${o.round_id || ''}`;
+    if (!grouped[key]) grouped[key] = { name: o.customer_name, roundId: o.round_id, merged: {}, totalAmount: 0, notes: [], orderIds: [] };
+    const g = grouped[key];
+    g.orderIds.push(o.id);
+    (o.items || []).forEach(it => {
+      if (it.deleted) return;
+      const itemKey = `${it.product_id || ''}|${it.spec_name || ''}`;
+      if (!g.merged[itemKey]) g.merged[itemKey] = { product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0 };
+      g.merged[itemKey].quantity += it.quantity || 0;
+      g.merged[itemKey].subtotal += Number(it.subtotal) || 0;
+    });
+    g.totalAmount += Number(o.total_amount) || 0;
+    if (o.note) g.notes.push(o.note);
   });
 
-  Object.entries(grouped).forEach(([name, userOrders]) => {
-    const userTotal = userOrders.reduce((s, o) => s + parseFloat(o.total_amount), 0);
+  Object.entries(grouped).forEach(([, g]) => {
     html += `<div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <span style="font-weight:600;font-size:1rem">${escHtml(name)}</span>
-        <span style="font-weight:700;color:var(--color-accent);font-size:1.0625rem">${userTotal.toFixed(2)}</span>
+        <span style="font-weight:600;font-size:1rem">${escHtml(g.name)}</span>
+        <span style="font-weight:700;color:var(--color-accent);font-size:1.0625rem">${g.totalAmount.toFixed(2)}</span>
       </div>`;
-    userOrders.forEach(o => {
-      (o.items || []).forEach(it => {
-        if (it.deleted) return;
-        html += `<div class="order-item-row">
-          <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} ${formatOrderItemQty(it)}</span>
-          <span class="item-price">${it.subtotal.toFixed(2)}</span>
-        </div>`;
-      });
-      if (o.note) html += `<p class="caption">备注: ${escHtml(o.note)}</p>`;
-      html += `<div style="text-align:right;margin-top:6px"><button class="btn btn-danger btn-sm" data-customer-name="${escAttr(name)}" onclick="adminCancelOrder('${o.id}','${escAttr(name)}')">砍单 · ¥${o.total_amount.toFixed(2)}</button></div>`;
+    Object.values(g.merged).forEach(it => {
+      html += `<div class="order-item-row">
+        <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity)}</strong></span>
+        <span class="item-price">${it.subtotal.toFixed(2)}</span>
+      </div>`;
     });
-    html += '</div>';
+    g.notes.filter(Boolean).forEach(note => {
+      html += `<p class="caption">备注: ${escHtml(note)}</p>`;
+    });
+    html += `<div style="text-align:right;margin-top:6px">
+      <button class="btn btn-danger btn-sm" data-customer-name="${escAttr(g.name)}" onclick="adminBatchCancel('${escAttr(g.name)}', '${escAttr(g.roundId)}')">砍单 · ¥${g.totalAmount.toFixed(2)}</button>
+    </div></div>`;
   });
 
   el.innerHTML = html;
@@ -2570,7 +2876,7 @@ async function exportOrders() {
     ps.spec,
     ps.qtyLabel || formatQtyLabel(ps.qty),
     ps.amount.toFixed(2),
-    ps.unfilled ? `未拼满，差 ${ps.missingLabel || formatQtyLabel(ps.missingQty)}` : (ps.isSplitUnit ? '已拼满' : '')
+    ps.unfilled ? `未拼满，差 ${toDisplayFraction(ps.missingQty, 40) || ps.missingLabel || formatQtyLabel(ps.missingQty)}` : (ps.isSplitUnit ? '已拼满' : '')
   ]));
 
   const wb = XLSX.utils.book_new();
@@ -2599,7 +2905,7 @@ async function renderPaymentSummary(el) {
   ).join('');
 
   const { data: rawOrders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
-  const orders = getAdminVisibleOrders(rawOrders);
+  const orders = getAdminVisibleOrders(rawOrders).filter(o => o.status !== 'pending_weight');
   const fees = adminRoundId ? await getRoundFees(adminRoundId) : normalizeFeeConfig({});
 
   const currentRound = allRounds.find(r => r.id === adminRoundId);
@@ -3016,6 +3322,175 @@ function adminCancelOrder(orderId, customerName) {
   showCancelOrderModal(orderId, customerName);
 }
 
+async function showWeightAllocation() {
+  const { data: orders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
+  const pendingOrders = (orders || []).filter(o => o.status === 'pending_weight');
+  if (pendingOrders.length === 0) { toast('没有待称重确认的订单'); return; }
+
+  // 查产品信息获取 weight_unit
+  const { data: weightedProductData } = await adminRpc('admin_get_products', { p_round_id: adminRoundId });
+  const productInfo = {};
+  (weightedProductData || []).forEach(p => { productInfo[p.id] = p; });
+
+  // 构建权重输入表: { productId: { name, unitPrice, unit, items: [{customer, share, shareLabel, orderId}] } }
+  const weightMap = {};
+  pendingOrders.forEach(o => {
+    (o.items || []).forEach(it => {
+      if (it.deleted) return;
+      const pid = it.product_id;
+      const pinfo = productInfo[pid] || {};
+      if (!weightMap[pid]) weightMap[pid] = { name: it.product_name, unitPrice: Number(it.spec_price) || 0, unit: pinfo.weight_unit || 'kg', items: [] };
+      weightMap[pid].items.push({ customer: o.customer_name, share: Number(it.share) || 1, shareLabel: it.spec_name, orderId: o.id });
+    });
+  });
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  let html = '<div class="modal-sheet" style="max-height:90vh;overflow-y:auto"><div class="modal-handle"></div><h3 class="section-title" style="margin-bottom:16px">称重分配</h3>';
+
+  Object.entries(weightMap).forEach(([pid, w]) => {
+    const wunit = w.unit || 'kg';
+    html += `<div style="margin-bottom:16px"><p style="font-weight:700;margin-bottom:8px">${escHtml(w.name)} <span class="caption">¥${w.unitPrice.toFixed(2)}/${wunit}</span></p>`;
+    w.items.forEach((item, idx) => {
+      const inputId = `weight-${pid}-${idx}`;
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--color-border-light)">
+        <span style="flex:1;font-size:.875rem">${escHtml(item.customer)} · ${escHtml(item.shareLabel)}</span>
+        <input type="number" id="${inputId}" class="form-input" placeholder="重量${wunit}" min="0.01" step="0.01" style="width:80px;text-align:right" oninput="updateWeightSubtotal('${inputId}',${w.unitPrice},${item.share})">
+        <span class="weight-sub" style="min-width:60px;text-align:right;font-weight:600;font-size:.875rem">¥0</span>
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  html += `<div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+    <button class="btn btn-primary btn-block btn-lg" id="confirm-weight-btn">确认分配</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
+  </div></div>`;
+  modal.innerHTML = html;
+  document.body.appendChild(modal);
+
+  window.updateWeightSubtotal = function(inputId, unitPrice, share) {
+    const input = document.getElementById(inputId);
+    const sub = input.parentElement.querySelector('.weight-sub');
+    const w = parseFloat(input.value) || 0;
+    sub.textContent = '¥' + (unitPrice * w * share).toFixed(2);
+  };
+
+  modal.querySelector('#confirm-weight-btn').onclick = async function() {
+    const weights = {}; // { orderId: { productId: weight } }
+    Object.entries(weightMap).forEach(([pid, w]) => {
+      w.items.forEach((item, idx) => {
+        const input = document.getElementById(`weight-${pid}-${idx}`);
+        const val = parseFloat(input.value) || 0;
+        if (val > 0) {
+          if (!weights[item.orderId]) weights[item.orderId] = {};
+          weights[item.orderId][pid] = val;
+        }
+      });
+    });
+
+    let confirmed = 0;
+    for (const [orderId, orderWeights] of Object.entries(weights)) {
+      const { error } = await adminRpc('admin_confirm_order_weight', { p_order_id: orderId, p_weights: orderWeights });
+      if (!error) confirmed++;
+    }
+    modal.remove();
+    renderAdminTab('orders');
+    toast(`已确认 ${confirmed} 单称重，价格已锁定`);
+  };
+}
+
+function adminBatchCancel(customerName, roundId) {
+  // 先拉订单数据构建商品列表
+  (async () => {
+    const { data: orders } = await adminRpc('admin_get_orders', { p_round_id: roundId });
+    const userOrders = (orders || []).filter(o => o.customer_name === customerName && o.status === 'active');
+    if (userOrders.length === 0) { toast('该顾客没有可砍单的订单', 'error'); return; }
+
+    // 合并商品
+    const mergedItems = {};
+    const notes = [];
+    userOrders.forEach(o => {
+      (o.items || []).forEach(it => {
+        if (it.deleted) return;
+        const key = `${it.product_id}|${it.spec_name}`;
+        if (!mergedItems[key]) mergedItems[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0 };
+        mergedItems[key].quantity += it.quantity || 0;
+        mergedItems[key].subtotal += Number(it.subtotal) || 0;
+      });
+      if (o.note) notes.push(o.note);
+    });
+
+    const renderList = () => {
+      const listEl = document.getElementById('batch-cancel-list');
+      listEl.innerHTML = Object.entries(mergedItems).map(([key, it]) => {
+        const selected = selectedCancelItems.has(key);
+        return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border-light);cursor:pointer" onclick="this.querySelector('input').click()">
+          <input type="checkbox" style="accent-color:var(--color-danger);flex-shrink:0" ${selected ? 'checked' : ''} onclick="event.stopPropagation();if(this.checked)selectedCancelItems.add('${escAttr(key)}');else selectedCancelItems.delete('${escAttr(key)}');renderCancelList()">
+          <span style="flex:1;font-size:.875rem">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} ×${formatQtyLabel(it.quantity)}</span>
+          <span style="color:var(--color-text-secondary);font-size:.8125rem">¥${it.subtotal.toFixed(2)}</span>
+        </div>`;
+      }).join('');
+    };
+    window.renderCancelList = renderList;
+    window.selectedCancelItems = new Set();
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <h3 class="section-title" style="margin-bottom:8px">选择砍单商品</h3>
+      <p style="margin-bottom:12px;color:var(--color-text-secondary);font-size:.875rem">${escHtml(customerName)} — 勾选需要取消的商品（未勾选的商品会保留并生成新订单）</p>
+      <div id="batch-cancel-list"></div>
+      <div class="form-group" style="margin-top:12px">
+        <label class="form-label">砍单原因（选填）</label>
+        <textarea id="cancel-reason-input" class="form-input" placeholder="顾客端会看到此原因" rows="2" style="resize:vertical;font-family:var(--font-sans);min-height:48px"></textarea>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+        <button class="btn btn-danger btn-block btn-lg" id="confirm-batch-cancel-btn">确认砍单</button>
+        <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    renderList();
+
+    modal.querySelector('#confirm-batch-cancel-btn').onclick = async function() {
+      if (window.selectedCancelItems.size === 0) { toast('请至少勾选一个商品', 'error'); return; }
+      modal.remove();
+      const reason = document.getElementById('cancel-reason-input').value.trim();
+      const note = reason ? `[团长砍单] ${reason}` : '[团长砍单]';
+
+      // 取消全部旧订单
+      let cancelled = 0;
+      for (const o of userOrders) {
+        const { error } = await adminRpc('admin_cancel_order', { p_order_id: o.id, p_note: note });
+        if (!error) cancelled++;
+      }
+
+      // 构建保留商品的新订单
+      const keepItems = [];
+      let keepTotal = 0;
+      Object.entries(mergedItems).forEach(([key, it]) => {
+        if (!window.selectedCancelItems.has(key)) {
+          keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: it.quantity, unit_qty: 1, purchase_qty: it.quantity, subtotal: it.subtotal });
+          keepTotal += it.subtotal;
+        }
+      });
+
+      if (keepItems.length > 0) {
+        const combinedNote = notes.filter(Boolean).join(' | ');
+        await sb.rpc('create_order', {
+          p_customer_name: customerName, p_items: keepItems, p_note: combinedNote,
+          p_total_amount: keepTotal, p_round_id: roundId
+        });
+      }
+
+      renderAdminTab('orders');
+      toast(`已砍单 ${window.selectedCancelItems.size} 种商品${keepItems.length > 0 ? '，保留商品已生成新订单' : ''}`);
+    };
+  })();
+}
+
 async function stopRound(id, name) {
   if (!confirm(`确定停止「${name}」吗？停止后顾客端将无法再下单。`)) return;
   try {
@@ -3204,6 +3679,63 @@ function escAttr(s) {
 // EVENT DELEGATION (replaces inline onclick handlers)
 // ============================================================
 document.addEventListener('click', function(e) {
+  // 点击数量数字 → 切换为键盘输入
+  const qtyVal = e.target.closest('.qty-val');
+  if (qtyVal && !qtyVal.querySelector('input')) {
+    const ctrl = qtyVal.closest('.qty-ctrl');
+    const oldText = qtyVal.textContent.trim();
+    const oldVal = parseInt(oldText) || 1;
+
+    // 从同级按钮获取 cartKey
+    const btn = ctrl ? (ctrl.querySelector('[data-cart-key]') || ctrl.querySelector('[data-checkout-key]')) : null;
+    const cartKey = btn ? (btn.dataset.cartKey || btn.dataset.checkoutKey) : null;
+
+    const input = document.createElement('input');
+    input.type = 'number'; input.min = '1'; input.value = oldVal;
+    input.style.cssText = 'width:100%;height:100%;text-align:center;font-size:inherit;font-weight:inherit;border:none;background:transparent;outline:none;-moz-appearance:textfield';
+    qtyVal.textContent = '';
+    qtyVal.appendChild(input);
+    input.focus(); input.select();
+
+    const finish = () => {
+      let v = parseInt(input.value);
+      if (isNaN(v) || v < 1) v = 1;
+      input.remove();
+      qtyVal.textContent = v;
+
+      if (cartKey && v !== oldVal) {
+        const productBtn = ctrl?.querySelector('[data-cart-key]');
+        const checkoutBtn = ctrl?.querySelector('[data-checkout-key]');
+        if (productBtn) {
+          const item = cart[cartKey];
+          if (item) { item.quantity = v; updateCartBar(); }
+        } else if (checkoutBtn) {
+          const item = cart[cartKey];
+          if (item) {
+            const delta = v - oldVal;
+            item.quantity = v;
+            // Re-render checkout
+            const checkoutItems = document.getElementById('checkout-items');
+            if (checkoutItems) { checkoutItems.innerHTML = buildCartItemsHtml(true); }
+            const totalEl = document.getElementById('checkout-total');
+            if (totalEl) { totalEl.textContent = Object.values(cart).reduce((s, i) => s + i.specPrice * i.quantity, 0).toFixed(2); }
+          }
+        } else {
+          // Cart details modal
+          const item = cart[cartKey];
+          if (item) { item.quantity = v; updateCartBar(); }
+          const detailEl = document.getElementById('checkout-items');
+          if (detailEl) { detailEl.innerHTML = buildCartItemsHtml(true); }
+          const totalEl = document.getElementById('checkout-total');
+          if (totalEl) { totalEl.textContent = Object.values(cart).reduce((s, i) => s + i.specPrice * i.quantity, 0).toFixed(2); }
+        }
+      }
+    };
+    input.addEventListener('blur', finish);
+    input.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); } });
+    return;
+  }
+
   // Cart +/- buttons in product list
   const cartBtn = e.target.closest('[data-cart-key]');
   if (cartBtn) {

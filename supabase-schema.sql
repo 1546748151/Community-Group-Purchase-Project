@@ -24,6 +24,9 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::
 ALTER TABLE products ADD COLUMN IF NOT EXISTS stock NUMERIC(10,3);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE products ADD COLUMN IF NOT EXISTS is_weighted BOOLEAN DEFAULT false;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_estimate TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_unit TEXT DEFAULT 'kg';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS round_id UUID REFERENCES rounds(id);
 ALTER TABLE products ALTER COLUMN stock TYPE NUMERIC(10,3) USING stock::numeric;
 
@@ -52,6 +55,9 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_amount NUMERIC(10,2) NOT NULL 
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+-- 添加 pending_weight 状态支持
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('active', 'cancelled', 'pending_weight'));
 
 COMMENT ON TABLE orders IS '订单表';
 COMMENT ON COLUMN orders.items IS '购买明细 [{product_id, product_name, spec_name, spec_price, quantity, unit_qty, purchase_qty, subtotal}]，quantity 为购买次数，purchase_qty 为按规格折算后的采购/扣库存份量';
@@ -302,7 +308,7 @@ BEGIN
   PERFORM require_admin(p_token);
   RETURN QUERY
     SELECT * FROM orders
-     WHERE status = 'active'
+     WHERE status IN ('active', 'pending_weight')
        AND (p_round_id IS NULL OR round_id = p_round_id)
      ORDER BY created_at;
 END;
@@ -334,6 +340,10 @@ SELECT COALESCE(jsonb_agg(s), '[]'::jsonb) FROM (
 ) s;
 $$ LANGUAGE sql SECURITY DEFINER;
 
+-- 清理旧版本避免重载冲突
+DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN);
+DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN, p_round_id UUID);
+DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN, p_round_id UUID, p_is_weighted BOOLEAN);
 CREATE OR REPLACE FUNCTION admin_save_product(
   p_token TEXT,
   p_id UUID,
@@ -343,7 +353,10 @@ CREATE OR REPLACE FUNCTION admin_save_product(
   p_tags JSONB,
   p_stock NUMERIC,
   p_is_active BOOLEAN,
-  p_round_id UUID DEFAULT NULL
+  p_round_id UUID DEFAULT NULL,
+  p_is_weighted BOOLEAN DEFAULT false,
+  p_weight_estimate TEXT DEFAULT NULL,
+  p_weight_unit TEXT DEFAULT 'kg'
 )
 RETURNS UUID AS $$
 DECLARE
@@ -361,8 +374,8 @@ BEGIN
     RAISE EXCEPTION 'each spec must have a name and a positive price';
   END IF;
   IF p_id IS NULL THEN
-    INSERT INTO products (name, image, specs, tags, stock, is_active, round_id)
-    VALUES (p_name, p_image, COALESCE(p_specs, '[]'::jsonb), COALESCE(p_tags, '[]'::jsonb), p_stock, COALESCE(p_is_active, true), p_round_id)
+    INSERT INTO products (name, image, specs, tags, stock, is_active, round_id, is_weighted, weight_estimate, weight_unit)
+    VALUES (p_name, p_image, COALESCE(p_specs, '[]'::jsonb), COALESCE(p_tags, '[]'::jsonb), p_stock, COALESCE(p_is_active, true), p_round_id, COALESCE(p_is_weighted, false), NULLIF(p_weight_estimate, ''), COALESCE(p_weight_unit, 'kg'))
     RETURNING id INTO new_id;
   ELSE
     UPDATE products
@@ -372,7 +385,10 @@ BEGIN
            tags = COALESCE(p_tags, '[]'::jsonb),
            stock = p_stock,
            is_active = COALESCE(p_is_active, true),
-           round_id = COALESCE(p_round_id, round_id)
+           round_id = COALESCE(p_round_id, round_id),
+           is_weighted = COALESCE(p_is_weighted, false),
+           weight_estimate = NULLIF(p_weight_estimate, ''),
+           weight_unit = COALESCE(p_weight_unit, 'kg')
      WHERE id = p_id
     RETURNING id INTO new_id;
   END IF;
@@ -628,6 +644,7 @@ BEGIN
     RAISE EXCEPTION 'cannot delete active round';
   END IF;
   DELETE FROM orders WHERE round_id = p_id;
+  DELETE FROM products WHERE round_id = p_id;
   DELETE FROM rounds WHERE id = p_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -700,7 +717,7 @@ BEGIN
     price := (spec_row->>'price')::numeric;
     line_total := ROUND(price * count_qty, 2);
 
-    IF qty > 0 THEN
+    IF qty > 0 AND product_row.is_weighted IS NOT TRUE THEN
       UPDATE products
          SET stock = stock - qty
        WHERE id = product_id
@@ -720,15 +737,65 @@ BEGIN
       'quantity', count_qty,
       'unit_qty', unit_qty,
       'purchase_qty', qty,
-      'subtotal', line_total
+      'subtotal', line_total,
+      'share', COALESCE((item->>'share')::numeric, null)
     ));
     server_total := server_total + line_total;
   END LOOP;
 
   INSERT INTO orders (customer_name, items, note, total_amount, status, round_id)
-  VALUES (p_customer_name, checked_items, COALESCE(p_note, ''), ROUND(server_total, 2), 'active', p_round_id)
+  VALUES (p_customer_name, checked_items, COALESCE(p_note, ''), ROUND(server_total, 2),
+    CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(checked_items) AS ci WHERE EXISTS (SELECT 1 FROM products WHERE id = (ci->>'product_id')::uuid AND is_weighted = true))
+      THEN 'pending_weight' ELSE 'active' END,
+    p_round_id)
   RETURNING id INTO new_id;
   RETURN new_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 称重商品确认：录入实际重量后确认订单
+CREATE OR REPLACE FUNCTION admin_confirm_order_weight(p_token TEXT, p_order_id UUID, p_weights JSONB)
+RETURNS BOOLEAN AS $$
+DECLARE
+  order_row orders;
+  item JSONB;
+  new_items JSONB := '[]'::jsonb;
+  new_total NUMERIC := 0;
+  product_row products;
+  actual_weight NUMERIC;
+  share_pct NUMERIC;
+  new_subtotal NUMERIC;
+  spec_price NUMERIC;
+  product_id UUID;
+BEGIN
+  PERFORM require_admin(p_token);
+  SELECT * INTO order_row FROM orders WHERE id = p_order_id AND status = 'pending_weight' FOR UPDATE;
+  IF order_row.id IS NULL THEN RETURN false; END IF;
+
+  FOR item IN SELECT * FROM jsonb_array_elements(COALESCE(order_row.items, '[]'::jsonb))
+  LOOP
+    product_id := (item->>'product_id')::uuid;
+    SELECT * INTO product_row FROM products WHERE id = product_id;
+    spec_price := (item->>'spec_price')::numeric;
+    share_pct := COALESCE((item->>'share')::numeric, 1);
+
+    IF product_row.is_weighted = true AND p_weights ? product_id::text THEN
+      actual_weight := (p_weights->>product_id::text)::numeric;
+      new_subtotal := ROUND(spec_price * actual_weight * share_pct, 2);
+      new_items := new_items || jsonb_build_array(item || jsonb_build_object(
+        'subtotal', new_subtotal,
+        'purchase_qty', actual_weight,
+        'actual_weight', actual_weight
+      ));
+      new_total := new_total + new_subtotal;
+    ELSE
+      new_items := new_items || jsonb_build_array(item);
+      new_total := new_total + COALESCE((item->>'subtotal')::numeric, 0);
+    END IF;
+  END LOOP;
+
+  UPDATE orders SET items = new_items, total_amount = ROUND(new_total, 2), status = 'active' WHERE id = p_order_id;
+  RETURN true;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
