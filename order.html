@@ -167,6 +167,10 @@ body{
   animation:slideUp .3s cubic-bezier(.16,1,.3,1);
 }
 .modal-handle{width:36px;height:4px;background:var(--color-border);border-radius:2px;margin:0 auto 20px}
+/* 图片预览 */
+.image-preview-overlay{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:24px}
+.image-preview-overlay img{max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.image-preview-close{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:1.25rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
 
 /* --- Toast --- */
 .toast{
@@ -866,6 +870,8 @@ async function adminLogin() {
 
 function adminLogout() {
   clearSession();
+  adminRoundId = null;
+  adminProductRoundId = null;
   if (window.location.hash === '#admin') history.replaceState(null, '', window.location.pathname);
   switchMode('customer');
   toast('已退出后台');
@@ -1093,9 +1099,74 @@ function collectTags(products) {
       }
     });
   });
-  tags.sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  // 按保存的自定义顺序排列，未保存的标签按拼音排在后面
+  const savedOrder = getTagOrder();
+  const orderMap = {};
+  savedOrder.forEach((t, i) => { orderMap[t] = i; });
+  tags.sort((a, b) => {
+    const ai = orderMap[a], bi = orderMap[b];
+    if (ai !== undefined && bi !== undefined) return ai - bi;
+    if (ai !== undefined) return -1;
+    if (bi !== undefined) return 1;
+    return a.localeCompare(b, 'zh-CN');
+  });
   if (hasUncategorized) tags.push('未分类');
   return tags;
+}
+
+function getTagOrder() {
+  try { return JSON.parse(localStorage.getItem('groupbuy_tag_order') || '[]'); } catch(_) { return []; }
+}
+function saveTagOrder(order) {
+  localStorage.setItem('groupbuy_tag_order', JSON.stringify(order));
+}
+
+async function openTagOrderEditor() {
+  const { data: products } = await adminRpc('admin_get_products', { p_round_id: adminProductRoundId });
+  const allTags = collectTags(products || []);
+  const order = getTagOrder();
+  // 确保所有标签都在顺序中
+  const merged = [...order];
+  allTags.forEach(t => { if (t !== '未分类' && !merged.includes(t)) merged.push(t); });
+  // 移除不再存在的标签
+  const current = merged.filter(t => allTags.includes(t) || t === '未分类');
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  const renderList = () => {
+    const listEl = modal.querySelector('#tag-order-list');
+    listEl.innerHTML = current.map((t, i) => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border-light)">
+      <span style="flex:1;font-size:.875rem">${escHtml(t)}</span>
+      <button class="btn btn-ghost btn-sm" onclick="moveTag(${i},-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+      <button class="btn btn-ghost btn-sm" onclick="moveTag(${i},1)" ${i === current.length - 1 ? 'disabled' : ''}>↓</button>
+    </div>`).join('');
+  };
+  window.moveTag = function(idx, dir) {
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= current.length) return;
+    [current[idx], current[newIdx]] = [current[newIdx], current[idx]];
+    renderList();
+  };
+
+  modal.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 class="section-title" style="margin-bottom:12px">标签排序</h3>
+    <p class="caption" style="margin-bottom:12px">拖拽 ↑↓ 调整标签顺序，点击「保存」后生效</p>
+    <div id="tag-order-list"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+      <button class="btn btn-primary btn-block btn-lg" id="tag-order-save">保存排序</button>
+      <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  renderList();
+
+  modal.querySelector('#tag-order-save').onclick = () => {
+    saveTagOrder(current);
+    modal.remove();
+    renderAdminTab('products');
+    toast('标签顺序已保存');
+  };
 }
 
 function productMatchesFilter(product, keyword = '', tag = '全部') {
@@ -1301,7 +1372,10 @@ async function renderProductManager(el) {
   // Fetch active rounds for selector
   const rounds = await getRounds();
   const activeRounds = rounds.filter(r => r.is_active || (r.is_active === false && !r.cutoff_time));
-  if (!adminProductRoundId && activeRounds.length > 0) adminProductRoundId = activeRounds[0].id;
+  // 确保 adminProductRoundId 始终指向一个可用轮次
+  if (!adminProductRoundId || !activeRounds.some(r => r.id === adminProductRoundId)) {
+    adminProductRoundId = activeRounds.length > 0 ? activeRounds[0].id : null;
+  }
 
   const { data: products, error } = await adminRpc('admin_get_products', { p_round_id: adminProductRoundId });
 
@@ -1336,8 +1410,11 @@ async function renderProductManager(el) {
     <button class="btn btn-secondary btn-sm" onclick="exportRoundProducts()">导出商品</button>
     <button class="btn btn-secondary btn-sm" onclick="importRoundProducts()">导入商品</button>
   </div>
-  <div class="tag-list">
-    ${['全部', ...allTags].map(tag => `<button class="tag-pill ${adminProductTagFilter === tag ? 'active' : ''}" onclick="adminProductTagFilter='${escAttr(tag)}';renderAdminTab('products')">${escHtml(tag)}</button>`).join('')}
+  <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:12px">
+    <div class="tag-list" style="flex:1">
+      ${['全部', ...allTags].map(tag => `<button class="tag-pill ${adminProductTagFilter === tag ? 'active' : ''}" onclick="adminProductTagFilter='${escAttr(tag)}';renderAdminTab('products')">${escHtml(tag)}</button>`).join('')}
+    </div>
+    ${allTags.length > 1 ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-top:2px" onclick="openTagOrderEditor()" title="自定义标签排序">排序</button>` : ''}
   </div>`;
 
   if (!products || products.length === 0) {
@@ -1357,7 +1434,7 @@ async function renderProductManager(el) {
       const tags = getProductTags(p);
       const statusBadge = p.is_active ? '<span class="badge badge-success">上架</span>' : '<span class="badge badge-muted">已下架</span>';
       html += `<div class="admin-product-card">
-        ${p.image ? `<img class="admin-product-thumb" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" onerror="this.outerHTML='<div class=&quot;admin-product-thumb placeholder&quot;>邻选</div>'">` : '<div class="admin-product-thumb placeholder">邻选</div>'}
+        ${p.image ? `<img class="admin-product-thumb" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" style="cursor:pointer" onclick="openImagePreview('${escAttr(p.image)}')" onerror="this.outerHTML='<div class=&quot;admin-product-thumb placeholder&quot;>邻选</div>'">` : '<div class="admin-product-thumb placeholder">邻选</div>'}
         <div class="admin-product-info">
           <div class="admin-product-head">
             <div class="admin-product-name product-name">${escHtml(p.name)}</div>
@@ -1867,7 +1944,7 @@ function buildProductCardHtml(p) {
   const displayPrice = selected ? selected.specPrice : firstSpec.price;
   const fillSummary = cachedSummaryByProduct[p.id] || cachedSummaryByProduct[p.name];
   const imgHtml = p.image
-    ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
+    ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" style="cursor:pointer" onclick="openImagePreview('${escAttr(p.image)}')" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
     : `<div class="shop-product-img placeholder">邻选</div>`;
   const stockHtml = p.stock !== null && !stockSoldOut ? `<span class="shop-product-stock">剩余 ${formatQtyLabel(p.stock)} 份</span>` : '';
   const fillHtml = fillSummary && fillSummary.isSplitUnit
@@ -2700,9 +2777,13 @@ async function renderSettings(el) {
         statusBadge = '<span class="badge badge-danger" style="margin-left:6px">已停止</span>';
         actionBtn = `<button class="btn btn-secondary btn-sm" onclick="activateRound('${r.id}')">启用</button>`;
       }
+      const isDeletable = !r.is_active || (r.cutoff_time && new Date(r.cutoff_time) <= new Date());
+      const checkboxHtml = roundSelectMode && isDeletable
+        ? `<input type="checkbox" style="margin-right:8px;accent-color:var(--color-danger)" ${selectedRoundIds.has(r.id) ? 'checked' : ''} onclick="event.stopPropagation();if(this.checked)selectedRoundIds.add('${r.id}');else selectedRoundIds.delete('${r.id}');renderAdminTab('settings')">`
+        : '';
       roundsHtml += `<div class="order-item-row" style="padding:10px 0">
         <span class="item-name">
-          <span style="font-weight:600">${escHtml(r.name)}</span>${statusBadge}
+          ${checkboxHtml}<span style="font-weight:600">${escHtml(r.name)}</span>${statusBadge}
           ${r.leader_name ? `<br><span class="caption" style="font-weight:500">团长: ${escHtml(r.leader_name)}</span>` : ''}
           <br><span class="caption">${isPlanning && !r.cutoff_time ? '未设置截止时间' : '截止: ' + (r.cutoff_time ? new Date(r.cutoff_time).toLocaleString('zh-CN') : '未设置')}</span>
         </span>
@@ -2723,7 +2804,13 @@ async function renderSettings(el) {
     <div class="card" style="margin-bottom:16px">
       <h3 class="section-title" style="margin-bottom:12px">团购轮次</h3>
       <p class="body-text" style="margin-bottom:12px">每次团购创建一个新轮次，订单和收款将按轮次分开</p>
-      <button class="btn btn-primary btn-block" style="margin-bottom:12px" onclick="createNewRound()">+ 创建新轮次</button>
+      <button class="btn btn-primary btn-block" style="margin-bottom:8px" onclick="createNewRound()">+ 创建新轮次</button>
+      ${rounds.length > 0 ? `<div style="display:flex;gap:6px;margin-bottom:12px">
+        <button class="btn btn-danger btn-sm" onclick="batchStopAllRounds()">一键停止</button>
+        <button class="btn btn-secondary btn-sm" onclick="batchActivateAllRounds()">一键启用</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleRoundSelect()">${roundSelectMode ? '取消选择' : '多选删除'}</button>
+        ${roundSelectMode ? `<button class="btn btn-danger btn-sm" onclick="batchDeleteSelected()">删除选中 (${selectedRoundIds.size})</button>` : `<button class="btn btn-ghost btn-sm" onclick="batchDeleteAllInactive()">一键删除</button>`}
+      </div>` : ''}
       ${roundsHtml}
     </div>
 
@@ -2953,6 +3040,74 @@ async function deleteRound(id, name) {
   }
 }
 
+// 批量操作
+let roundSelectMode = false;
+let selectedRoundIds = new Set();
+
+function toggleRoundSelect() {
+  roundSelectMode = !roundSelectMode;
+  selectedRoundIds.clear();
+  renderAdminTab('settings');
+}
+
+async function batchStopAllRounds() {
+  const rounds = await getRounds();
+  const activeRounds = rounds.filter(r => r.is_active && (!r.cutoff_time || new Date(r.cutoff_time) > new Date()));
+  if (activeRounds.length === 0) { toast('没有进行中的轮次', 'error'); return; }
+  if (!confirm(`确定停止全部 ${activeRounds.length} 个进行中的轮次吗？`)) return;
+  let count = 0;
+  for (const r of activeRounds) {
+    const { error } = await adminRpc('admin_stop_round', { p_id: r.id });
+    if (!error) count++;
+  }
+  renderAdminTab('settings');
+  toast(`已停止 ${count} 个轮次`);
+}
+
+async function batchActivateAllRounds() {
+  const rounds = await getRounds();
+  const stoppedRounds = rounds.filter(r => !r.is_active && r.cutoff_time && new Date(r.cutoff_time) <= new Date());
+  if (stoppedRounds.length === 0) { toast('没有已停止的轮次', 'error'); return; }
+  if (!confirm(`确定启用全部 ${stoppedRounds.length} 个已停止的轮次吗？`)) return;
+  let count = 0;
+  for (const r of stoppedRounds) {
+    const { error } = await adminRpc('admin_activate_round', { p_id: r.id });
+    if (!error) count++;
+  }
+  renderAdminTab('settings');
+  toast(`已启用 ${count} 个轮次`);
+}
+
+async function batchDeleteAllInactive() {
+  const rounds = await getRounds();
+  const inactive = rounds.filter(r => !r.is_active || (r.cutoff_time && new Date(r.cutoff_time) <= new Date()));
+  if (inactive.length === 0) { toast('没有可删除的轮次', 'error'); return; }
+  if (!confirm(`确定删除全部 ${inactive.length} 个非进行中的轮次吗？该轮次的所有订单和商品也会一起删除，此操作不可撤销。`)) return;
+  let count = 0;
+  for (const r of inactive) {
+    const { error } = await adminRpc('admin_delete_round', { p_id: r.id });
+    if (!error) count++;
+  }
+  renderAdminTab('settings');
+  toast(`已删除 ${count} 个轮次`);
+}
+
+async function batchDeleteSelected() {
+  if (selectedRoundIds.size === 0) { toast('请先勾选要删除的轮次', 'error'); return; }
+  const rounds = await getRounds();
+  const selected = rounds.filter(r => selectedRoundIds.has(r.id));
+  if (!confirm(`确定删除勾选的 ${selected.length} 个轮次吗？该轮次的所有订单和商品也会一起删除，此操作不可撤销。`)) return;
+  let count = 0;
+  for (const r of selected) {
+    const { error } = await adminRpc('admin_delete_round', { p_id: r.id });
+    if (!error) count++;
+  }
+  selectedRoundIds.clear();
+  roundSelectMode = false;
+  renderAdminTab('settings');
+  toast(`已删除 ${count} 个轮次`);
+}
+
 async function saveSiteTitle() {
   const input = document.getElementById('site-title-input');
   const title = input.value.trim();
@@ -3022,6 +3177,16 @@ function toast(msg, type = 'success') {
 // ============================================================
 // UTILITIES
 // ============================================================
+function openImagePreview(url) {
+  if (!url) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'image-preview-overlay';
+  overlay.innerHTML = `<button class="image-preview-close" onclick="this.parentElement.remove()">✕</button><img src="${escHtml(url)}">`;
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', esc); } });
+  document.body.appendChild(overlay);
+}
+
 function escHtml(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
