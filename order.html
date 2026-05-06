@@ -1649,8 +1649,9 @@ async function loadProductForEdit(id) {
 
   // Check if this product has orders in the current round
   let hasOrders = false;
-  if (activeRoundId) {
-    const { data: allOrders } = await adminRpc('admin_get_orders', { p_round_id: activeRoundId });
+  const productRoundId = adminProductRoundId || activeRoundId;
+  if (productRoundId) {
+    const { data: allOrders } = await adminRpc('admin_get_orders', { p_round_id: productRoundId });
     hasOrders = (allOrders || []).some(o => (o.items || []).some(it => !it.deleted && it.product_id === id));
   }
 
@@ -2706,6 +2707,7 @@ async function renderSettings(el) {
       roundsHtml += `<div class="order-item-row" style="padding:10px 0">
         <span class="item-name">
           <span style="font-weight:600">${escHtml(r.name)}</span>${statusBadge}
+          ${r.leader_name ? `<br><span class="caption" style="font-weight:500">团长: ${escHtml(r.leader_name)}</span>` : ''}
           <br><span class="caption">${isPlanning && !r.cutoff_time ? '未设置截止时间' : '截止: ' + (r.cutoff_time ? new Date(r.cutoff_time).toLocaleString('zh-CN') : '未设置')}</span>
         </span>
         <span style="display:flex;gap:4px">
@@ -2776,6 +2778,10 @@ function createNewRound() {
         <input type="datetime-local" id="round-cutoff" class="form-input">
         <span class="form-hint">到期后自动关闭下单</span>
       </div>
+      <div class="form-group">
+        <label class="form-label">本期团长</label>
+        <input type="text" id="round-leader" class="form-input" placeholder="选填，如：王姐" maxlength="20">
+      </div>
       <span class="form-error" id="round-error" style="display:none"></span>
       <button class="btn btn-primary btn-block btn-lg" id="round-submit">创建</button>
       <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
@@ -2786,13 +2792,15 @@ function createNewRound() {
   document.getElementById('round-submit').onclick = async function() {
     const name = document.getElementById('round-name').value.trim();
     const cutoffVal = document.getElementById('round-cutoff').value;
+    const leaderVal = document.getElementById('round-leader').value.trim();
     const errEl = document.getElementById('round-error');
     if (!name) { errEl.textContent = '请输入轮次名称'; errEl.style.display = 'block'; return; }
 
     try {
       const { data, error } = await adminRpc('admin_create_round', {
         p_name: name,
-        p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null
+        p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null,
+        p_leader_name: leaderVal || null
       });
       if (error) { errEl.textContent = '创建失败: ' + error.message; errEl.style.display = 'block'; return; }
 
@@ -2827,6 +2835,10 @@ async function editRound(id) {
         <label class="form-label">下单截止时间</label>
         <input type="datetime-local" id="round-cutoff" class="form-input" value="${round.cutoff_time ? round.cutoff_time.slice(0,16) : ''}">
       </div>
+      <div class="form-group">
+        <label class="form-label">本期团长</label>
+        <input type="text" id="round-leader" class="form-input" value="${escHtml(round.leader_name || '')}" placeholder="选填" maxlength="20">
+      </div>
       <span class="form-error" id="round-error" style="display:none"></span>
       <button class="btn btn-primary btn-block btn-lg" id="round-submit">保存</button>
       <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
@@ -2837,6 +2849,7 @@ async function editRound(id) {
   document.getElementById('round-submit').onclick = async function() {
     const name = document.getElementById('round-name').value.trim();
     const cutoffVal = document.getElementById('round-cutoff').value;
+    const leaderVal = document.getElementById('round-leader').value.trim();
     const errEl = document.getElementById('round-error');
     if (!name) { errEl.textContent = '请输入轮次名称'; errEl.style.display = 'block'; return; }
 
@@ -2844,7 +2857,8 @@ async function editRound(id) {
       const { error } = await adminRpc('admin_update_round', {
         p_id: id,
         p_name: name,
-        p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null
+        p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null,
+        p_leader_name: leaderVal || null
       });
       if (error) { errEl.textContent = '保存失败: ' + error.message; errEl.style.display = 'block'; return; }
 

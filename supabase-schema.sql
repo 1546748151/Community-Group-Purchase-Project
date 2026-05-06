@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS rounds (
 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS name TEXT;
 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS cutoff_time TIMESTAMPTZ;
 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE rounds ADD COLUMN IF NOT EXISTS leader_name TEXT;
 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 COMMENT ON TABLE rounds IS '团购轮次表，每次团购为一个轮次';
@@ -551,24 +552,24 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE FUNCTION admin_create_round(p_token TEXT, p_name TEXT, p_cutoff_time TIMESTAMPTZ)
+CREATE OR REPLACE FUNCTION admin_create_round(p_token TEXT, p_name TEXT, p_cutoff_time TIMESTAMPTZ, p_leader_name TEXT DEFAULT NULL)
 RETURNS UUID AS $$
 DECLARE
   new_id UUID;
 BEGIN
   PERFORM require_admin(p_token);
-  INSERT INTO rounds (name, cutoff_time, is_active)
-  VALUES (p_name, p_cutoff_time, false)
+  INSERT INTO rounds (name, cutoff_time, is_active, leader_name)
+  VALUES (p_name, p_cutoff_time, false, NULLIF(p_leader_name, ''))
   RETURNING id INTO new_id;
   RETURN new_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE FUNCTION admin_update_round(p_token TEXT, p_id UUID, p_name TEXT, p_cutoff_time TIMESTAMPTZ)
+CREATE OR REPLACE FUNCTION admin_update_round(p_token TEXT, p_id UUID, p_name TEXT, p_cutoff_time TIMESTAMPTZ, p_leader_name TEXT DEFAULT NULL)
 RETURNS VOID AS $$
 BEGIN
   PERFORM require_admin(p_token);
-  UPDATE rounds SET name = p_name, cutoff_time = p_cutoff_time WHERE id = p_id;
+  UPDATE rounds SET name = p_name, cutoff_time = p_cutoff_time, leader_name = NULLIF(p_leader_name, '') WHERE id = p_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
