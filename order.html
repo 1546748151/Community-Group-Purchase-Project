@@ -961,6 +961,7 @@ function buildProductSummary(orders) {
       const unit = getItemUnitQty(it);
       const isSplitUnit = unit !== null;
       const key = isSplitUnit ? (it.product_id || name) : `${it.product_id || name}::${spec}`;
+      const hasShare = it.share != null;
       if (!productSales[key]) {
         productSales[key] = {
           productId: it.product_id || '',
@@ -969,29 +970,39 @@ function buildProductSummary(orders) {
           sortUnit: isSplitUnit ? unit : Number.POSITIVE_INFINITY,
           specs: new Set(),
           qty: 0,
+          shareTotal: 0,
           orderQty: 0,
           amount: 0,
           isSplitUnit,
+          hasShare,
           unfilled: false,
           missingQty: 0
         };
       }
       const quantity = Number(it.quantity) || 0;
       productSales[key].specs.add(spec);
-      productSales[key].qty += getItemStockQty(it);
+      productSales[key].qty += hasShare ? 0 : getItemStockQty(it);
+      productSales[key].shareTotal += hasShare ? (Number(it.share) || 0) : 0;
       productSales[key].orderQty += quantity;
       productSales[key].amount += Number(it.subtotal) || 0;
     });
   });
   return Object.values(productSales).map(ps => {
-    const rounded = Math.round(ps.qty * 1000) / 1000;
-    const nextInt = Math.ceil(rounded);
-    ps.qty = rounded;
+    if (ps.hasShare) {
+      ps.qty = Math.round(ps.shareTotal * 1000) / 1000;
+      const nextInt = Math.ceil(ps.qty);
+      ps.unfilled = Math.abs(ps.qty - Math.round(ps.qty)) > 0.0001;
+      ps.missingQty = ps.unfilled ? Math.round((nextInt - ps.qty) * 1000) / 1000 : 0;
+    } else {
+      const rounded = Math.round(ps.qty * 1000) / 1000;
+      const nextInt = Math.ceil(rounded);
+      ps.qty = rounded;
+      ps.unfilled = ps.isSplitUnit && Math.abs(rounded - Math.round(rounded)) > 0.0001;
+      ps.missingQty = ps.unfilled ? Math.round((nextInt - rounded) * 1000) / 1000 : 0;
+    }
     ps.spec = ps.isSplitUnit ? `拼单规格：${Array.from(ps.specs).sort((a, b) => (parsePurchaseUnit(a) || 0) - (parsePurchaseUnit(b) || 0)).map(formatUnitLabel).join(' 、 ')}` : formatUnitLabel(ps.spec);
-    ps.unfilled = ps.isSplitUnit && Math.abs(rounded - Math.round(rounded)) > 0.0001;
-    ps.missingQty = ps.unfilled ? Math.round((nextInt - rounded) * 1000) / 1000 : 0;
     ps.qtyLabel = formatQtyLabel(ps.qty);
-    ps.missingLabel = ps.unfilled ? formatQtyLabel(ps.missingQty) : '';
+    ps.missingLabel = ps.unfilled ? (toDisplayFraction(ps.missingQty, 40) || formatQty(ps.missingQty)) : '';
     return ps;
   }).sort((a, b) => {
     const nameCmp = String(a.name).localeCompare(String(b.name), 'zh-CN');
@@ -2011,24 +2022,28 @@ async function loadCustomerProducts() {
   // Fetch order stats for "已拼满/未拼满" display
   const { data: orderStats } = await sb.rpc('get_round_order_stats', { p_round_id: customerRoundId });
   const orderStatsMap = {};
-  (orderStats || []).forEach(s => { orderStatsMap[s.product_id] = { qty: s.qty, orders: s.order_count }; });
+  (orderStats || []).forEach(s => { orderStatsMap[s.product_id] = { qty: s.qty, shareTotal: s.share_total, orders: s.order_count }; });
   cachedSummaryByProduct = {};
   products.forEach(p => {
     const stats = orderStatsMap[p.id];
     if (stats) {
       const spec = (p.specs || [])[0] || {};
       const pu = parsePurchaseUnit(spec.name);
-      const hasFractional = stats.qty % 1 > 1e-9;
-      const isSplit = pu !== null || hasFractional;
+      // 称重商品用份额汇总，普通商品用 purchase_qty
+      const fillQty = p.is_weighted && stats.shareTotal != null ? stats.shareTotal : stats.qty;
+      const hasFractional = fillQty % 1 > 1e-9;
+      const isSplit = pu !== null || hasFractional || (p.is_weighted && stats.shareTotal != null);
+      const unfilled = isSplit && hasFractional;
+      const missing = Math.max(0, Math.ceil(fillQty) - fillQty);
       cachedSummaryByProduct[p.id] = {
         productId: p.id, name: p.name, spec: spec.name || '',
         qty: stats.qty, orderQty: stats.orders, amount: 0,
         isSplitUnit: isSplit,
-        unfilled: isSplit ? hasFractional : false,
-        missingQty: isSplit ? Math.max(0, Math.ceil(stats.qty) - stats.qty) : 0,
-        missingLabel: isSplit ? (toDisplayFraction(stats.qty % 1 === 0 ? 0 : Math.ceil(stats.qty) - stats.qty, 40) || formatQty(Math.ceil(stats.qty) - stats.qty)) : '',
-        fillLabel: isSplit && !hasFractional && stats.qty > 0 ? '已拼满' : '',
-        qtyLabel: formatQtyLabel(stats.qty)
+        unfilled: unfilled,
+        missingQty: isSplit ? missing : 0,
+        missingLabel: isSplit ? (toDisplayFraction(missing === 0 ? 0 : missing, 40) || formatQty(missing)) : '',
+        fillLabel: isSplit && !unfilled && fillQty > 0 ? '已拼满' : '',
+        qtyLabel: formatQtyLabel(fillQty)
       };
     }
   });

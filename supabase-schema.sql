@@ -331,9 +331,10 @@ RETURNS JSONB AS $$
 SELECT COALESCE(jsonb_agg(s), '[]'::jsonb) FROM (
   SELECT it->>'product_id' as product_id,
     SUM(COALESCE((it->>'purchase_qty')::numeric, (it->>'quantity')::numeric, 0)) as qty,
+    SUM(COALESCE((it->>'share')::numeric, null)) as share_total,
     COUNT(*)::int as order_count
   FROM orders o, jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) it
-  WHERE o.round_id = p_round_id AND o.status = 'active'
+  WHERE o.round_id = p_round_id AND o.status IN ('active', 'pending_weight')
     AND (it->>'deleted') IS DISTINCT FROM 'true'
     AND (it->>'product_id') IS NOT NULL
   GROUP BY it->>'product_id'
