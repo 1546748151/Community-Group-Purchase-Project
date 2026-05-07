@@ -490,6 +490,7 @@ body[data-mode="admin"] .cart-bar{display:none}
         <p class="caption" id="cutoff-countdown"></p>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="showOrderLookup()">查/改订单</button>
+      <button class="btn btn-ghost btn-sm" onclick="showFeedback()">建议与意见</button>
     </div>
     <div class="customer-hero">
       <div class="customer-hero-card">
@@ -651,6 +652,32 @@ body[data-mode="admin"] .cart-bar{display:none}
       <button class="btn btn-primary btn-block" onclick="lookupOrders()" style="margin-bottom:16px">查询我的订单</button>
       <div id="lookup-results"></div>
       <button class="btn btn-ghost btn-block btn-sm" onclick="closeLookup()">关闭</button>
+    </div>
+  </div>
+
+  <!-- ========== FEEDBACK MODAL ========== -->
+  <div id="modal-feedback" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <h3 class="section-title" style="margin-bottom:12px">建议与意见</h3>
+      <p class="caption" style="margin-bottom:12px">欢迎反馈商品质量、配送体验或任何建议，可上传截图</p>
+      <div class="form-group">
+        <label class="form-label">你的群昵称</label>
+        <input type="text" id="feedback-name" class="form-input" placeholder="方便团长联系你" maxlength="30">
+      </div>
+      <div class="form-group">
+        <label class="form-label">反馈内容 *</label>
+        <textarea id="feedback-content" class="form-input" placeholder="请描述你的建议或遇到的问题" rows="4" style="resize:vertical;font-family:var(--font-sans);min-height:80px" maxlength="500"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">上传截图（选填）</label>
+        <input type="file" id="feedback-image" accept="image/*" style="font-family:var(--font-sans);font-size:.875rem">
+      </div>
+      <span class="form-error" id="feedback-error" style="display:none"></span>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+        <button class="btn btn-primary btn-block btn-lg" id="feedback-submit">提交反馈</button>
+        <button class="btn btn-ghost btn-block btn-sm" onclick="closeFeedback()">关闭</button>
+      </div>
     </div>
   </div>
 
@@ -1657,7 +1684,7 @@ async function openProductForm(id) {
       const unitPrice = parseFloat(document.getElementById('pf-unit-price').value);
       if (!unitPrice || unitPrice <= 0) { errEl.textContent = '请输入单位价格（¥/kg）'; errEl.style.display = 'block'; return; }
       // 自动生成默认规格 + 补充规格
-      specs.push({ name: '1/2份', price: unitPrice }, { name: '1份', price: unitPrice });
+      specs.push({ name: '1份', price: unitPrice });
       document.querySelectorAll('#pf-specs-weighted .spec-row').forEach(row => {
         const inputs = row.querySelectorAll('input');
         const sname = inputs[0]?.value?.trim();
@@ -2143,7 +2170,7 @@ function buildProductCardHtml(p) {
   return `<div class="shop-product" data-product-id="${p.id}" style="opacity:${stockSoldOut ? '.55' : '1'}">
     ${imgHtml}
     <div class="shop-product-body">
-      <div class="shop-product-name">${escHtml(p.name)}</div>
+      <div class="shop-product-name">${escHtml(p.name)}${isWeighted ? ' <span style="display:inline-flex;align-items:center;height:1.3em;padding:0 6px;border-radius:4px;background:var(--color-warning-light);color:#92400e;font-size:.82em;font-weight:600;margin-left:4px;vertical-align:middle">称重</span>' : ''}</div>
       <div class="shop-product-meta"><span class="shop-product-spec">${escHtml(formatUnitLabel(displaySpec))}</span>${stockHtml}${fillHtml}</div>
       ${(getProductTags(p).length || (isWeighted && p.weight_estimate)) ? `<div class="tag-list" style="margin:0 0 8px">${getProductTags(p).map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('')}${isWeighted && p.weight_estimate ? `<span class="tag-pill" style="background:var(--color-warning-light);color:#92400e;font-weight:600">预估: ${escHtml(p.weight_estimate)}</span>` : ''}</div>` : ''}
       <div class="shop-product-price">¥${Number(displayPrice || 0).toFixed(2)} <small>${isWeighted ? '/' + (p.weight_unit || 'kg') : '/份'}</small></div>
@@ -2527,6 +2554,64 @@ function closeLookup() {
   unlockScroll();
   document.getElementById('modal-lookup').classList.add('hidden');
 }
+
+function showFeedback() {
+  lockScroll();
+  document.getElementById('feedback-name').value = localStorage.getItem('groupbuy_last_name') || '';
+  document.getElementById('feedback-content').value = '';
+  document.getElementById('feedback-image').value = '';
+  document.getElementById('feedback-error').style.display = 'none';
+  document.getElementById('modal-feedback').classList.remove('hidden');
+  document.getElementById('feedback-submit').onclick = submitFeedback;
+}
+
+function closeFeedback() {
+  unlockScroll();
+  document.getElementById('modal-feedback').classList.add('hidden');
+}
+
+async function submitFeedback() {
+  const btn = document.getElementById('feedback-submit');
+  const errEl = document.getElementById('feedback-error');
+  const name = document.getElementById('feedback-name').value.trim();
+  const content = document.getElementById('feedback-content').value.trim();
+
+  if (!content) { errEl.textContent = '请输入反馈内容'; errEl.style.display = 'block'; return; }
+
+  btn.disabled = true; btn.textContent = '提交中...';
+  let imageUrl = null;
+
+  try {
+    const fileInput = document.getElementById('feedback-image');
+    if (fileInput.files.length > 0) {
+      const file = fileInput.files[0];
+      if (file.size > 5242880) { errEl.textContent = '图片不能超过 5MB'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = '提交反馈'; return; }
+      const ext = file.name.split('.').pop() || 'png';
+      const path = `feedback/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+      const { error: uploadErr } = await sb.storage.from('product-images').upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+      if (!uploadErr) {
+        const { data: urlData } = sb.storage.from('product-images').getPublicUrl(path);
+        imageUrl = urlData.publicUrl;
+      }
+    }
+
+    const { error } = await sb.from('feedback').insert({
+      customer_name: name || '匿名',
+      content,
+      image_url: imageUrl,
+      round_id: activeRoundId || null
+    });
+
+    if (error) { errEl.textContent = '提交失败，请重试'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = '提交反馈'; return; }
+
+    closeFeedback();
+    toast('感谢你的反馈！团长会尽快查看');
+  } catch(e) {
+    errEl.textContent = '提交失败，请重试'; errEl.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = '提交反馈';
+}
+
 function focusLookupResults() {
   const sheet = document.querySelector('#modal-lookup .modal-sheet');
   const resultsEl = document.getElementById('lookup-results');
@@ -3167,6 +3252,12 @@ async function renderSettings(el) {
       <button class="btn btn-primary" onclick="changePassword()">${hasPassword ? '修改密码' : '设置密码'}</button>
     </div>
 
+    <div class="card" style="margin-bottom:16px">
+      <h3 class="section-title" style="margin-bottom:8px">顾客反馈</h3>
+      <button class="btn btn-secondary btn-sm" onclick="showAdminFeedback()">查看反馈</button>
+      <div id="admin-feedback-list" style="margin-top:12px"></div>
+    </div>
+
     <div class="card">
       <h3 class="section-title" style="margin-bottom:8px">数据管理</h3>
       <p class="body-text" style="margin-bottom:12px">连接信息：${getConfig().url || '未配置'}</p>
@@ -3425,46 +3516,52 @@ async function showWeightAllocation() {
 }
 
 function adminBatchCancel(customerName, roundId) {
-  // 先拉订单数据构建商品列表
   (async () => {
     const { data: orders } = await adminRpc('admin_get_orders', { p_round_id: roundId });
-    const userOrders = (orders || []).filter(o => o.customer_name === customerName && o.status === 'active');
+    const userOrders = (orders || []).filter(o => o.customer_name === customerName && o.status !== 'cancelled');
     if (userOrders.length === 0) { toast('该顾客没有可砍单的订单', 'error'); return; }
 
-    // 合并商品
-    const mergedItems = {};
+    // 收集每笔订单的每个商品项（不合并，保留原始数据）
+    const lineItems = [];
     const notes = [];
     userOrders.forEach(o => {
       (o.items || []).forEach(it => {
         if (it.deleted) return;
-        const key = `${it.product_id}|${it.spec_name}`;
-        if (!mergedItems[key]) mergedItems[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0 };
-        mergedItems[key].quantity += it.quantity || 0;
-        mergedItems[key].subtotal += Number(it.subtotal) || 0;
+        lineItems.push({ product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: it.quantity || 0, subtotal: Number(it.subtotal) || 0, share: it.share, orderId: o.id });
       });
       if (o.note) notes.push(o.note);
     });
 
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
     const renderList = () => {
       const listEl = document.getElementById('batch-cancel-list');
-      listEl.innerHTML = Object.entries(mergedItems).map(([key, it]) => {
-        const selected = selectedCancelItems.has(key);
-        return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border-light);cursor:pointer" onclick="this.querySelector('input').click()">
-          <input type="checkbox" style="accent-color:var(--color-danger);flex-shrink:0" ${selected ? 'checked' : ''} onclick="event.stopPropagation();if(this.checked)selectedCancelItems.add('${escAttr(key)}');else selectedCancelItems.delete('${escAttr(key)}');renderCancelList()">
+      if (!listEl) return;
+      listEl.innerHTML = lineItems.map((it, idx) => {
+        const cancelKey = `cancel-${idx}`;
+        const curCancel = window._cancelQty ? (window._cancelQty[cancelKey] || 0) : 0;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border-light)">
           <span style="flex:1;font-size:.875rem">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} ×${formatQtyLabel(it.quantity)}</span>
-          <span style="color:var(--color-text-secondary);font-size:.8125rem">¥${it.subtotal.toFixed(2)}</span>
+          <input type="number" id="${cancelKey}" class="form-input" value="${curCancel}" min="0" max="${it.quantity}" step="0.01" style="width:70px;text-align:right">
+          <span style="color:var(--color-text-secondary);font-size:.75rem">/ ${formatQtyLabel(it.quantity)}</span>
+          <span style="color:var(--color-text-secondary);font-size:.8125rem;min-width:50px;text-align:right">¥${it.subtotal.toFixed(2)}</span>
         </div>`;
       }).join('');
     };
-    window.renderCancelList = renderList;
-    window.selectedCancelItems = new Set();
+    window._cancelQty = {};
+    window._readCancelQty = function() {
+      const map = {};
+      lineItems.forEach((it, idx) => {
+        const el = document.getElementById(`cancel-${idx}`);
+        map[`cancel-${idx}`] = el ? parseFloat(el.value) || 0 : 0;
+      });
+      return map;
+    };
 
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `<div class="modal-sheet">
+    modal.innerHTML = `<div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
       <div class="modal-handle"></div>
-      <h3 class="section-title" style="margin-bottom:8px">选择砍单商品</h3>
-      <p style="margin-bottom:12px;color:var(--color-text-secondary);font-size:.875rem">${escHtml(customerName)} — 勾选需要取消的商品（未勾选的商品会保留并生成新订单）</p>
+      <h3 class="section-title" style="margin-bottom:8px">砍单 — ${escHtml(customerName)}</h3>
+      <p style="margin-bottom:8px;color:var(--color-text-secondary);font-size:.8125rem">输入每项要取消的数量（0=全保留，等于总量=全取消，可部分取消）</p>
       <div id="batch-cancel-list"></div>
       <div class="form-group" style="margin-top:12px">
         <label class="form-label">砍单原因（选填）</label>
@@ -3479,41 +3576,43 @@ function adminBatchCancel(customerName, roundId) {
     renderList();
 
     modal.querySelector('#confirm-batch-cancel-btn').onclick = async function() {
-      if (window.selectedCancelItems.size === 0) { toast('请至少勾选一个商品', 'error'); return; }
+      const qtyMap = window._readCancelQty();
+      let hasCancel = false;
+      for (const v of Object.values(qtyMap)) { if (v > 0) { hasCancel = true; break; } }
+      if (!hasCancel) { toast('请至少输入一个要取消的数量', 'error'); return; }
+
+      const reason = modal.querySelector('#cancel-reason-input').value.trim();
       modal.remove();
-      const reason = document.getElementById('cancel-reason-input').value.trim();
       const note = reason ? `[团长砍单] ${reason}` : '[团长砍单]';
 
-      // 取消全部旧订单
-      let cancelled = 0;
       for (const o of userOrders) {
-        const { error } = await adminRpc('admin_cancel_order', { p_order_id: o.id, p_note: note });
-        if (!error) cancelled++;
+        await adminRpc('admin_cancel_order', { p_order_id: o.id, p_note: note });
       }
 
-      // 构建保留商品的新订单
       const keepItems = [];
       let keepTotal = 0;
-      Object.entries(mergedItems).forEach(([key, it]) => {
-        if (!window.selectedCancelItems.has(key)) {
-          keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: it.quantity, unit_qty: 1, purchase_qty: it.quantity, subtotal: it.subtotal });
-          keepTotal += it.subtotal;
+      lineItems.forEach((it, idx) => {
+        const cancelQty = qtyMap[`cancel-${idx}`] || 0;
+        const keepQty = Math.max(0, it.quantity - cancelQty);
+        if (keepQty > 0) {
+          const ratio = keepQty / it.quantity;
+          keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: keepQty, unit_qty: 1, purchase_qty: keepQty, subtotal: parseFloat((it.subtotal * ratio).toFixed(2)), share: it.share });
+          keepTotal += parseFloat((it.subtotal * ratio).toFixed(2));
         }
       });
 
       if (keepItems.length > 0) {
         const combinedNote = notes.filter(Boolean).join(' | ');
-        await sb.rpc('create_order', {
-          p_customer_name: customerName, p_items: keepItems, p_note: combinedNote,
-          p_total_amount: keepTotal, p_round_id: roundId
-        });
+        await sb.rpc('create_order', { p_customer_name: customerName, p_items: keepItems, p_note: combinedNote, p_total_amount: keepTotal, p_round_id: roundId });
       }
 
       renderAdminTab('orders');
-      toast(`已砍单 ${window.selectedCancelItems.size} 种商品${keepItems.length > 0 ? '，保留商品已生成新订单' : ''}`);
+      const totalCancel = Object.values(qtyMap).reduce((s, v) => s + v, 0);
+      toast(`已砍单 ${formatQtyLabel(totalCancel)} 件${keepItems.length > 0 ? '，保留商品已生成新订单' : ''}`);
     };
   })();
 }
+// END_adminBatchCancel_marker
 
 async function stopRound(id, name) {
   if (!confirm(`确定停止「${name}」吗？停止后顾客端将无法再下单。`)) return;
@@ -3638,6 +3737,33 @@ async function changePassword() {
   } catch (e) {
     toast('操作失败，请重新登录后重试', 'error');
   }
+}
+
+async function showAdminFeedback() {
+  const listEl = document.getElementById('admin-feedback-list');
+  if (listEl.innerHTML) { listEl.innerHTML = ''; return; }
+
+  listEl.innerHTML = '<div class="skel-line skeleton"></div>';
+  const { data: feedbacks, error } = await adminRpc('admin_get_feedback', {});
+  if (error || !feedbacks) { listEl.innerHTML = '<p class="caption">加载失败</p>'; return; }
+  if (feedbacks.length === 0) { listEl.innerHTML = '<p class="caption">暂无反馈</p>'; return; }
+
+  listEl.innerHTML = feedbacks.map(f => `
+    <div class="card" style="margin-bottom:8px;padding:12px;opacity:${f.status === 'read' ? '.6' : '1'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:600;font-size:.875rem">${escHtml(f.customer_name)}</span>
+        <span class="caption">${new Date(f.created_at).toLocaleString('zh-CN')}</span>
+      </div>
+      <p style="font-size:.875rem;margin-bottom:6px;white-space:pre-wrap">${escHtml(f.content)}</p>
+      ${f.image_url ? `<img src="${escHtml(f.image_url)}" style="max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;margin-bottom:6px" onclick="openImagePreview('${escAttr(f.image_url)}')">` : ''}
+      ${f.status === 'unread' ? `<button class="btn btn-ghost btn-sm" onclick="markFeedbackRead('${f.id}')">标记已读</button>` : '<span class="badge badge-muted">已读</span>'}
+    </div>
+  `).join('');
+}
+
+async function markFeedbackRead(id) {
+  await adminRpc('admin_mark_feedback_read', { p_id: id });
+  showAdminFeedback();
 }
 
 // ============================================================
