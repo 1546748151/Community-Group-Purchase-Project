@@ -2574,7 +2574,7 @@ async function lookupOrders() {
       (order.items || []).forEach(it => {
         if (it.deleted) return;
         const key = `${it.product_id || ''}|${it.spec_name || ''}`;
-        if (!g.merged[key]) g.merged[key] = { product_name: it.product_name, spec_name: it.spec_name, quantity: 0, subtotal: 0, unit_qty: it.unit_qty };
+        if (!g.merged[key]) g.merged[key] = { product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, share: it.share, actual_weight: it.actual_weight };
         g.merged[key].quantity += it.quantity || 0;
         g.merged[key].subtotal += Number(it.subtotal) || 0;
       });
@@ -2616,8 +2616,12 @@ async function lookupOrders() {
     // 合并后的商品列表
     Object.values(g.merged).forEach(it => {
       const specLabel = formatUnitLabel(it.spec_name);
+      let weightInfo = '';
+      if (it.actual_weight != null) {
+        weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
+      }
       html += `<div class="order-item-row">
-        <span class="item-name">${escHtml(it.product_name)} ${escHtml(specLabel)} <strong>×${formatQtyLabel(it.quantity)}</strong></span>
+        <span class="item-name">${escHtml(it.product_name)} ${escHtml(specLabel)} <strong>×${formatQtyLabel(it.quantity)}</strong>${weightInfo}</span>
         <span class="item-price">${it.subtotal.toFixed(2)}</span>
       </div>`;
     });
@@ -2823,7 +2827,7 @@ async function renderOrderManager(el) {
     (o.items || []).forEach(it => {
       if (it.deleted) return;
       const itemKey = `${it.product_id || ''}|${it.spec_name || ''}`;
-      if (!g.merged[itemKey]) g.merged[itemKey] = { product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0 };
+      if (!g.merged[itemKey]) g.merged[itemKey] = { product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, share: it.share, actual_weight: it.actual_weight };
       g.merged[itemKey].quantity += it.quantity || 0;
       g.merged[itemKey].subtotal += Number(it.subtotal) || 0;
     });
@@ -2838,8 +2842,12 @@ async function renderOrderManager(el) {
         <span style="font-weight:700;color:var(--color-accent);font-size:1.0625rem">${g.totalAmount.toFixed(2)}</span>
       </div>`;
     Object.values(g.merged).forEach(it => {
+      let weightInfo = '';
+      if (it.actual_weight != null) {
+        weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
+      }
       html += `<div class="order-item-row">
-        <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity)}</strong></span>
+        <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity)}</strong>${weightInfo}</span>
         <span class="item-price">${it.subtotal.toFixed(2)}</span>
       </div>`;
     });
@@ -3337,8 +3345,9 @@ async function showWeightAllocation() {
   pendingOrders.forEach(o => {
     (o.items || []).forEach(it => {
       if (it.deleted) return;
+      const pinfo = productInfo[it.product_id] || {};
+      if (!pinfo.is_weighted) return;
       const pid = it.product_id;
-      const pinfo = productInfo[pid] || {};
       if (!weightMap[pid]) weightMap[pid] = { name: it.product_name, unitPrice: Number(it.spec_price) || 0, unit: pinfo.weight_unit || 'kg', items: [] };
       weightMap[pid].items.push({ customer: o.customer_name, share: Number(it.share) || 1, shareLabel: it.spec_name, orderId: o.id });
     });
@@ -3355,7 +3364,7 @@ async function showWeightAllocation() {
       const inputId = `weight-${pid}-${idx}`;
       html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--color-border-light)">
         <span style="flex:1;font-size:.875rem">${escHtml(item.customer)} · ${escHtml(item.shareLabel)}</span>
-        <input type="number" id="${inputId}" class="form-input" placeholder="重量${wunit}" min="0.01" step="0.01" style="width:80px;text-align:right" oninput="updateWeightSubtotal('${inputId}',${w.unitPrice},${item.share})">
+        <input type="number" id="${inputId}" class="form-input" placeholder="重量${wunit}" min="0.01" step="0.01" style="width:100px;text-align:right" oninput="updateWeightSubtotal('${inputId}',${w.unitPrice},${item.share})">
         <span class="weight-sub" style="min-width:60px;text-align:right;font-weight:600;font-size:.875rem">¥0</span>
       </div>`;
     });
