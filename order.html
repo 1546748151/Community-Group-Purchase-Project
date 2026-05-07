@@ -1983,9 +1983,13 @@ async function loadCustomerProducts() {
     return;
   }
 
-  // Auto-select first available round if current selection invalid
+  // Auto-select: 优先选有商品的轮次，否则选第一个可用
   if (!customerRoundId || !availableRounds.some(r => r.id === customerRoundId)) {
-    customerRoundId = availableRounds[0].id;
+    const roundIds = availableRounds.map(r => r.id);
+    const { data: productCounts } = await sb.from('products').select('round_id').in('round_id', roundIds).eq('is_active', true).limit(1);
+    const firstWithProducts = productCounts && productCounts.length > 0 ? productCounts[0].round_id : null;
+    const best = firstWithProducts ? availableRounds.find(r => r.id === firstWithProducts) : availableRounds[0];
+    customerRoundId = best ? best.id : (availableRounds[0]?.id || null);
   }
   const activeRound = availableRounds.find(r => r.id === customerRoundId);
   activeRoundId = customerRoundId;
@@ -2151,10 +2155,8 @@ function buildProductCardHtml(p) {
     ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" style="cursor:pointer" onclick="openImagePreview('${escAttr(p.image)}')" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
     : `<div class="shop-product-img placeholder">邻选</div>`;
   const stockHtml = p.stock !== null && !stockSoldOut ? `<span class="shop-product-stock">剩余 ${formatQtyLabel(p.stock)} 份</span>` : '';
-  const fillHtml = fillSummary && fillSummary.isSplitUnit
-    ? (fillSummary.unfilled
-      ? `<span class="shop-product-fill">未拼满，差 ${escHtml(fillSummary.missingLabel)}</span>`
-      : `<span class="shop-product-fill ok">已拼满</span>`)
+  const fillHtml = fillSummary && fillSummary.isSplitUnit && fillSummary.unfilled && fillSummary.missingQty > 1e-9
+    ? `<span class="shop-product-fill">未拼满，差 ${escHtml(fillSummary.missingLabel)}</span>`
     : '';
   const sameProductTotalQty = Object.values(cart).filter(i => i.productId === p.id).reduce((s, i) => s + (parsePurchaseUnit(i.specName) || 1) * i.quantity, 0);
   const atStockLimit = p.stock !== null && sameProductTotalQty >= p.stock;
@@ -2659,6 +2661,47 @@ async function lookupOrders() {
     return;
   }
 
+  // 👥 按商品计算每位顾客的拼单归属（按时间排序，越早越优先拼满）
+  const customerFillStatus = {};
+  const uniqueProductIds = [...new Set(orders.flatMap(o => (o.items||[]).map(it => it.product_id)))].filter(Boolean);
+  if (uniqueProductIds.length > 0) {
+    // 批量获取所有相关轮次的订单
+    const relevantRoundIds = [...new Set(orders.map(o => o.round_id).filter(Boolean))];
+    for (const rid of relevantRoundIds) {
+      const { data: allRoundOrders } = await sb.rpc('lookup_orders', { p_customer_name: null, p_round_id: rid });
+      const activeOrders = (allRoundOrders || []).filter(o => o.status !== 'cancelled' && o.status !== 'pending_weight');
+      uniqueProductIds.forEach(pid => {
+        // 收集此商品的所有行项，按时间排序
+        const itemRows = [];
+        activeOrders.forEach(o => {
+          (o.items || []).forEach(it => {
+            if (it.deleted || it.product_id !== pid) return;
+            itemRows.push({ customer: o.customer_name, qty: Number(it.purchase_qty) || Number(it.quantity) || 0, time: o.created_at });
+          });
+        });
+        if (itemRows.length === 0) return;
+        itemRows.sort((a,b) => new Date(a.time) - new Date(b.time));
+        const totalQty = itemRows.reduce((s, r) => s + r.qty, 0);
+        const whole = Math.ceil(totalQty);
+        const globalUnfilled = Math.abs(totalQty - Math.round(totalQty)) > 0.0001;
+        let cum = 0;
+        const perCustomer = {};
+        // 最后一位且全局未拼满 → 显示差值
+        itemRows.forEach((row, i) => {
+          cum += row.qty;
+          if (i === itemRows.length - 1 && globalUnfilled) {
+            const diff = Math.max(0, Math.round((whole - totalQty) * 1000) / 1000);
+            if (diff > 0.001) perCustomer[row.customer] = `未拼满，差 ${toDisplayFraction(diff, 40) || formatQty(diff)}`;
+          } else {
+            perCustomer[row.customer] = '已拼满';
+          }
+        });
+        // 合并到全局 map
+        customerFillStatus[pid] = Object.assign(customerFillStatus[pid] || {}, perCustomer);
+      });
+    }
+  }
+
   // 按轮次分组，合并同类商品
   const roundGroups = {};
   orders.forEach(order => {
@@ -2668,15 +2711,18 @@ async function lookupOrders() {
     g.orders.push(order);
     if (order.status === 'pending_weight') {
       g.hasPendingWeight = true;
-      g.hasActive = true; // 算作活跃状态但不计金额
-    } else if (order.status !== 'cancelled') {
+      g.hasActive = true;
+    }
+    if (order.status !== 'cancelled') {
       g.hasActive = true;
       (order.items || []).forEach(it => {
         if (it.deleted) return;
         const key = `${it.product_id || ''}|${it.spec_name || ''}`;
-        if (!g.merged[key]) g.merged[key] = { product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, share: it.share, actual_weight: it.actual_weight };
+        if (!g.merged[key]) g.merged[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, share: it.share, actual_weight: it.actual_weight, lastTime: '' };
         g.merged[key].quantity += it.quantity || 0;
         g.merged[key].subtotal += Number(it.subtotal) || 0;
+        const ot = new Date(order.created_at).toLocaleString('zh-CN');
+        if (ot > (g.merged[key].lastTime || '')) g.merged[key].lastTime = ot;
       });
       g.totalAmount += Number(order.total_amount) || 0;
     } else {
@@ -2713,15 +2759,18 @@ async function lookupOrders() {
         ${statusBadge}
       </div>`;
 
-    // 合并后的商品列表
+    // 合并后的商品列表（顾客端）
     Object.values(g.merged).forEach(it => {
       const specLabel = formatUnitLabel(it.spec_name);
       let weightInfo = '';
       if (it.actual_weight != null) {
         weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
       }
+      const pidFill = (customerFillStatus[it.product_id || ''] || {})[name] || '';
+      const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill.startsWith('已拼满') ? '<span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span>' : '';
+      const timeInfo = it.lastTime ? `<br><span class="caption">最后下单: ${it.lastTime}</span>` : '';
       html += `<div class="order-item-row">
-        <span class="item-name">${escHtml(it.product_name)} ${escHtml(specLabel)} <strong>×${formatQtyLabel(it.quantity)}</strong>${weightInfo}</span>
+        <span class="item-name">${escHtml(it.product_name)} ${escHtml(specLabel)} <strong>×${formatQtyLabel(it.quantity)}</strong>${fillBadge}${weightInfo}${timeInfo}</span>
         <span class="item-price">${it.subtotal.toFixed(2)}</span>
       </div>`;
     });
@@ -2768,59 +2817,104 @@ async function cancelOrder(orderId) {
 }
 
 async function cancelAllRoundOrders(roundId, btn) {
-  if (!confirm('确定要取消本轮所有订单吗？商品将回到购物车，库存会恢复。')) return;
   const name = document.getElementById('lookup-name').value.trim();
   if (!name) return;
-  btn.disabled = true;
-  btn.textContent = '取消中...';
 
-  try {
-    const { data: orders } = await sb.rpc('lookup_orders', { p_customer_name: name, p_round_id: roundId });
-    const activeOrders = (orders || []).filter(o => o.status === 'active');
-    if (activeOrders.length === 0) { toast('本轮没有可取消的订单'); return; }
+  const { data: orders } = await sb.rpc('lookup_orders', { p_customer_name: name, p_round_id: roundId });
+  const activeOrders = (orders || []).filter(o => o.status === 'active');
+  if (activeOrders.length === 0) { toast('本轮没有可取消的订单'); return; }
 
-    // 收集所有商品，准备迁回购物车
+  // 合并同类商品
+  const mergedItems = {};
+  activeOrders.forEach(o => {
+    (o.items || []).forEach(it => {
+      if (it.deleted) return;
+      const key = `${it.product_id}|${it.spec_name}`;
+      if (!mergedItems[key]) mergedItems[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0 };
+      mergedItems[key].quantity += it.quantity || 0;
+      mergedItems[key].subtotal += Number(it.subtotal) || 0;
+    });
+  });
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `<div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <h3 class="section-title" style="margin-bottom:8px">修改订单</h3>
+    <p style="margin-bottom:8px;color:var(--color-text-secondary);font-size:.8125rem">输入要取消的数量（0=保留，填满=全部取消），取消的商品会回到购物车</p>
+    <div id="customer-cancel-list"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+      <button class="btn btn-danger btn-block btn-lg" id="confirm-cancel-btn">确认修改</button>
+      <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+
+  const listEl = document.getElementById('customer-cancel-list');
+  const itemKeys = Object.keys(mergedItems);
+  listEl.innerHTML = itemKeys.map((key, idx) => {
+    const it = mergedItems[key];
+    const cancelKey = `cust-cancel-${idx}`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border-light)">
+      <span style="flex:1;font-size:.875rem">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} ×${it.quantity}</span>
+      <input type="number" id="${cancelKey}" class="form-input" value="0" min="0" max="${it.quantity}" step="1" oninput="this.value=Math.floor(this.value)||0" style="width:60px;text-align:right">
+      <span style="color:var(--color-text-secondary);font-size:.75rem">/ ${it.quantity}</span>
+      <span style="color:var(--color-text-secondary);font-size:.8125rem;min-width:50px;text-align:right">¥${it.subtotal.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+
+  modal.querySelector('#confirm-cancel-btn').onclick = async function() {
+    let hasCancel = false;
+    const keepItems = [];
+    let keepTotal = 0;
     const cartAdditions = {};
-    for (const o of activeOrders) {
-      (o.items || []).forEach(it => {
-        if (it.deleted) return;
-        const key = `${it.product_id}-${it.spec_name}`;
-        if (!cartAdditions[key]) {
-          cartAdditions[key] = { productId: it.product_id, productName: it.product_name, specName: it.spec_name, specPrice: it.spec_price, quantity: 0 };
-        }
-        cartAdditions[key].quantity += it.quantity || 0;
-      });
-    }
 
-    let cancelled = 0;
+    itemKeys.forEach((key, idx) => {
+      const it = mergedItems[key];
+      const input = document.getElementById(`cust-cancel-${idx}`);
+      const cancelQty = input ? parseInt(input.value) || 0 : 0;
+      if (cancelQty > 0) {
+        hasCancel = true;
+        const cartKey = `${it.product_id}-${it.spec_name}`;
+        if (!cartAdditions[cartKey]) cartAdditions[cartKey] = { productId: it.product_id, productName: it.product_name, specName: it.spec_name, specPrice: it.spec_price, quantity: 0 };
+        cartAdditions[cartKey].quantity += cancelQty;
+      }
+      const keepQty = Math.max(0, it.quantity - cancelQty);
+      if (keepQty > 0) {
+        const ratio = keepQty / it.quantity;
+        keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: keepQty, unit_qty: 1, purchase_qty: keepQty, subtotal: parseFloat((it.subtotal * ratio).toFixed(2)) });
+        keepTotal += parseFloat((it.subtotal * ratio).toFixed(2));
+      }
+    });
+
+    if (!hasCancel) { toast('请至少输入一个要取消的数量'); return; }
+    modal.remove();
+
+    // 取消全部旧订单
     for (const o of activeOrders) {
       if (cancellingOrders.has(o.id)) continue;
       cancellingOrders.add(o.id);
-      const { error } = await sb.rpc('cancel_order', { p_order_id: o.id, p_customer_name: name });
+      await sb.rpc('cancel_order', { p_order_id: o.id, p_customer_name: name });
       cancellingOrders.delete(o.id);
-      if (!error) cancelled++;
     }
 
-    if (cancelled > 0) {
-      // 迁回购物车
-      Object.values(cartAdditions).forEach(it => {
-        cart[`${it.productId}-${it.specName}`] = it;
-      });
-      // 切到该轮次并刷新顾客端
-      customerRoundId = roundId;
-      closeLookup();
-      updateCartBar();
-      loadCustomerProducts();
-      toast(`本轮已取消 ${cancelled} 笔订单，商品已回到购物车`);
-      return;
+    // 创建保留商品的新订单
+    if (keepItems.length > 0) {
+      await sb.rpc('create_order', { p_customer_name: name, p_items: keepItems, p_note: '', p_total_amount: keepTotal, p_round_id: roundId });
     }
-    lookupOrders();
-  } catch (e) {
-    toast('操作失败，请重试', 'error');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '取消本轮订单';
-  }
+
+    // 取消的商品回到购物车
+    Object.values(cartAdditions).forEach(it => {
+      if (it.quantity > 0) cart[`${it.productId}-${it.specName}`] = it;
+    });
+
+    customerRoundId = roundId;
+    closeLookup();
+    updateCartBar();
+    loadCustomerProducts();
+    const totalCancel = Object.values(cartAdditions).reduce((s, v) => s + v.quantity, 0);
+    toast(`已取消 ${totalCancel} 件，商品已回到购物车`);
+  };
 }
 
 // ============================================================
@@ -2927,9 +3021,11 @@ async function renderOrderManager(el) {
     (o.items || []).forEach(it => {
       if (it.deleted) return;
       const itemKey = `${it.product_id || ''}|${it.spec_name || ''}`;
-      if (!g.merged[itemKey]) g.merged[itemKey] = { product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, share: it.share, actual_weight: it.actual_weight };
+      if (!g.merged[itemKey]) g.merged[itemKey] = { product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, share: it.share, actual_weight: it.actual_weight, lastTime: '' };
       g.merged[itemKey].quantity += it.quantity || 0;
       g.merged[itemKey].subtotal += Number(it.subtotal) || 0;
+      const ot = new Date(o.created_at).toLocaleString('zh-CN');
+      if (ot > (g.merged[itemKey].lastTime || '')) g.merged[itemKey].lastTime = ot;
     });
     g.totalAmount += Number(o.total_amount) || 0;
     if (o.note) g.notes.push(o.note);
@@ -2946,8 +3042,9 @@ async function renderOrderManager(el) {
       if (it.actual_weight != null) {
         weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
       }
+      const timeInfo = it.lastTime ? `<br><span class="caption">最后下单: ${it.lastTime}</span>` : '';
       html += `<div class="order-item-row">
-        <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity)}</strong>${weightInfo}</span>
+        <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity)}</strong>${weightInfo}${timeInfo}</span>
         <span class="item-price">${it.subtotal.toFixed(2)}</span>
       </div>`;
     });
