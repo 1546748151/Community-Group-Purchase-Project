@@ -8,34 +8,17 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px}
-body{
-  font-family:'Geist',-apple-system,BlinkMacSystemFont,sans-serif;
-  background:radial-gradient(circle at 50% 0,#fff 0,#eaf4ff 44%,#f8fbff 100%);
-  color:#101828;line-height:1.7;
-  -webkit-font-smoothing:antialiased;max-width:860px;margin:0 auto;padding:36px 24px 56px;
-}
-h1{font-size:2.25rem;font-weight:900;letter-spacing:0;margin-bottom:8px}
-h2{font-size:1.45rem;font-weight:850;letter-spacing:0;margin-top:48px;margin-bottom:12px;padding-top:32px;border-top:1px solid #d8e4f5;color:#064da8}
+body{font-family:'Geist',-apple-system,BlinkMacSystemFont,sans-serif;background:radial-gradient(circle at 50% 0,#fff 0,#eaf4ff 44%,#f8fbff 100%);color:#101828;line-height:1.7;-webkit-font-smoothing:antialiased;max-width:860px;margin:0 auto;padding:36px 24px 56px}
+h1{font-size:2.25rem;font-weight:900;margin-bottom:8px}
+h2{font-size:1.45rem;font-weight:850;margin-top:48px;margin-bottom:12px;padding-top:32px;border-top:1px solid #d8e4f5;color:#064da8}
 h3{font-size:1.0625rem;font-weight:800;margin-top:28px;margin-bottom:8px}
 p{margin-bottom:14px;color:#667085;font-size:.9375rem}
 ul,ol{margin-bottom:14px;padding-left:20px;color:#667085;font-size:.9375rem}
 li{margin-bottom:6px}
-code{
-  background:#e8f2ff;padding:2px 6px;border-radius:6px;font-size:.875rem;
-  font-family:'SF Mono','Cascadia Code',monospace;color:#064da8;
-}
-.step{
-  background:rgba(255,255,255,.86);border:1px solid #d8e4f5;border-radius:18px;padding:24px;margin-bottom:20px;
-  box-shadow:0 12px 32px rgba(20,74,132,.07);
-}
-.step-num{
-  display:inline-flex;width:30px;height:30px;border-radius:50%;background:#064da8;color:#fff;
-  align-items:center;justify-content:center;font-size:.8125rem;font-weight:800;margin-bottom:8px;
-}
-.note{
-  background:#eef5ff;border:1px solid #b9d3f4;border-radius:12px;padding:14px 18px;margin:16px 0;
-  font-size:.875rem;color:#064da8;
-}
+code{background:#e8f2ff;padding:2px 6px;border-radius:6px;font-size:.875rem;font-family:'SF Mono','Cascadia Code',monospace;color:#064da8}
+.step{background:rgba(255,255,255,.86);border:1px solid #d8e4f5;border-radius:18px;padding:24px;margin-bottom:20px;box-shadow:0 12px 32px rgba(20,74,132,.07)}
+.step-num{display:inline-flex;width:30px;height:30px;border-radius:50%;background:#064da8;color:#fff;align-items:center;justify-content:center;font-size:.8125rem;font-weight:800;margin-bottom:8px}
+.note{background:#eef5ff;border:1px solid #b9d3f4;border-radius:12px;padding:14px 18px;margin:16px 0;font-size:.875rem;color:#064da8}
 img{max-width:100%;border-radius:12px;border:1px solid #d8e4f5;margin:12px 0}
 .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;background:rgba(255,255,255,.84);border:1px solid #d8e4f5;border-radius:18px;padding:14px 18px;box-shadow:0 12px 32px rgba(20,74,132,.07)}
 .brand{display:flex;align-items:center;gap:9px;color:#064da8;font-size:1.35rem;font-weight:900;text-decoration:none}
@@ -50,80 +33,47 @@ img{max-width:100%;border-radius:12px;border:1px solid #d8e4f5;margin:12px 0}
   <a class="home-link" href="order.html">进入下单</a>
 </div>
 <h1>邻居下单指南</h1>
-<p>三分钟学会用邻选下单、查订单、改订单。</p>
+<p>三分钟学会用邻选下单、查订单、改订单、反馈建议。</p>
 
 <h2>怎么下单</h2>
 
-<div class="step">
-  <div class="step-num">1</div>
-  <p>在微信群里<strong>长按二维码</strong> →「识别图中二维码」，打开下单页面。</p>
-</div>
-
-<div class="step">
-  <div class="step-num">2</div>
-  <p>看到商品列表后，可以<strong>搜索</strong>商品名或<strong>按标签筛选</strong>（如「蛋糕」「冷藏」）。点击选择规格，按 <strong>+ -</strong> 调整数量。</p>
-</div>
-
-<div class="step">
-  <div class="step-num">3</div>
-  <p>选好后点底部<strong>「去下单」</strong>。</p>
-</div>
-
-<div class="step">
-  <div class="step-num">4</div>
-  <p>填写<strong>你的群昵称</strong>（必填）+ 备注（选填，如「不要葱」「放门口」）。</p>
-</div>
-
-<div class="step">
-  <div class="step-num">5</div>
-  <p>点<strong>「提交订单」</strong>，完成！</p>
-</div>
+<div class="step"><div class="step-num">1</div><p>在微信群里<strong>长按二维码</strong> →「识别图中二维码」，打开下单页面。</p></div>
+<div class="step"><div class="step-num">2</div><p>看到商品列表后，可以<strong>搜索</strong>商品名或<strong>按标签筛选</strong>。点击选择规格，按 <strong>+ -</strong> 调整数量。点击数量数字可直接键盘输入。称重商品（标有橙色「称重」标签）只显示单价和预估价格。商品图片点击可放大。</p></div>
+<div class="step"><div class="step-num">3</div><p>选好后点底部<strong>「去下单」</strong>。</p></div>
+<div class="step"><div class="step-num">4</div><p>填写<strong>你的群昵称</strong>（必填）+ 备注（选填）。</p></div>
+<div class="step"><div class="step-num">5</div><p>点<strong>「提交订单」</strong>，完成！</p></div>
 
 <h2>怎么查 / 改订单</h2>
 
 <div class="step">
-  <p>点页面顶部<strong>「查/改订单」</strong>，输入下单时填的昵称，点查询。</p>
+  <p>点页面顶部<strong>「查/改订单」</strong>，输入昵称查询。</p>
   <ul>
-    <li>可以看到所有订单明细、金额、下单时间、<strong>所属轮次</strong></li>
-    <li>截止时间前可以点「取消订单」自行取消，库存会自动恢复</li>
-    <li>如果订单被团长取消，会显示<strong>红色「已砍单」</strong>标签和砍单原因</li>
+    <li>订单按<strong>轮次分组</strong>显示，同商品自动合并</li>
+    <li>可看到商品明细、金额、下单时间、拼单状态</li>
+    <li>称重商品确认后显示：单价 × 重量 × 份额 = 最终价</li>
+    <li>点「取消本轮订单」→ 输入数量 → 取消的回到购物车，保留的生成新订单</li>
+    <li>被团长砍单显示<strong>红色「已砍单」</strong>和砍单原因</li>
   </ul>
 </div>
 
+<h2>拼单状态说明</h2>
+
+<div class="step">
+  <p><strong>「已拼满」（绿色）</strong>：你的订单在按时间排序中属于优先凑满的那批，该商品已拼成整盒。</p>
+  <p><strong>「未拼满，差 X」（灰色）</strong>：该商品整盒尚未凑满，你是最后下单的，显示还差多少。先下单的顾客会优先凑满显示「已拼满」。</p>
+</div>
+
+<h2>怎么反馈建议</h2>
+<div class="step"><p>点页面顶部<strong>「建议与意见」</strong>，填写内容（可选上传截图），团后台可查看。</p></div>
+
 <h2>常见问题</h2>
 
-<div class="step">
-  <p><strong>找不到我的订单？</strong></p>
-  <p>确认输入的昵称和下单时填的一致。查询会显示你在所有轮次的订单。</p>
-</div>
+<div class="step"><p><strong>找不到我的订单？</strong></p><p>确认昵称一致。查询显示所有轮次的订单。</p></div>
+<div class="step"><p><strong>想改数量或换规格？</strong></p><p>点「取消本轮订单」输入数量，商品回购物车后重新下单。已截止的需联系团长。</p></div>
+<div class="step"><p><strong>显示「已售罄」？</strong></p><p>商品已抢完，售罄商品沉底变暗。</p></div>
+<div class="step"><p><strong>显示「待称重确认」？</strong></p><p>订单含称重商品，到货后团长确认价格。</p></div>
+<div class="step"><p><strong>显示「下单已截止」？</strong></p><p>本轮已截止，无法下单和取消。</p></div>
 
-<div class="step">
-  <p><strong>想改数量或换规格？</strong></p>
-  <p>先取消原订单，再重新下单。但如果<strong>已到截止时间</strong>则无法取消，需要联系团长帮忙处理。</p>
-</div>
-
-<div class="step">
-  <p><strong>显示「已售罄」？</strong></p>
-  <p>该商品已被抢完，售罄商品会沉到列表底部并变暗。</p>
-</div>
-
-<div class="step">
-  <p><strong>商品突然不见了？</strong></p>
-  <p>可能是团长下架了该商品，联系团长确认。</p>
-</div>
-
-<div class="step">
-  <p><strong>显示「下单已截止」？</strong></p>
-  <p>本轮团购已到截止时间，无法再下单和取消。</p>
-</div>
-
-<div class="step">
-  <p><strong>订单显示「已砍单」是什么意思？</strong></p>
-  <p>表示团长主动取消了你的这笔订单，红色卡片上会显示砍单原因（如「缺货」）。与你自己取消的灰色「已取消」不同。</p>
-</div>
-
-<div class="note" style="margin-top:32px">
-  <strong>有任何问题？</strong> 在群里直接问团长就行，不用客气！
-</div>
+<div class="note" style="margin-top:32px"><strong>有任何问题？</strong> 在群里直接问团长就行！</div>
 </body>
 </html>

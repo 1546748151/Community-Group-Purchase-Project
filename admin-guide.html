@@ -20,31 +20,12 @@ h3{font-size:1.0625rem;font-weight:800;margin-top:28px;margin-bottom:8px}
 p{margin-bottom:14px;color:#667085;font-size:.9375rem}
 ul,ol{margin-bottom:14px;padding-left:20px;color:#667085;font-size:.9375rem}
 li{margin-bottom:6px}
-code{
-  background:#e8f2ff;padding:2px 6px;border-radius:6px;font-size:.875rem;
-  font-family:'SF Mono','Cascadia Code',monospace;color:#064da8;
-}
-pre{
-  background:#101828;color:#eaf4ff;padding:16px 20px;border-radius:14px;
-  overflow-x:auto;font-size:.8125rem;line-height:1.6;margin-bottom:16px;
-  font-family:'SF Mono','Cascadia Code',monospace;
-}
-.step{
-  background:rgba(255,255,255,.86);border:1px solid #d8e4f5;border-radius:18px;padding:24px;margin-bottom:20px;
-  box-shadow:0 12px 32px rgba(20,74,132,.07);
-}
-.step-num{
-  display:inline-flex;width:30px;height:30px;border-radius:50%;background:#064da8;color:#fff;
-  align-items:center;justify-content:center;font-size:.8125rem;font-weight:800;margin-bottom:8px;
-}
-.note{
-  background:#eef5ff;border:1px solid #b9d3f4;border-radius:12px;padding:14px 18px;margin:16px 0;
-  font-size:.875rem;color:#064da8;
-}
-.warn{
-  background:#fff1f1;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;margin:16px 0;
-  font-size:.875rem;color:#b42318;
-}
+code{background:#e8f2ff;padding:2px 6px;border-radius:6px;font-size:.875rem;font-family:'SF Mono','Cascadia Code',monospace;color:#064da8}
+pre{background:#101828;color:#eaf4ff;padding:16px 20px;border-radius:14px;overflow-x:auto;font-size:.8125rem;line-height:1.6;margin-bottom:16px;font-family:'SF Mono','Cascadia Code',monospace}
+.step{background:rgba(255,255,255,.86);border:1px solid #d8e4f5;border-radius:18px;padding:24px;margin-bottom:20px;box-shadow:0 12px 32px rgba(20,74,132,.07)}
+.step-num{display:inline-flex;width:30px;height:30px;border-radius:50%;background:#064da8;color:#fff;align-items:center;justify-content:center;font-size:.8125rem;font-weight:800;margin-bottom:8px}
+.note{background:#eef5ff;border:1px solid #b9d3f4;border-radius:12px;padding:14px 18px;margin:16px 0;font-size:.875rem;color:#064da8}
+.warn{background:#fff1f1;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;margin:16px 0;font-size:.875rem;color:#b42318}
 img{max-width:100%;border-radius:12px;border:1px solid #d8e4f5;margin:12px 0}
 .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;background:rgba(255,255,255,.84);border:1px solid #d8e4f5;border-radius:18px;padding:14px 18px;box-shadow:0 12px 32px rgba(20,74,132,.07)}
 .brand{display:flex;align-items:center;gap:9px;color:#064da8;font-size:1.35rem;font-weight:900;text-decoration:none}
@@ -71,11 +52,12 @@ img{max-width:100%;border-radius:12px;border:1px solid #d8e4f5;margin:12px 0}
     <li><a href="#s1">登录后台</a></li>
     <li><a href="#s2">创建与管理轮次</a></li>
     <li><a href="#s3">添加商品</a></li>
-    <li><a href="#s4">开团与生成二维码</a></li>
-    <li><a href="#s5">查看与处理订单</a></li>
-    <li><a href="#s6">收款</a></li>
-    <li><a href="#s7">常见操作</a></li>
-    <li><a href="#s8">小贴士</a></li>
+    <li><a href="#s4">称重商品</a></li>
+    <li><a href="#s5">开团与生成二维码</a></li>
+    <li><a href="#s6">查看与处理订单</a></li>
+    <li><a href="#s7">收款</a></li>
+    <li><a href="#s8">常见操作</a></li>
+    <li><a href="#s9">小贴士</a></li>
   </ol>
 </div>
 
@@ -91,6 +73,7 @@ img{max-width:100%;border-radius:12px;border:1px solid #d8e4f5;margin:12px 0}
   <p>左侧菜单 → <strong>轮次设置</strong> → 点击「创建新轮次」</p>
   <ul>
     <li>填写轮次名称（如「5 月第一周团购」）</li>
+    <li>可选填写<strong>本期团长</strong>名（顾客端会显示）</li>
     <li>设置下单截止时间（选填，到期后顾客端自动显示「已截止」并关闭下单）</li>
     <li>点击「创建」，轮次进入<strong>「策划中」</strong>状态</li>
   </ul>
@@ -100,10 +83,12 @@ img{max-width:100%;border-radius:12px;border:1px solid #d8e4f5;margin:12px 0}
     · <strong>进行中</strong> — 已开团，顾客可浏览商品和下单<br>
     · <strong>已截止</strong> — 到达截止时间自动变更，不可再下单<br>
     · <strong>已停止</strong> — 团长手动停止，等同已截止<br>
-    允许多个轮次同时「进行中」，不同轮次的商品和订单完全隔离，适合水果团、日用品团同时开。
+    允许多个轮次同时「进行中」，不同轮次的商品和订单完全隔离。
   </div>
   <p>添加商品完成后，点击该轮次的<strong>「开团」</strong>按钮使其变为「进行中」，顾客端才可见。</p>
-  <p>进行中可点<strong>「停止」</strong>提前结束；已停可点<strong>「启用」</strong>重新开团。只有已停止的轮次才能<strong>「删除」</strong>（会同时删除该轮次所有订单，不可恢复）。</p>
+  <p>进行中可点<strong>「停止」</strong>提前结束；已停可点<strong>「启用」</strong>重新开团。只有已停止的轮次才能<strong>「删除」</strong>（会同时删除该轮次所有订单和商品，不可恢复）。</p>
+  <h3>批量操作</h3>
+  <p>轮次设置页支持：<strong>一键停止</strong>所有进行中轮次、<strong>一键启用</strong>所有已停止轮次、<strong>多选删除</strong>（勾选后批量删）、<strong>一键删除</strong>所有非进行中轮次。</p>
 </div>
 
 <h2 id="s3">三、添加商品</h2>
@@ -112,131 +97,111 @@ img{max-width:100%;border-radius:12px;border:1px solid #d8e4f5;margin:12px 0}
   <p>左侧菜单 → <strong>商品管理</strong> → 选择轮次 → 点击「添加商品到「轮次名」」</p>
   <ul>
     <li><strong>商品名称</strong>（必填）— 如「烟台红富士苹果」</li>
-    <li><strong>商品图片</strong>（选填）— 支持 JPG/PNG/GIF/WebP，最大 5MB，可直接拍照上传</li>
+    <li><strong>商品图片</strong>（选填）— 支持 JPG/PNG/GIF/WebP，最大 5MB，点击可放大预览</li>
     <li><strong>规格与价格</strong>（至少一个）— 如「500g / 15 元」「1kg / 28 元」，可添加多个规格</li>
-    <li><strong>整装拆分计算器</strong> — 适用于山姆、开市客等大包装商品。输入整装数量（如 30 个）、总价（如 19.90 元）、每份大小（如 5 个），一键自动算好份数和单价</li>
+    <li><strong>整装拆分计算器</strong> — 适用于山姆、开市客等大包装商品。输入整装数量、总价、每份大小，一键生成拆分规格</li>
     <li><strong>商品标签</strong>（选填）— 如「蛋糕 冷藏」，用空格分隔，顾客端可按标签筛选</li>
+    <li><strong>标签排序</strong> — 标签旁的「排序」按钮可自定义标签显示顺序，顾客端同步</li>
     <li><strong>库存数量</strong>（选填）— 不填则不限，卖完自动显示「已售罄」并停止加购</li>
     <li>点击「添加商品」，商品默认上架</li>
   </ul>
-  <div class="note">拆分商品命名格式为「5/30个/份」，表示从 30 个一盒中拆成每份 5 个出售。顾客端按「份」显示和购买，库存按「份」扣减。</div>
+  <div class="note">拆分商品命名格式为「5/30个/份」，表示从 30 个一盒中拆成每份 5 个出售。顾客端按份显示和购买，库存按份扣减。整装规格（如 30/30）优先显示。</div>
 </div>
 
-<h2 id="s4">四、开团与生成二维码</h2>
+<h2 id="s4">四、称重商品</h2>
 <div class="step">
-  <div class="step-num">3</div>
-  <p>商品添加完毕后，到 <strong>「轮次设置」</strong> 点击该轮次的<strong>「开团」</strong>按钮。</p>
-  <p>然后进入 <strong>「下单二维码」</strong> 标签页：</p>
+  <p>适用于山姆等平台的称重商品（如排骨、大排等，只有单价没有确定总价）。</p>
+  <p>添加商品时勾选<strong>「称重商品」</strong>，表单会切换为称重模式：</p>
   <ul>
-    <li>二维码自动生成，指向顾客下单页面</li>
-    <li>长按二维码图片 → 保存到手机相册</li>
-    <li>发到业主微信群，配上文字说明（如「本周团购开始啦，大家扫码下单」）</li>
-    <li>也可点击「复制下单链接」直接发链接到群里</li>
+    <li><strong>单位价格</strong>（必填）— 选择 ¥/kg 或 ¥/份，作为计算单价</li>
+    <li><strong>预估克重</strong>（选填）— 如「约 800g/份」，顾客端参考用</li>
+    <li><strong>规格自动生成</strong> — 保存后自动生成「1份」规格。可手动补充「1/2份」「1/3份」等</li>
+    <li>顾客下单后订单状态为<strong>「待称重确认」</strong>，不计入收款总额</li>
+    <li>到货后，团长进入订单汇总→<strong>「称重分配」</strong>，录入每人的实际重量</li>
+    <li>系统自动计算：<strong>单价 × 实际重量 × 份额 = 最终价格</strong></li>
+    <li>确认后订单转正式，计入收款清单和导出 Excel</li>
   </ul>
 </div>
 
-<h2 id="s5">五、查看与处理订单</h2>
+<h2 id="s5">五、开团与生成二维码</h2>
+<div class="step">
+  <div class="step-num">3</div>
+  <p>商品添加完毕后，到 <strong>「轮次设置」</strong> 点击该轮次的<strong>「开团」</strong>按钮。</p>
+  <p>然后进入 <strong>「下单二维码」</strong> 标签页，保存图片发到业主微信群即可。</p>
+</div>
+
+<h2 id="s6">六、查看与处理订单</h2>
 <div class="step">
   <div class="step-num">4</div>
   <p>左侧菜单 → <strong>订单汇总</strong></p>
   <ul>
-    <li>顶部下拉选择不同轮次，切换后订单列表自动刷新</li>
-    <li>顶部统计卡片显示当前轮次的订单数和总金额</li>
-    <li>按人分组显示订单明细（商品、规格、数量、金额、备注）</li>
-    <li>底部<strong>「采购清单」</strong>按商品汇总采购数量，可一键复制到美团优选等平台统一采购</li>
+    <li>顶部下拉选择轮次，按人分组显示订单明细（同商品自动合并、显示最后下单时间）</li>
+    <li>顶部统计卡片显示订单数和总金额</li>
+    <li>底部<strong>「采购清单」</strong>按商品汇总采购量，显示拼单状态，一键复制</li>
     <li>点击<strong>「导出 Excel」</strong>下载含「订单明细」和「商品汇总」两个 sheet 的表格</li>
   </ul>
 </div>
 
 <div class="step">
   <p><strong>砍单功能</strong></p>
-  <p>对有问题的订单（如邻居下错、临时不要），点击订单下方的<strong>「砍单」</strong>按钮：</p>
+  <p>点击订单下方的<strong>「砍单」</strong>按钮：</p>
   <ul>
+    <li>弹窗列出该顾客的所有商品，<strong>可输入取消数量</strong>（支持部分取消，如顾客 B 的 4/3 份中只取消 2/3 份）</li>
     <li>弹出确认弹窗，可填写砍单原因（选填，如「缺货」「规格不符」）</li>
-    <li>确认后订单取消，库存自动恢复</li>
+    <li>确认后取消部分被标记，保留部分自动生成新订单</li>
     <li>顾客查单时会看到红色<strong>「已砍单」</strong>标签和砍单原因</li>
-    <li>区别于顾客自行取消（显示灰色「已取消」）</li>
   </ul>
 </div>
 
-<h2 id="s6">六、收款</h2>
+<h2 id="s7">七、收款</h2>
 <div class="step">
   <div class="step-num">5</div>
   <p>左侧菜单 → <strong>收款清单</strong></p>
   <ul>
     <li>设置本轮费用（运费、包装费、其他费用），系统自动按人数均摊到分</li>
-    <li>底部「收款清单」列出每人应付金额：商品金额 + 均摊费用</li>
-    <li>点击<strong>「一键复制收款清单」</strong></li>
-    <li>打开微信 → 业主群 → 群工具 → 群收款，参考清单逐一发起</li>
+    <li>底部收款清单列出每人应付金额：商品金额 + 均摊费用</li>
+    <li>称重确认后的订单才会计入收款</li>
+    <li>点击<strong>「一键复制收款清单」</strong>后到微信发起群收款</li>
   </ul>
 </div>
 
-<h2 id="s7">七、常见操作</h2>
+<h2 id="s8">八、常见操作</h2>
 
 <h3>编辑商品</h3>
-<div class="step">
-  <p>商品管理 → 点击商品右侧「编辑」→ 修改后点「保存修改」。</p>
-  <div class="note">如果该商品已有顾客订单，规格名称会被锁定不可修改（防止数据不一致），只能修改价格、库存、标签等。</div>
-</div>
+<div class="step"><p>商品管理 → 点击商品右侧「编辑」→ 修改后点「保存修改」。已有订单时规格名称自动锁定不可修改。</p></div>
 
-<h3>上下架商品</h3>
-<div class="step">
-  <p>商品管理 → 点击「下架」隐藏商品，顾客端不可见。再点击「上架」恢复显示。</p>
-</div>
-
-<h3>删除商品</h3>
-<div class="step">
-  <p>商品管理 → 点击「删除」→ 确认。该商品会从所有订单中标记为「已删除」，金额归零，不影响其他商品。</p>
-</div>
+<h3>上下架/删除商品</h3>
+<div class="step"><p>商品管理 → 点击「下架」隐藏商品。点击「删除」将商品从所有订单中标记为已删除。</p></div>
 
 <h3>导入导出商品</h3>
-<div class="step">
-  <p>商品管理 → 点击<strong>「导出商品」</strong>下载当前轮次商品到 Excel。点击<strong>「导入商品」</strong>选择之前导出的文件批量恢复商品。适合轮次间复用商品配置。</p>
-</div>
+<div class="step"><p>商品管理 →「导出商品」下载 Excel，「导入商品」批量恢复。适合轮次间复用商品配置。</p></div>
 
 <h3>整装拆分计算器</h3>
-<div class="step">
-  <p>在添加/编辑商品弹窗中，展开「整装拆分自动计算」：</p>
-  <ul>
-    <li>填入整装数量（如一盒 30 个）、单位（如「个」）、总价（如 19.90 元）、每份大小（如 5 个）</li>
-    <li>点击「一键添加」，自动生成规格如「5/30个/份」，单价 3.32 元/份</li>
-    <li>提示盈亏差额和余数信息，方便核对</li>
-  </ul>
-</div>
+<div class="step"><p>在添加/编辑商品弹窗中展开计算器，填入整装数量、单位、总价、每份大小，一键添加拆分规格。</p></div>
 
-<h3>修改站点标题</h3>
-<div class="step">
-  <p>轮次设置 → 顾客端标题输入框 → 输入新标题 → 保存。顾客端顶部会实时更新。</p>
-</div>
+<h3>修改站点标题和密码</h3>
+<div class="step"><p>轮次设置 → 顾客端标题/管理密码 → 输入新值 → 保存。</p></div>
 
-<h3>修改管理密码</h3>
-<div class="step">
-  <p>轮次设置 → 管理密码区域 → 输入新密码（≥4 位）→「修改密码」。</p>
-</div>
+<h3>查看顾客反馈</h3>
+<div class="step"><p>轮次设置 →「顾客反馈」→「查看反馈」，可以看到顾客提交的文字和截图，点击「标记已读」归档。</p></div>
 
 <h3>忘记密码</h3>
-<div class="step">
-  <p>在 Supabase → SQL Editor 执行：</p>
-  <pre>UPDATE settings SET value = '' WHERE key = 'admin_password';</pre>
-  <p>然后重新打开 <code>#admin</code> 设置新密码。</p>
-</div>
+<div class="step"><p>在 Supabase → SQL Editor 执行：<pre>UPDATE settings SET value = '' WHERE key = 'admin_password';</pre>然后重新打开 <code>#admin</code> 设置新密码。</p></div>
 
-<h2 id="s8">八、小贴士</h2>
+<h2 id="s9">九、小贴士</h2>
 <div class="step">
   <ul>
-    <li>售罄商品会自动沉到列表底部，显示「已售罄」标记，顾客无法加购</li>
-    <li>库存会每 10 秒自动刷新，多设备同时下单不会超卖</li>
-    <li>顾客下单后在页面顶部「查/改订单」可自行查询和取消（截止前）</li>
-    <li>顾客查单时会看到订单所属轮次和状态，被砍单会显示红色砍单原因</li>
-    <li>轮次切换时顾客购物车会自动清空，防止跨轮次商品混淆</li>
-    <li>允许多个轮次同时「进行中」，适合不同品类分开团购</li>
-    <li>商品可导出为 Excel 再导入到新轮次，无需重复填写</li>
-    <li>历史轮次可在订单汇总下拉中查看，数据不会丢失</li>
+    <li>售罄商品自动沉底，显示「已售罄」标记</li>
+    <li>库存每 10 秒自动刷新，多人同时下单不会超卖（数据库行锁保护）</li>
+    <li>顾客可自行查单和部分取消，取消的商品回到购物车</li>
+    <li>顾客查单会看到订单所属轮次、状态、最后下单时间和称重计算公式</li>
+    <li>轮次切换时顾客购物车自动清空，搜索和标签筛选重置</li>
+    <li>允许多个轮次同时进行中，不同品类分开团购</li>
+    <li>商品可导出 Excel 再导入到新轮次</li>
+    <li>弹窗只能通过取消按钮或 ESC 关闭，不会误触空白处</li>
   </ul>
 </div>
 
-<div class="note" style="margin-top:32px">
-  <strong>还没完成首次部署？</strong> 请先查看 <a href="setup-guide.html">部署使用指南</a>，大约 15 分钟即可完成全部设置。
-</div>
+<div class="note" style="margin-top:32px"><strong>还没完成首次部署？</strong> 请先查看 <a href="setup-guide.html">部署使用指南</a>，大约 15 分钟即可完成全部设置。</div>
 </body>
 </html>
