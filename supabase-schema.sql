@@ -319,7 +319,7 @@ RETURNS SETOF orders AS $$
 BEGIN
   RETURN QUERY
     SELECT * FROM orders
-     WHERE customer_name = p_customer_name
+     WHERE (p_customer_name IS NULL OR customer_name = p_customer_name)
        AND (p_round_id IS NULL OR round_id = p_round_id)
      ORDER BY created_at DESC;
 END;
@@ -441,7 +441,7 @@ BEGIN
       ) AS new_total
     FROM orders o
     CROSS JOIN LATERAL jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) AS item
-    WHERE o.status = 'active'
+    WHERE o.status IN ('active', 'pending_weight')
       AND EXISTS (
         SELECT 1
           FROM jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) AS existing_item
@@ -512,7 +512,7 @@ BEGIN
       BOOL_OR(item.value->>'deleted' = 'true') AS has_deleted_product
     FROM orders o
     CROSS JOIN LATERAL jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) WITH ORDINALITY AS item(value, ordinality)
-    WHERE o.status = 'active'
+    WHERE o.status IN ('active', 'pending_weight')
     GROUP BY o.id
   )
   UPDATE orders o
@@ -607,7 +607,7 @@ DECLARE
   qty NUMERIC;
 BEGIN
   PERFORM require_admin(p_token);
-  SELECT * INTO order_row FROM orders WHERE id = p_order_id AND status = 'active' FOR UPDATE;
+  SELECT * INTO order_row FROM orders WHERE id = p_order_id AND status IN ('active', 'pending_weight') FOR UPDATE;
   IF order_row.id IS NULL THEN RETURN false; END IF;
   UPDATE orders SET
     status = 'cancelled',
@@ -687,7 +687,7 @@ BEGIN
     SELECT 1 FROM orders
     WHERE customer_name = p_customer_name
       AND round_id = p_round_id
-      AND status = 'active'
+      AND status IN ('active', 'pending_weight')
       AND note IS NOT DISTINCT FROM p_note
       AND created_at > now() - INTERVAL '5 seconds'
   ) THEN
@@ -841,6 +841,46 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 REVOKE EXECUTE ON FUNCTION deduct_stock(UUID, NUMERIC) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION restore_stock(UUID, NUMERIC) FROM PUBLIC, anon, authenticated;
+
+-- 5. 用户反馈表
+CREATE TABLE IF NOT EXISTS feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_name TEXT NOT NULL,
+  content TEXT NOT NULL,
+  image_url TEXT,
+  round_id UUID REFERENCES rounds(id),
+  status TEXT NOT NULL DEFAULT 'unread' CHECK (status IN ('unread', 'read')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS customer_name TEXT;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS content TEXT;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS round_id UUID REFERENCES rounds(id);
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'unread';
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can insert feedback" ON feedback;
+CREATE POLICY "Anyone can insert feedback" ON feedback FOR INSERT WITH CHECK (true);
+
+-- 管理员查看
+CREATE OR REPLACE FUNCTION admin_get_feedback(p_token TEXT)
+RETURNS SETOF feedback AS $$
+BEGIN
+  PERFORM require_admin(p_token);
+  RETURN QUERY SELECT * FROM feedback ORDER BY created_at DESC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 标记已读
+CREATE OR REPLACE FUNCTION admin_mark_feedback_read(p_token TEXT, p_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  PERFORM require_admin(p_token);
+  UPDATE feedback SET status = 'read' WHERE id = p_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================================
 -- Storage Bucket: 商品图片存储

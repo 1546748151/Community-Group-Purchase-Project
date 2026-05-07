@@ -3680,7 +3680,14 @@ function adminBatchCancel(customerName, roundId) {
 
       const reason = modal.querySelector('#cancel-reason-input').value.trim();
       modal.remove();
-      const note = reason ? `[团长砍单] ${reason}` : '[团长砍单]';
+      // 收集被砍商品名称+数量
+      const cancelledNames = [];
+      lineItems.forEach((it, idx) => {
+        const cq = qtyMap[`cancel-${idx}`] || 0;
+        if (cq > 0) cancelledNames.push(`${it.product_name} ×${formatQtyLabel(cq)}`);
+      });
+      const cancelDesc = cancelledNames.length > 0 ? ` — 已取消: ${cancelledNames.join('、')}` : '';
+      const note = reason ? `[团长砍单] ${reason}${cancelDesc}` : `[团长砍单]${cancelDesc}`;
 
       for (const o of userOrders) {
         await adminRpc('admin_cancel_order', { p_order_id: o.id, p_note: note });
