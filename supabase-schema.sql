@@ -650,13 +650,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP FUNCTION IF EXISTS create_order(TEXT, JSONB, TEXT, NUMERIC, UUID);
 CREATE OR REPLACE FUNCTION create_order(
   p_customer_name TEXT,
   p_items JSONB,
   p_note TEXT,
-  -- 兼容旧前端参数；实际订单金额在数据库端按商品规格重新计算。
   p_total_amount NUMERIC,
-  p_round_id UUID
+  p_round_id UUID,
+  p_created_at TIMESTAMPTZ DEFAULT NULL
 )
 RETURNS UUID AS $$
 DECLARE
@@ -739,16 +740,18 @@ BEGIN
       'unit_qty', unit_qty,
       'purchase_qty', qty,
       'subtotal', line_total,
-      'share', COALESCE((item->>'share')::numeric, null)
+      'share', COALESCE((item->>'share')::numeric, null),
+      '_orig_time', item->>'_orig_time'
     ));
     server_total := server_total + line_total;
   END LOOP;
 
-  INSERT INTO orders (customer_name, items, note, total_amount, status, round_id)
+  INSERT INTO orders (customer_name, items, note, total_amount, status, round_id, created_at)
   VALUES (p_customer_name, checked_items, COALESCE(p_note, ''), ROUND(server_total, 2),
     CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(checked_items) AS ci WHERE EXISTS (SELECT 1 FROM products WHERE id = (ci->>'product_id')::uuid AND is_weighted = true))
       THEN 'pending_weight' ELSE 'active' END,
-    p_round_id)
+    p_round_id,
+    COALESCE(p_created_at, now()))
   RETURNING id INTO new_id;
   RETURN new_id;
 END;

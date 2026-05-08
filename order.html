@@ -424,7 +424,7 @@ body[data-mode="admin"] .cart-bar{display:none}
   .admin-topbar{padding:16px 20px;margin:0;background:rgba(255,255,255,.82);position:sticky;top:0;z-index:40;backdrop-filter:blur(18px)}
   .admin-nav{display:flex;gap:8px;overflow-x:auto;padding:4px 0 16px;margin-bottom:0;-webkit-overflow-scrolling:touch}
   .admin-nav button{width:auto;flex-shrink:0;justify-content:center;padding:0 16px;border:1px solid var(--color-border);background:#fff;border-radius:999px;height:38px;font-size:.82rem}
-  .stat-row{grid-template-columns:1fr 1fr}
+  .stat-row{grid-template-columns:repeat(3,1fr)}
   .purchase-summary-head{display:block}.purchase-summary-head .btn{margin-top:12px;width:100%}
   .purchase-row{grid-template-columns:minmax(0,1fr) auto}.purchase-amount{grid-column:1 / -1;color:var(--color-text-secondary);font-size:.82rem}
   .fee-config-grid{grid-template-columns:1fr}.fee-row{grid-template-columns:1fr auto}
@@ -2663,6 +2663,7 @@ async function lookupOrders() {
 
   // 👥 按商品计算每位顾客的拼单归属（按时间排序，越早越优先拼满）
   const customerFillStatus = {};
+  const customerSplitMap = {};
   const uniqueProductIds = [...new Set(orders.flatMap(o => (o.items||[]).map(it => it.product_id)))].filter(Boolean);
   if (uniqueProductIds.length > 0) {
     // 批量获取所有相关轮次的订单
@@ -2683,20 +2684,30 @@ async function lookupOrders() {
         itemRows.sort((a,b) => new Date(a.time) - new Date(b.time));
         const totalQty = itemRows.reduce((s, r) => s + r.qty, 0);
         const whole = Math.ceil(totalQty);
+        const floorTotal = Math.floor(totalQty);
         const globalUnfilled = Math.abs(totalQty - Math.round(totalQty)) > 0.0001;
         let cum = 0;
         const perCustomer = {};
-        // 最后一位且全局未拼满 → 显示差值
-        itemRows.forEach((row, i) => {
+        const splitMap = customerSplitMap[pid] || (customerSplitMap[pid] = {});
+        itemRows.forEach((row) => {
+          const cumBefore = cum;
           cum += row.qty;
-          if (i === itemRows.length - 1 && globalUnfilled) {
+          const rowKey = `${row.customer}::${row.time}`;
+          if (globalUnfilled && cum > floorTotal + 0.0001) {
             const diff = Math.max(0, Math.round((whole - totalQty) * 1000) / 1000);
-            if (diff > 0.001) perCustomer[row.customer] = `未拼满，差 ${toDisplayFraction(diff, 40) || formatQty(diff)}`;
+            if (diff > 0.001) perCustomer[rowKey] = `未拼满，差 ${toDisplayFraction(diff, 40) || formatQty(diff)}`;
+            // 检查是否跨越边界需拆分
+            if (cumBefore < floorTotal && cum > floorTotal) {
+              const splitFilled = Math.max(0, floorTotal - cumBefore);
+              const splitUnfilled = row.qty - splitFilled;
+              if (splitFilled > 0.0001 && splitUnfilled > 0.0001) {
+                splitMap[rowKey] = { filledQty: splitFilled, unfilledQty: splitUnfilled };
+              }
+            }
           } else {
-            perCustomer[row.customer] = '已拼满';
+            perCustomer[rowKey] = '已拼满';
           }
         });
-        // 合并到全局 map
         customerFillStatus[pid] = Object.assign(customerFillStatus[pid] || {}, perCustomer);
       });
     }
@@ -2717,11 +2728,14 @@ async function lookupOrders() {
       g.hasActive = true;
       (order.items || []).forEach(it => {
         if (it.deleted) return;
-        const key = `${it.product_id || ''}|${it.spec_name || ''}`;
-        if (!g.merged[key]) g.merged[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, share: it.share, actual_weight: it.actual_weight, lastTime: '' };
+        const fillStatus = (customerFillStatus[it.product_id] || {})[`${order.customer_name}::${order.created_at}`] || '';
+          const fillKey = fillStatus.startsWith('未拼满') ? 'unfilled' : 'filled';
+          const key = `${it.product_id || ''}|${it.spec_name || ''}|${fillKey}`;
+        if (!g.merged[key]) g.merged[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, purchase_qty: 0, share: it.share, actual_weight: it.actual_weight, lastTime: '', _orig_time: it._orig_time || order.created_at, fillStatus };
         g.merged[key].quantity += it.quantity || 0;
         g.merged[key].subtotal += Number(it.subtotal) || 0;
-        const ot = new Date(order.created_at).toLocaleString('zh-CN');
+      g.merged[key].purchase_qty += Number(it.purchase_qty) || 0;
+        const ot = new Date(g.merged[key]._orig_time || order.created_at).toLocaleString('zh-CN');
         if (ot > (g.merged[key].lastTime || '')) g.merged[key].lastTime = ot;
       });
       g.totalAmount += Number(order.total_amount) || 0;
@@ -2730,6 +2744,32 @@ async function lookupOrders() {
       if (order.note && order.note.includes('[团长砍单]')) g.isAdminCancelled = true;
     }
     if (order.note) g.notes.push(order.note);
+  });
+  // 后处理：拆分跨边界订单商品
+  Object.entries(roundGroups).forEach(([rid, g]) => {
+    const newMerged = {};
+    Object.entries(g.merged).forEach(([key, item]) => {
+      if (key.endsWith('|filled') || !item.product_id) { newMerged[key] = item; return; }
+      const split = (customerSplitMap[item.product_id] || {});
+      let filledPQty = 0, totalPQty = item.purchase_qty || item.quantity || 0;
+      const seenSplits = new Set();
+      g.orders.forEach(o => {
+        const ork = `${o.customer_name}::${o.created_at}`;
+        if (split[ork] && !seenSplits.has(ork)) { seenSplits.add(ork); filledPQty += split[ork].filledQty; }
+      });
+      // 用 purchase_qty 的比例换算 quantity
+      const ratio = totalPQty > 0.0001 ? filledPQty / totalPQty : 0;
+      if (ratio > 0.0001 && ratio < 0.9999) {
+        const filledItem = { ...item, quantity: Math.round(item.quantity * ratio * 1000) / 1000, subtotal: Math.round(item.subtotal * ratio * 100) / 100, purchase_qty: filledPQty, fillStatus: '已拼满' };
+        const unfilledKey = key; // keep original key as unfilled
+        const filledKey = key.replace('|unfilled', '|filled');
+        newMerged[filledKey] = filledItem;
+        newMerged[unfilledKey] = { ...item, quantity: Math.round(item.quantity * (1 - ratio) * 1000) / 1000, subtotal: Math.round(item.subtotal * (1 - ratio) * 100) / 100, purchase_qty: Math.round(item.purchase_qty * (1 - ratio) * 1000) / 1000 };
+      } else {
+        newMerged[key] = item;
+      }
+    });
+    g.merged = newMerged;
   });
 
   let html = '';
@@ -2766,7 +2806,11 @@ async function lookupOrders() {
       if (it.actual_weight != null) {
         weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
       }
-      const pidFill = (customerFillStatus[it.product_id || ''] || {})[name] || '';
+      let pidFill = it.fillStatus || (customerFillStatus[it.product_id || ''] || {})[name] || '';
+      if (!pidFill && it.product_id) {
+        const split = (customerSplitMap[it.product_id] || {});
+        for (const k of Object.keys(split)) { if (k.startsWith(name + '::')) { pidFill = '已拼满'; break; } }
+      }
       const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill.startsWith('已拼满') ? '<span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span>' : '';
       const timeInfo = it.lastTime ? `<br><span class="caption">最后下单: ${it.lastTime}</span>` : '';
       html += `<div class="order-item-row">
@@ -2830,9 +2874,10 @@ async function cancelAllRoundOrders(roundId, btn) {
     (o.items || []).forEach(it => {
       if (it.deleted) return;
       const key = `${it.product_id}|${it.spec_name}`;
-      if (!mergedItems[key]) mergedItems[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0 };
+      if (!mergedItems[key]) mergedItems[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, purchase_qty: 0, _orig_time: it._orig_time || o.created_at };
       mergedItems[key].quantity += it.quantity || 0;
       mergedItems[key].subtotal += Number(it.subtotal) || 0;
+      mergedItems[key].purchase_qty += Number(it.purchase_qty) || 0;
     });
   });
 
@@ -2882,7 +2927,7 @@ async function cancelAllRoundOrders(roundId, btn) {
       const keepQty = Math.max(0, it.quantity - cancelQty);
       if (keepQty > 0) {
         const ratio = keepQty / it.quantity;
-        keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: keepQty, unit_qty: 1, purchase_qty: keepQty, subtotal: parseFloat((it.subtotal * ratio).toFixed(2)) });
+        keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: keepQty, unit_qty: 1, purchase_qty: parseFloat(((it.purchase_qty || it.quantity || 0) * ratio).toFixed(6)), subtotal: parseFloat((it.subtotal * ratio).toFixed(2)), _orig_time: cancelQty > 0 ? new Date().toISOString() : (it._orig_time || null) });
         keepTotal += parseFloat((it.subtotal * ratio).toFixed(2));
       }
     });
@@ -2898,7 +2943,7 @@ async function cancelAllRoundOrders(roundId, btn) {
       cancellingOrders.delete(o.id);
     }
 
-    // 创建保留商品的新订单
+    // 创建保留商品的新订单，每个商品独立携带原始时间
     if (keepItems.length > 0) {
       await sb.rpc('create_order', { p_customer_name: name, p_items: keepItems, p_note: '', p_total_amount: keepTotal, p_round_id: roundId });
     }
@@ -2957,10 +3002,15 @@ async function renderOrderManager(el) {
     <button class="btn btn-secondary btn-sm" onclick="renderOrderManager(document.getElementById('admin-tab-orders'))">刷新</button>
   </div>`;
 
-  html += `<div class="stat-row">
+  const uniqueProductCount = new Set(orders.flatMap(o => (o.items||[]).map(it => it.product_id).filter(Boolean))).size;
+  html += `<div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
     <div class="stat-card">
       <div class="stat-value" style="color:var(--color-accent)">${totalOrders}</div>
-      <div class="stat-label">${currentRound ? escHtml(currentRound.name) : ''} · 订单数</div>
+      <div class="stat-label">订单数</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:var(--color-accent)">${uniqueProductCount}</div>
+      <div class="stat-label">下单商品种数</div>
     </div>
     <div class="stat-card">
       <div class="stat-value">${totalAmount.toFixed(2)}</div>
@@ -3011,22 +3061,46 @@ async function renderOrderManager(el) {
 
   html += '<h3 class="section-title" style="margin:20px 0 12px">按人订单明细</h3>';
 
-  // Group by customer + round
+  // 👥 计算每位顾客的拼单归属
+  const adminFillStatus = {};
+  const adminSplitMap = {};
+  const uniquePids = [...new Set(orders.flatMap(o => (o.items||[]).map(it => it.product_id)))].filter(Boolean);
+  uniquePids.forEach(pid => {
+    const rows = [];
+    orders.filter(o => o.status !== 'cancelled').forEach(o => {
+      (o.items||[]).forEach(it => { if (!it.deleted && it.product_id === pid) rows.push({ customer: o.customer_name, qty: Number(it.purchase_qty)||Number(it.quantity)||0, time: o.created_at }); });
+    });
+    if (rows.length === 0) return;
+    rows.sort((a,b) => new Date(a.time) - new Date(b.time));
+    const total = rows.reduce((s,r) => s+r.qty, 0);
+    const floorTotal = Math.floor(total);
+    const filled = Math.abs(total - Math.round(total)) <= 0.0001;
+    let cum = 0;
+    rows.forEach((r) => {
+      const cumBefore = cum;
+      const rowKey = `${r.customer}::${r.time}`;
+      cum += r.qty;
+      const fsMap = adminFillStatus[pid] || (adminFillStatus[pid] = {});
+      const splitMap = adminSplitMap[pid] || (adminSplitMap[pid] = {});
+      if (!filled && cum > floorTotal + 0.0001) {
+        if (cumBefore < floorTotal && cum > floorTotal) {
+          splitMap[rowKey] = { filledQty: Math.max(0, floorTotal - cumBefore), unfilledQty: r.qty - Math.max(0, floorTotal - cumBefore) };
+        }
+        const diff = Math.max(0, Math.round((Math.ceil(total)-total)*1000)/1000);
+        if (diff > 0.001 && fsMap[`${r.customer}::${r.time}`] !== '已拼满') fsMap[`${r.customer}::${r.time}`] = `未拼满，差 ${toDisplayFraction(diff,40)||formatQty(diff)}`;
+      } else {
+        fsMap[`${r.customer}::${r.time}`] = '已拼满';
+      }
+    });
+  });
+
+  // Group by customer + round, keep per-order items
   const grouped = {};
   orders.forEach(o => {
     const key = `${o.customer_name}||${o.round_id || ''}`;
-    if (!grouped[key]) grouped[key] = { name: o.customer_name, roundId: o.round_id, merged: {}, totalAmount: 0, notes: [], orderIds: [] };
+    if (!grouped[key]) grouped[key] = { name: o.customer_name, roundId: o.round_id, orders: [], totalAmount: 0, notes: [] };
     const g = grouped[key];
-    g.orderIds.push(o.id);
-    (o.items || []).forEach(it => {
-      if (it.deleted) return;
-      const itemKey = `${it.product_id || ''}|${it.spec_name || ''}`;
-      if (!g.merged[itemKey]) g.merged[itemKey] = { product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, share: it.share, actual_weight: it.actual_weight, lastTime: '' };
-      g.merged[itemKey].quantity += it.quantity || 0;
-      g.merged[itemKey].subtotal += Number(it.subtotal) || 0;
-      const ot = new Date(o.created_at).toLocaleString('zh-CN');
-      if (ot > (g.merged[itemKey].lastTime || '')) g.merged[itemKey].lastTime = ot;
-    });
+    g.orders.push({ id: o.id, time: new Date(o.created_at).toLocaleString('zh-CN'), createdAt: o.created_at, items: o.items, note: o.note, total: o.total_amount });
     g.totalAmount += Number(o.total_amount) || 0;
     if (o.note) g.notes.push(o.note);
   });
@@ -3037,19 +3111,39 @@ async function renderOrderManager(el) {
         <span style="font-weight:600;font-size:1rem">${escHtml(g.name)}</span>
         <span style="font-weight:700;color:var(--color-accent);font-size:1.0625rem">${g.totalAmount.toFixed(2)}</span>
       </div>`;
-    Object.values(g.merged).forEach(it => {
-      let weightInfo = '';
-      if (it.actual_weight != null) {
-        weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
-      }
-      const timeInfo = it.lastTime ? `<br><span class="caption">最后下单: ${it.lastTime}</span>` : '';
-      html += `<div class="order-item-row">
-        <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity)}</strong>${weightInfo}${timeInfo}</span>
-        <span class="item-price">${it.subtotal.toFixed(2)}</span>
-      </div>`;
-    });
-    g.notes.filter(Boolean).forEach(note => {
-      html += `<p class="caption">备注: ${escHtml(note)}</p>`;
+    g.orders.forEach(o => {
+      (o.items || []).forEach(it => {
+        if (it.deleted) return;
+        // 检查是否需要拆分
+        const split = (adminSplitMap[it.product_id] || {})[`${g.name}::${o.createdAt}`];
+        if (split && split.filledQty > 0.001 && split.unfilledQty > 0.001) {
+          const total = split.filledQty + split.unfilledQty;
+          const ratio = total > 0 ? split.filledQty / total : 0;
+          // 已拼满行
+          html += `<div class="order-item-row" style="margin-bottom:4px">
+            <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(Math.round((it.quantity||0)*ratio*1000)/1000)}</strong><span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span> <span class="caption" style="font-size:.7rem">${o.time}</span></span>
+            <span class="item-price">${Math.round((Number(it.subtotal||0)*ratio)*100)/100}</span>
+          </div>`;
+          // 未拼满行
+          const pidFillUnfilled = (adminFillStatus[it.product_id]||{})[`${g.name}::${o.createdAt}`]||'';
+          html += `<div class="order-item-row" style="margin-bottom:4px">
+            <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(Math.round((it.quantity||0)*(1-ratio)*1000)/1000)}</strong>${pidFillUnfilled.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFillUnfilled)}</span>` : ''} <span class="caption" style="font-size:.7rem">${o.time}</span></span>
+            <span class="item-price">${Math.round((Number(it.subtotal||0)*(1-ratio))*100)/100}</span>
+          </div>`;
+          return;
+        }
+        const pidFill = (adminFillStatus[it.product_id]||{})[`${g.name}::${o.createdAt}`]||'';
+        const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill === '已拼满' ? '<span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span>' : '';
+        let weightInfo = '';
+        if (it.actual_weight != null) {
+          weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${Number(it.subtotal||0).toFixed(2)}</span>`;
+        }
+        html += `<div class="order-item-row" style="margin-bottom:4px">
+          <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity||0)}</strong>${fillBadge} <span class="caption" style="font-size:.7rem">${o.time}</span>${weightInfo}</span>
+          <span class="item-price">${Number(it.subtotal||0).toFixed(2)}</span>
+        </div>`;
+      });
+      if (o.note) html += `<p class="caption">备注: ${escHtml(o.note)}</p>`;
     });
     html += `<div style="text-align:right;margin-top:6px">
       <button class="btn btn-danger btn-sm" data-customer-name="${escAttr(g.name)}" onclick="adminBatchCancel('${escAttr(g.name)}', '${escAttr(g.roundId)}')">砍单 · ¥${g.totalAmount.toFixed(2)}</button>
@@ -3618,16 +3712,21 @@ function adminBatchCancel(customerName, roundId) {
     const userOrders = (orders || []).filter(o => o.customer_name === customerName && o.status !== 'cancelled');
     if (userOrders.length === 0) { toast('该顾客没有可砍单的订单', 'error'); return; }
 
-    // 收集每笔订单的每个商品项（不合并，保留原始数据）
-    const lineItems = [];
+    // 合并同类商品
+    const mergedItems = {};
     const notes = [];
     userOrders.forEach(o => {
       (o.items || []).forEach(it => {
         if (it.deleted) return;
-        lineItems.push({ product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: it.quantity || 0, subtotal: Number(it.subtotal) || 0, share: it.share, orderId: o.id });
+        const key = `${it.product_id}|${it.spec_name}`;
+        if (!mergedItems[key]) mergedItems[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, purchase_qty: 0, share: it.share, _orig_time: it._orig_time || o.created_at };
+        mergedItems[key].quantity += it.quantity || 0;
+        mergedItems[key].subtotal += Number(it.subtotal) || 0;
+        mergedItems[key].purchase_qty += Number(it.purchase_qty) || (it.quantity || 0);
       });
       if (o.note) notes.push(o.note);
     });
+    const lineItems = Object.values(mergedItems);
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
@@ -3700,14 +3799,15 @@ function adminBatchCancel(customerName, roundId) {
         const keepQty = Math.max(0, it.quantity - cancelQty);
         if (keepQty > 0) {
           const ratio = keepQty / it.quantity;
-          keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: keepQty, unit_qty: 1, purchase_qty: keepQty, subtotal: parseFloat((it.subtotal * ratio).toFixed(2)), share: it.share });
+          keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: keepQty, unit_qty: 1, purchase_qty: parseFloat(((it.purchase_qty || it.quantity || 0) * ratio).toFixed(6)), subtotal: parseFloat((it.subtotal * ratio).toFixed(2)), share: it.share, _orig_time: cancelQty > 0 ? new Date().toISOString() : (it._orig_time || null) });
           keepTotal += parseFloat((it.subtotal * ratio).toFixed(2));
         }
       });
 
       if (keepItems.length > 0) {
         const combinedNote = notes.filter(Boolean).join(' | ');
-        await sb.rpc('create_order', { p_customer_name: customerName, p_items: keepItems, p_note: combinedNote, p_total_amount: keepTotal, p_round_id: roundId });
+        const origTime = userOrders.reduce((latest, o) => o.created_at > latest ? o.created_at : latest, userOrders[0]?.created_at || new Date().toISOString());
+        await sb.rpc('create_order', { p_customer_name: customerName, p_items: keepItems, p_note: combinedNote, p_total_amount: keepTotal, p_round_id: roundId, p_created_at: origTime });
       }
 
       renderAdminTab('orders');
