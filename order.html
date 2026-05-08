@@ -1282,7 +1282,8 @@ function normalizeFeeConfig(fees) {
     shipping: Math.max(0, Number(fees?.shipping) || 0),
     packing: Math.max(0, Number(fees?.packing) || 0),
     other: Math.max(0, Number(fees?.other) || 0),
-    note: String(fees?.note || '').trim()
+    note: String(fees?.note || '').trim(),
+    mode: fees?.mode || 'per_person'
   };
 }
 
@@ -1291,21 +1292,37 @@ function getFeeTotal(fees) {
   return cfg.shipping + cfg.packing + cfg.other;
 }
 
-function buildFeeAdjustedPaymentRows(groupedAmounts, fees) {
+function buildFeeAdjustedPaymentRows(groupedAmounts, fees, groupedQtys) {
   const names = Object.keys(groupedAmounts || {});
-  const feeTotalCents = Math.round(getFeeTotal(fees) * 100);
-  const baseShareCents = names.length ? Math.floor(feeTotalCents / names.length) : 0;
-  const remainder = names.length ? feeTotalCents % names.length : 0;
-  return names.map((name, index) => {
+  const cfg = normalizeFeeConfig(fees);
+  const feeTotalCents = Math.round(getFeeTotal(cfg) * 100);
+  if (names.length === 0 || feeTotalCents === 0) return names.map(name => ({ name, productAmount: Number(groupedAmounts[name])||0, feeShare: 0, total: Number(groupedAmounts[name])||0 }));
+
+  const mode = cfg.mode || 'per_person';
+  let weights = {};
+  if (mode === 'per_person') {
+    names.forEach(n => { weights[n] = 1; });
+  } else if (mode === 'per_item') {
+    const totalQty = Object.values(groupedQtys||{}).reduce((s,v) => s+v, 0);
+    names.forEach(n => { weights[n] = totalQty > 0 ? (groupedQtys[n]||0) / totalQty : 0; });
+  } else if (mode === 'per_amount') {
+    const totalAmt = Object.values(groupedAmounts).reduce((s,v) => s+(Number(v)||0), 0);
+    names.forEach(n => { weights[n] = totalAmt > 0 ? (Number(groupedAmounts[n])||0) / totalAmt : 0; });
+  }
+
+  // 按权重分配费用（分）
+  const sharesCents = names.map(n => Math.round(weights[n] * feeTotalCents));
+  // 尾差调整
+  const allocated = sharesCents.reduce((s,v) => s+v, 0);
+  let diff = feeTotalCents - allocated;
+  let idx = 0;
+  while (diff > 0) { sharesCents[idx % names.length]++; diff--; idx++; }
+  while (diff < 0) { sharesCents[idx % names.length]--; diff++; idx++; }
+
+  return names.map((name, i) => {
     const productAmount = Number(groupedAmounts[name]) || 0;
-    const shareCents = baseShareCents + (index < remainder ? 1 : 0);
-    const feeShare = shareCents / 100;
-    return {
-      name,
-      productAmount,
-      feeShare,
-      total: Math.round((productAmount + feeShare) * 100) / 100
-    };
+    const feeShare = sharesCents[i] / 100;
+    return { name, productAmount, feeShare, total: Math.round((productAmount + feeShare) * 100) / 100 };
   });
 }
 
@@ -1325,7 +1342,8 @@ async function saveRoundFees() {
     shipping: document.getElementById('fee-shipping')?.value,
     packing: document.getElementById('fee-packing')?.value,
     other: document.getElementById('fee-other')?.value,
-    note: document.getElementById('fee-note')?.value
+    note: document.getElementById('fee-note')?.value,
+    mode: document.getElementById('fee-mode')?.value
   });
   try {
     const { error } = await adminRpc('admin_save_round_fees', { p_round_id: adminRoundId, p_fees: fees });
@@ -3230,6 +3248,7 @@ async function renderPaymentSummary(el) {
       <div class="form-group"><label class="form-label">运费</label><input id="fee-shipping" class="form-input" type="number" min="0" step="0.01" value="${fees.shipping || ''}" placeholder="0.00"></div>
       <div class="form-group"><label class="form-label">包装费</label><input id="fee-packing" class="form-input" type="number" min="0" step="0.01" value="${fees.packing || ''}" placeholder="0.00"></div>
       <div class="form-group"><label class="form-label">其他费用</label><input id="fee-other" class="form-input" type="number" min="0" step="0.01" value="${fees.other || ''}" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">均摊方式</label><select id="fee-mode" class="form-input"><option value="per_person" ${(fees.mode||'per_person')==='per_person'?'selected':''}>按人均摊</option><option value="per_item" ${fees.mode==='per_item'?'selected':''}>按件均摊</option><option value="per_amount" ${fees.mode==='per_amount'?'selected':''}>按金额均摊</option></select></div>
     </div>
     <div class="form-group" style="margin-bottom:12px"><label class="form-label">费用说明（选填）</label><input id="fee-note" class="form-input" maxlength="80" value="${escAttr(fees.note)}" placeholder="如：山姆配送费、保温袋、停车费"></div>
     <button class="btn btn-primary btn-sm" onclick="saveRoundFees()">保存费用设置</button>
@@ -3242,15 +3261,18 @@ async function renderPaymentSummary(el) {
   }
 
   const grouped = {};
+  const groupedQtys = {};
   orders.forEach(o => {
-    if (!grouped[o.customer_name]) grouped[o.customer_name] = 0;
+    if (!grouped[o.customer_name]) { grouped[o.customer_name] = 0; groupedQtys[o.customer_name] = 0; }
     grouped[o.customer_name] += parseFloat(o.total_amount);
+    (o.items||[]).forEach(it => { if (!it.deleted) groupedQtys[o.customer_name] += Number(it.purchase_qty) || Number(it.quantity) || 0; });
   });
 
-  const paymentRows = buildFeeAdjustedPaymentRows(grouped, fees);
+  const paymentRows = buildFeeAdjustedPaymentRows(grouped, fees, groupedQtys);
   const productTotal = paymentRows.reduce((s, row) => s + row.productAmount, 0);
   const total = paymentRows.reduce((s, row) => s + row.total, 0);
-  const perPersonHint = paymentRows.length ? `${paymentRows[0].feeShare.toFixed(2)} 元/人起` : '0.00 元/人';
+  const modeLabel = fees.mode === 'per_item' ? '按件均摊' : fees.mode === 'per_amount' ? '按金额均摊' : '按人均摊';
+  const perPersonHint = paymentRows.length ? `${modeLabel} · ${paymentRows[0].feeShare.toFixed(2)} 元起` : '';
 
   html += `<div class="stat-row">
     <div class="stat-card"><div class="stat-value" style="color:var(--color-accent)">${Object.keys(grouped).length}</div><div class="stat-label">${escHtml(roundLabel)} · 下单人数</div></div>
