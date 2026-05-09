@@ -2879,7 +2879,7 @@ async function lookupOrders() {
 
     html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border-light)">
       <span style="font-weight:800">合计: <span style="color:var(--color-accent);font-size:1.1rem">${g.totalAmount.toFixed(2)}</span></span>
-      ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelAllRoundOrders('${rid}', this)">取消本轮订单</button>` : (!g.hasActive ? '' : '<span class="badge badge-muted">已截止</span>')}
+      ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelAllRoundOrders('${rid}', this)">修改/取消订单</button>` : (!g.hasActive ? '' : '<span class="badge badge-muted">已截止</span>')}
     </div></div>`;
   });
   resultsEl.innerHTML = html;
