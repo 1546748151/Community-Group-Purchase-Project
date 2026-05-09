@@ -610,6 +610,10 @@ body[data-mode="admin"] .cart-bar{display:none}
         <span style="font-size:1.25rem;font-weight:700;color:var(--color-accent)" id="checkout-total"></span>
       </div>
       <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">选择群组</label>
+        <select id="checkout-group" class="form-input" style="overflow:visible"></select>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
         <label class="form-label">你的群昵称 *</label>
         <input type="text" id="checkout-name" class="form-input" placeholder="请输入你在群里的昵称" maxlength="30">
         <span class="form-error" id="checkout-name-error" style="display:none"></span>
@@ -706,6 +710,13 @@ const DEFAULT_SUPABASE_CONFIG = {
 };
 function debounce(fn, ms) { let t; return function(...a) { clearTimeout(t); t = setTimeout(() => fn.apply(this, a), ms); }; }
 const debouncedSearchLoad = debounce(() => loadCustomerProducts(), 300);
+
+async function getGroupNames() {
+  try {
+    const { data } = await sb.rpc('get_group_names');
+    return data ? data.split(/[,，]+/).map(s => s.trim()).filter(Boolean) : [];
+  } catch(_) { return []; }
+}
 
 function getConfig() {
   try {
@@ -2109,7 +2120,7 @@ async function loadCustomerProducts() {
       const spec = (p.specs || [])[0] || {};
       const pu = parsePurchaseUnit(spec.name);
       // 称重商品用份额汇总，普通商品用 purchase_qty
-      const fillQty = p.is_weighted && stats.shareTotal != null ? stats.shareTotal : stats.qty;
+      const fillQty = Math.round((p.is_weighted && stats.shareTotal != null ? stats.shareTotal : stats.qty) * 1000) / 1000;
       const hasFractional = fillQty % 1 > 0.001;
       const isSplit = pu !== null || hasFractional || (p.is_weighted && stats.shareTotal != null);
       const rawDiff = Math.ceil(fillQty) - fillQty;
@@ -2454,7 +2465,7 @@ function openCartDetails() {
   document.body.appendChild(modal);
 }
 
-function openCheckout() {
+async function openCheckout() {
   const items = Object.values(cart);
   if (items.length === 0) return;
   lockScroll();
@@ -2471,6 +2482,16 @@ function openCheckout() {
   if (totalLabel) totalLabel.textContent = hasWeighted ? '预估总额（称重待确认）' : '应付总额';
   const weightNote = document.getElementById('checkout-weight-note');
   if (weightNote) weightNote.style.display = hasWeighted ? 'block' : 'none';
+
+  // 填充群组选择
+  const groupSelect = document.getElementById('checkout-group');
+  if (groupSelect) {
+    const groupNames = await getGroupNames();
+    if (groupNames.length === 0) groupNames.push('默认群');
+    groupSelect.innerHTML = groupNames.map(g => `<option value="${escAttr(g)}">${escHtml(g)}</option>`).join('');
+    groupSelect.value = localStorage.getItem('groupbuy_last_group') || '';
+    groupSelect.style.display = 'block';
+  }
 
   document.getElementById('checkout-name').value = localStorage.getItem('groupbuy_last_name') || '';
   document.getElementById('checkout-note').value = '';
@@ -2558,7 +2579,8 @@ async function submitOrder() {
         unit_qty: unitQty,
         purchase_qty: unitQty * i.quantity,
         subtotal: parseFloat((i.specPrice * i.quantity).toFixed(2)),
-        share: share
+        share: share,
+        _orig_time: null
       };
     });
 
@@ -2567,7 +2589,8 @@ async function submitOrder() {
       p_items: orderItems,
       p_note: note,
       p_total_amount: parseFloat(total.toFixed(2)),
-      p_round_id: activeRoundId
+      p_round_id: activeRoundId,
+      p_customer_group: document.getElementById('checkout-group')?.value || ''
     });
 
     if (error) {
@@ -2575,6 +2598,7 @@ async function submitOrder() {
     }
 
     localStorage.setItem('groupbuy_last_name', name);
+    localStorage.setItem('groupbuy_last_group', document.getElementById('checkout-group')?.value || '');
     success = true;
     closeCheckout();
     document.getElementById('success-order-id').textContent = String(orderId).slice(0, 8).toUpperCase();
@@ -2675,9 +2699,6 @@ async function lookupOrders() {
   const name = document.getElementById('lookup-name').value.trim();
   const resultsEl = document.getElementById('lookup-results');
   if (!name) { resultsEl.innerHTML = '<p class="caption" style="text-align:center">请输入昵称</p>'; return; }
-  if (!activeRoundId) {
-    activeRoundId = null;
-  }
 
   resultsEl.innerHTML = '<div class="skel-line skeleton"></div><div class="skel-line skeleton"></div>';
   focusLookupResults();
@@ -2717,7 +2738,7 @@ async function lookupOrders() {
     const relevantRoundIds = [...new Set(orders.map(o => o.round_id).filter(Boolean))];
     for (const rid of relevantRoundIds) {
       const { data: allRoundOrders } = await sb.rpc('lookup_orders', { p_customer_name: null, p_round_id: rid });
-      const activeOrders = (allRoundOrders || []).filter(o => o.status !== 'cancelled' && o.status !== 'pending_weight');
+      const activeOrders = (allRoundOrders || []).filter(o => o.status !== 'cancelled');
       uniqueProductIds.forEach(pid => {
         // 收集此商品的所有行项，按时间排序
         const itemRows = [];
@@ -2729,12 +2750,10 @@ async function lookupOrders() {
         });
         if (itemRows.length === 0) return;
         itemRows.sort((a,b) => new Date(a.time) - new Date(b.time));
-        const totalQty = itemRows.reduce((s, r) => s + r.qty, 0);
+        const totalQty = Math.round(itemRows.reduce((s, r) => s + r.qty, 0) * 1000) / 1000;
         const whole = Math.ceil(totalQty);
         const floorTotal = Math.floor(totalQty);
-        const rawDiff = whole - totalQty;
-        const globalUnfilled = rawDiff > 0.001;
-        const displayDiff = Math.round(rawDiff * 1000) / 1000;
+        const globalUnfilled = Math.abs(totalQty - Math.round(totalQty)) > 0.0001;
         let cum = 0;
         const perCustomer = {};
         const splitMap = customerSplitMap[pid] || (customerSplitMap[pid] = {});
@@ -2743,7 +2762,8 @@ async function lookupOrders() {
           cum += row.qty;
           const rowKey = `${row.customer}::${row.time}`;
           if (globalUnfilled && cum > floorTotal + 0.0001) {
-            perCustomer[rowKey] = `未拼满，差 ${toDisplayFraction(displayDiff, 40) || formatQty(displayDiff)}`;
+            const diff = Math.max(0, Math.round((whole - totalQty) * 1000) / 1000);
+            if (diff > 0.001) perCustomer[rowKey] = `未拼满，差 ${toDisplayFraction(diff, 40) || formatQty(diff)}`;
             // 检查是否跨越边界需拆分
             if (cumBefore < floorTotal && cum > floorTotal) {
               const splitFilled = Math.max(0, floorTotal - cumBefore);
@@ -2776,7 +2796,7 @@ async function lookupOrders() {
       g.hasActive = true;
       (order.items || []).forEach(it => {
         if (it.deleted) return;
-        const fillStatus = (customerFillStatus[it.product_id] || {})[`${order.customer_name}::${order.created_at}`] || '';
+        const fillStatus = (customerFillStatus[it.product_id] || {})[`${order.customer_name}::${it._orig_time || order.created_at}`] || '';
           const fillKey = fillStatus.startsWith('未拼满') ? 'unfilled' : 'filled';
           const key = `${it.product_id || ''}|${it.spec_name || ''}|${fillKey}`;
         if (!g.merged[key]) g.merged[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, purchase_qty: 0, share: it.share, actual_weight: it.actual_weight, lastTime: '', _orig_time: it._orig_time || order.created_at, fillStatus };
@@ -2803,7 +2823,7 @@ async function lookupOrders() {
       const seenSplits = new Set();
       g.orders.forEach(o => {
         (o.items || []).forEach(it => {
-          const ork = `${o.customer_name}::${it._orig_time || o.createdAt}`;
+          const ork = `${o.customer_name}::${it._orig_time || o.created_at}`;
           if (split[ork] && !seenSplits.has(ork)) { seenSplits.add(ork); filledPQty += split[ork].filledQty; }
         });
       });
@@ -2977,7 +2997,7 @@ async function cancelAllRoundOrders(roundId, btn) {
       const keepQty = Math.max(0, it.quantity - cancelQty);
       if (keepQty > 0) {
         const ratio = keepQty / it.quantity;
-        keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: keepQty, unit_qty: 1, purchase_qty: parseFloat(((it.purchase_qty || it.quantity || 0) * ratio).toFixed(6)), subtotal: parseFloat((it.subtotal * ratio).toFixed(2)), _orig_time: cancelQty > 0 ? new Date().toISOString() : (it._orig_time || null) });
+        keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: keepQty, unit_qty: parsePurchaseUnit(it.spec_name) || 1, purchase_qty: parseFloat(((it.purchase_qty || it.quantity || 0) * ratio).toFixed(6)), subtotal: parseFloat((it.subtotal * ratio).toFixed(2)), _orig_time: cancelQty > 0 ? new Date().toISOString() : (it._orig_time || null) });
         keepTotal += parseFloat((it.subtotal * ratio).toFixed(2));
       }
     });
@@ -2993,7 +3013,7 @@ async function cancelAllRoundOrders(roundId, btn) {
       cancellingOrders.delete(o.id);
     }
 
-    // 创建保留商品的新订单
+    // 创建保留商品的新订单，每个商品独立携带原始时间
     if (keepItems.length > 0) {
       await sb.rpc('create_order', { p_customer_name: name, p_items: keepItems, p_note: '', p_total_amount: keepTotal, p_round_id: roundId });
     }
@@ -3044,7 +3064,8 @@ async function renderOrderManager(el) {
 
   const orders0 = getAdminVisibleOrders(rawOrders);
   // 用当前商品价格刷新订单金额
-  const { data: curProducts } = await adminRpc('admin_get_products', { p_round_id: adminRoundId });
+  let curProducts = [];
+  try { const r = await adminRpc('admin_get_products', { p_round_id: adminRoundId }); curProducts = r.data || []; } catch(e) {}
   const priceMap = buildPriceMap(curProducts);
   const orders = enrichOrdersWithCurrentPrices(orders0, priceMap);
   const currentRound = allRounds.find(r => r.id === adminRoundId);
@@ -3129,11 +3150,9 @@ async function renderOrderManager(el) {
     });
     if (rows.length === 0) return;
     rows.sort((a,b) => new Date(a.time) - new Date(b.time));
-    const total = rows.reduce((s,r) => s+r.qty, 0);
+    const total = Math.round(rows.reduce((s,r) => s+r.qty, 0) * 1000) / 1000;
     const floorTotal = Math.floor(total);
-    const rawDiff = Math.ceil(total) - total;
-    const filled = rawDiff <= 0.001;
-    const displayDiff = Math.round(rawDiff * 1000) / 1000;
+    const filled = Math.abs(total - Math.round(total)) <= 0.0001;
     let cum = 0;
     rows.forEach((r) => {
       const cumBefore = cum;
@@ -3145,9 +3164,10 @@ async function renderOrderManager(el) {
         if (cumBefore < floorTotal && cum > floorTotal) {
           splitMap[rowKey] = { filledQty: Math.max(0, floorTotal - cumBefore), unfilledQty: r.qty - Math.max(0, floorTotal - cumBefore) };
         }
-        fsMap[rowKey] = `未拼满，差 ${toDisplayFraction(displayDiff, 40) || formatQty(displayDiff)}`;
+        const diff = Math.max(0, Math.round((Math.ceil(total)-total)*1000)/1000);
+        if (diff > 0.001 && fsMap[`${r.customer}::${r.time}`] !== '已拼满') fsMap[`${r.customer}::${r.time}`] = `未拼满，差 ${toDisplayFraction(diff,40)||formatQty(diff)}`;
       } else {
-        fsMap[rowKey] = '已拼满';
+        fsMap[`${r.customer}::${r.time}`] = '已拼满';
       }
     });
   });
@@ -3172,34 +3192,32 @@ async function renderOrderManager(el) {
     g.orders.forEach(o => {
       (o.items || []).forEach(it => {
         if (it.deleted) return;
-        const itemTime = it._orig_time || o.createdAt;
-        const itemTimeStr = new Date(itemTime).toLocaleString('zh-CN');
         // 检查是否需要拆分
-        const split = (adminSplitMap[it.product_id] || {})[`${g.name}::${itemTime}`];
+        const split = (adminSplitMap[it.product_id] || {})[`${g.name}::${it._orig_time || o.createdAt}`];
         if (split && split.filledQty > 0.001 && split.unfilledQty > 0.001) {
           const total = split.filledQty + split.unfilledQty;
           const ratio = total > 0 ? split.filledQty / total : 0;
           // 已拼满行
           html += `<div class="order-item-row" style="margin-bottom:4px">
-            <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(Math.round((it.quantity||0)*ratio*1000)/1000)}</strong><span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span> <span class="caption" style="font-size:.7rem">${itemTimeStr}</span></span>
+            <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(Math.round((it.quantity||0)*ratio*1000)/1000)}</strong><span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span> <span class="caption" style="font-size:.7rem">${o.time}</span></span>
             <span class="item-price">${Math.round((Number(it.subtotal||0)*ratio)*100)/100}</span>
           </div>`;
           // 未拼满行
-          const pidFillUnfilled = (adminFillStatus[it.product_id]||{})[`${g.name}::${itemTime}`]||'';
+          const pidFillUnfilled = (adminFillStatus[it.product_id]||{})[`${g.name}::${it._orig_time || o.createdAt}`]||'';
           html += `<div class="order-item-row" style="margin-bottom:4px">
-            <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(Math.round((it.quantity||0)*(1-ratio)*1000)/1000)}</strong>${pidFillUnfilled.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFillUnfilled)}</span>` : ''} <span class="caption" style="font-size:.7rem">${itemTimeStr}</span></span>
+            <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(Math.round((it.quantity||0)*(1-ratio)*1000)/1000)}</strong>${pidFillUnfilled.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFillUnfilled)}</span>` : ''} <span class="caption" style="font-size:.7rem">${o.time}</span></span>
             <span class="item-price">${Math.round((Number(it.subtotal||0)*(1-ratio))*100)/100}</span>
           </div>`;
           return;
         }
-        const pidFill = (adminFillStatus[it.product_id]||{})[`${g.name}::${itemTime}`]||'';
+        const pidFill = (adminFillStatus[it.product_id]||{})[`${g.name}::${it._orig_time || o.createdAt}`]||'';
         const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill === '已拼满' ? '<span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span>' : '';
         let weightInfo = '';
         if (it.actual_weight != null) {
           weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${Number(it.subtotal||0).toFixed(2)}</span>`;
         }
         html += `<div class="order-item-row" style="margin-bottom:4px">
-          <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity||0)}</strong>${fillBadge} <span class="caption" style="font-size:.7rem">${itemTimeStr}</span>${weightInfo}</span>
+          <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity||0)}</strong>${fillBadge} <span class="caption" style="font-size:.7rem">${o.time}</span>${weightInfo}</span>
           <span class="item-price">${Number(it.subtotal||0).toFixed(2)}</span>
         </div>`;
       });
@@ -3249,7 +3267,8 @@ async function renderOrderManager(el) {
 async function exportOrders() {
   const { data: rawOrders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
   // 用当前商品价格刷新订单金额
-  const { data: curProducts } = await adminRpc('admin_get_products', { p_round_id: adminRoundId });
+  let curProducts = [];
+  try { const r = await adminRpc('admin_get_products', { p_round_id: adminRoundId }); curProducts = r.data || []; } catch(e) {}
   const priceMap = buildPriceMap(curProducts);
   const orders = enrichOrdersWithCurrentPrices(getAdminVisibleOrders(rawOrders), priceMap);
   if (!orders || orders.length === 0) { toast('没有可导出的订单', 'info'); return; }
@@ -3301,7 +3320,8 @@ async function renderPaymentSummary(el) {
 
   const { data: rawOrders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
   // 用当前商品价格刷新订单金额
-  const { data: curProducts } = await adminRpc('admin_get_products', { p_round_id: adminRoundId });
+  let curProducts = [];
+  try { const r = await adminRpc('admin_get_products', { p_round_id: adminRoundId }); curProducts = r.data || []; } catch(e) {}
   const priceMap = buildPriceMap(curProducts);
   const orders = enrichOrdersWithCurrentPrices(getAdminVisibleOrders(rawOrders), priceMap).filter(o => o.status !== 'pending_weight');
   const fees = adminRoundId ? await getRoundFees(adminRoundId) : normalizeFeeConfig({});
@@ -3462,6 +3482,7 @@ async function renderSettings(el) {
   const hasPassword = !needsPassword;
   const { data: siteTitleData } = await sb.rpc('get_site_title');
   const siteTitle = (siteTitleData || '美好小区团购群').trim();
+  const groupNames = (await getGroupNames()).join(',');
 
   // Fetch rounds for management list
   const rounds = await getRounds();
@@ -3544,6 +3565,15 @@ async function renderSettings(el) {
         <input type="password" id="new-password" class="form-input" placeholder="输入新密码" maxlength="20">
       </div>
       <button class="btn btn-primary" onclick="changePassword()">${hasPassword ? '修改密码' : '设置密码'}</button>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <h3 class="section-title" style="margin-bottom:8px">顾客群组名称</h3>
+      <p class="body-text" style="margin-bottom:8px">顾客下单时可选择所属群组，用逗号分隔多个群名</p>
+      <div class="form-group" style="margin-bottom:8px">
+        <input type="text" id="group-names-input" class="form-input" value="${escAttr(groupNames)}" placeholder="山姆群,美食群" maxlength="200">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveGroupNames()">保存群组</button>
     </div>
 
     <div class="card" style="margin-bottom:16px">
@@ -3813,7 +3843,8 @@ function adminBatchCancel(customerName, roundId) {
   (async () => {
     const { data: rawOrders } = await adminRpc('admin_get_orders', { p_round_id: roundId });
     // 用当前商品价格刷新订单金额
-    const { data: curProducts } = await adminRpc('admin_get_products', { p_round_id: roundId });
+    let curProducts = [];
+    try { const r = await adminRpc('admin_get_products', { p_round_id: roundId }); curProducts = r.data || []; } catch(e) {}
     const priceMap = buildPriceMap(curProducts);
     const orders = enrichOrdersWithCurrentPrices(rawOrders, priceMap);
     const userOrders = (orders || []).filter(o => o.customer_name === customerName && o.status !== 'cancelled');
@@ -4028,6 +4059,15 @@ async function saveSiteTitle() {
   } catch (e) {
     toast('操作失败，请重新登录后重试', 'error');
   }
+}
+
+async function saveGroupNames() {
+  const val = document.getElementById('group-names-input').value.trim();
+  try {
+    const { error } = await adminRpc('admin_set_group_names', { p_names: val });
+    if (error) { toast('保存失败', 'error'); return; }
+    toast('群组名称已保存');
+  } catch (e) { toast('操作失败', 'error'); }
 }
 
 async function changePassword() {
