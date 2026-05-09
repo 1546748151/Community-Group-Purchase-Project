@@ -2676,9 +2676,7 @@ async function lookupOrders() {
   const resultsEl = document.getElementById('lookup-results');
   if (!name) { resultsEl.innerHTML = '<p class="caption" style="text-align:center">请输入昵称</p>'; return; }
   if (!activeRoundId) {
-    resultsEl.innerHTML = '<div class="empty-state" style="padding:24px"><p>暂无进行中的团购</p><p class="caption">当前没有可查询的本轮订单</p></div>';
-    focusLookupResults();
-    return;
+    activeRoundId = null;
   }
 
   resultsEl.innerHTML = '<div class="skel-line skeleton"></div><div class="skel-line skeleton"></div>';
