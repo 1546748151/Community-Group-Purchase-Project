@@ -2695,7 +2695,7 @@ async function lookupOrders() {
         activeOrders.forEach(o => {
           (o.items || []).forEach(it => {
             if (it.deleted || it.product_id !== pid) return;
-            itemRows.push({ customer: o.customer_name, qty: Number(it.purchase_qty) || Number(it.quantity) || 0, time: o.created_at });
+            itemRows.push({ customer: o.customer_name, qty: Number(it.purchase_qty) || Number(it.quantity) || 0, time: it._orig_time || o.created_at });
           });
         });
         if (itemRows.length === 0) return;
@@ -2772,8 +2772,10 @@ async function lookupOrders() {
       let filledPQty = 0, totalPQty = item.purchase_qty || item.quantity || 0;
       const seenSplits = new Set();
       g.orders.forEach(o => {
-        const ork = `${o.customer_name}::${o.created_at}`;
-        if (split[ork] && !seenSplits.has(ork)) { seenSplits.add(ork); filledPQty += split[ork].filledQty; }
+        (o.items || []).forEach(it => {
+          const ork = `${o.customer_name}::${it._orig_time || o.createdAt}`;
+          if (split[ork] && !seenSplits.has(ork)) { seenSplits.add(ork); filledPQty += split[ork].filledQty; }
+        });
       });
       // 用 purchase_qty 的比例换算 quantity
       const ratio = totalPQty > 0.0001 ? filledPQty / totalPQty : 0;
@@ -2961,7 +2963,7 @@ async function cancelAllRoundOrders(roundId, btn) {
       cancellingOrders.delete(o.id);
     }
 
-    // 创建保留商品的新订单，每个商品独立携带原始时间
+    // 创建保留商品的新订单
     if (keepItems.length > 0) {
       await sb.rpc('create_order', { p_customer_name: name, p_items: keepItems, p_note: '', p_total_amount: keepTotal, p_round_id: roundId });
     }
@@ -3086,7 +3088,7 @@ async function renderOrderManager(el) {
   uniquePids.forEach(pid => {
     const rows = [];
     orders.filter(o => o.status !== 'cancelled').forEach(o => {
-      (o.items||[]).forEach(it => { if (!it.deleted && it.product_id === pid) rows.push({ customer: o.customer_name, qty: Number(it.purchase_qty)||Number(it.quantity)||0, time: o.created_at }); });
+      (o.items||[]).forEach(it => { if (!it.deleted && it.product_id === pid) rows.push({ customer: o.customer_name, qty: Number(it.purchase_qty)||Number(it.quantity)||0, time: it._orig_time || o.created_at }); });
     });
     if (rows.length === 0) return;
     rows.sort((a,b) => new Date(a.time) - new Date(b.time));
@@ -3132,32 +3134,34 @@ async function renderOrderManager(el) {
     g.orders.forEach(o => {
       (o.items || []).forEach(it => {
         if (it.deleted) return;
+        const itemTime = it._orig_time || o.createdAt;
+        const itemTimeStr = new Date(itemTime).toLocaleString('zh-CN');
         // 检查是否需要拆分
-        const split = (adminSplitMap[it.product_id] || {})[`${g.name}::${o.createdAt}`];
+        const split = (adminSplitMap[it.product_id] || {})[`${g.name}::${itemTime}`];
         if (split && split.filledQty > 0.001 && split.unfilledQty > 0.001) {
           const total = split.filledQty + split.unfilledQty;
           const ratio = total > 0 ? split.filledQty / total : 0;
           // 已拼满行
           html += `<div class="order-item-row" style="margin-bottom:4px">
-            <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(Math.round((it.quantity||0)*ratio*1000)/1000)}</strong><span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span> <span class="caption" style="font-size:.7rem">${o.time}</span></span>
+            <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(Math.round((it.quantity||0)*ratio*1000)/1000)}</strong><span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span> <span class="caption" style="font-size:.7rem">${itemTimeStr}</span></span>
             <span class="item-price">${Math.round((Number(it.subtotal||0)*ratio)*100)/100}</span>
           </div>`;
           // 未拼满行
-          const pidFillUnfilled = (adminFillStatus[it.product_id]||{})[`${g.name}::${o.createdAt}`]||'';
+          const pidFillUnfilled = (adminFillStatus[it.product_id]||{})[`${g.name}::${itemTime}`]||'';
           html += `<div class="order-item-row" style="margin-bottom:4px">
-            <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(Math.round((it.quantity||0)*(1-ratio)*1000)/1000)}</strong>${pidFillUnfilled.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFillUnfilled)}</span>` : ''} <span class="caption" style="font-size:.7rem">${o.time}</span></span>
+            <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(Math.round((it.quantity||0)*(1-ratio)*1000)/1000)}</strong>${pidFillUnfilled.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFillUnfilled)}</span>` : ''} <span class="caption" style="font-size:.7rem">${itemTimeStr}</span></span>
             <span class="item-price">${Math.round((Number(it.subtotal||0)*(1-ratio))*100)/100}</span>
           </div>`;
           return;
         }
-        const pidFill = (adminFillStatus[it.product_id]||{})[`${g.name}::${o.createdAt}`]||'';
+        const pidFill = (adminFillStatus[it.product_id]||{})[`${g.name}::${itemTime}`]||'';
         const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill === '已拼满' ? '<span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span>' : '';
         let weightInfo = '';
         if (it.actual_weight != null) {
           weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${Number(it.subtotal||0).toFixed(2)}</span>`;
         }
         html += `<div class="order-item-row" style="margin-bottom:4px">
-          <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity||0)}</strong>${fillBadge} <span class="caption" style="font-size:.7rem">${o.time}</span>${weightInfo}</span>
+          <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity||0)}</strong>${fillBadge} <span class="caption" style="font-size:.7rem">${itemTimeStr}</span>${weightInfo}</span>
           <span class="item-price">${Number(it.subtotal||0).toFixed(2)}</span>
         </div>`;
       });
@@ -3181,7 +3185,7 @@ async function exportOrders() {
   orders.forEach(o => {
     (o.items || []).forEach(it => {
       if (it.deleted) return;
-      rows1.push([o.customer_name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), formatQtyLabel(getItemStockQty(it)), it.spec_price, it.subtotal, o.note || '', o.total_amount, new Date(o.created_at).toLocaleString('zh-CN')]);
+      rows1.push([o.customer_name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), formatQtyLabel(getItemStockQty(it)), it.spec_price, it.subtotal, o.note || '', o.total_amount, new Date(it._orig_time || o.created_at).toLocaleString('zh-CN')]);
     });
   });
 
