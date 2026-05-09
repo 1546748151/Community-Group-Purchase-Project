@@ -3035,7 +3035,10 @@ async function renderOrderManager(el) {
   }).join('');
 
   // Fetch orders for selected round
-  const { data: rawOrders, error } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
+  const [{ data: rawOrders, error }, { data: cancelledOrders }] = await Promise.all([
+    adminRpc('admin_get_orders', { p_round_id: adminRoundId }),
+    adminRpc('admin_get_cancelled_orders', { p_round_id: adminRoundId })
+  ]);
 
   if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab(\'orders\')">重试</button></div>'; return; }
 
@@ -3206,6 +3209,39 @@ async function renderOrderManager(el) {
       <button class="btn btn-danger btn-sm" data-customer-name="${escAttr(g.name)}" onclick="adminBatchCancel('${escAttr(g.name)}', '${escAttr(g.roundId)}')">砍单 · ¥${g.totalAmount.toFixed(2)}</button>
     </div></div>`;
   });
+
+  // 砍单记录
+  const adminCancelled = (cancelledOrders || []).filter(o => o.note && o.note.includes('[团长砍单]'));
+  if (adminCancelled.length > 0) {
+    html += `<h3 class="section-title" style="margin:24px 0 12px">砍单记录 <span style="font-size:.8rem;font-weight:500;color:var(--color-text-muted)">(${adminCancelled.length})</span></h3>`;
+    adminCancelled.forEach(o => {
+      const cancelTime = new Date(o.updated_at).toLocaleString('zh-CN');
+      const createTime = new Date(o.created_at).toLocaleString('zh-CN');
+      // 解析砍单原因：去掉 [团长砍单] 前缀
+      const rawNote = o.note || '';
+      const reasonMatch = rawNote.match(/^\[团长砍单\]\s*(.+?)(?:\s*—\s*已取消:.*)?$/);
+      const reason = reasonMatch ? reasonMatch[1].trim() : (rawNote.includes('[团长砍单]') ? rawNote.replace('[团长砍单]', '').trim() : '');
+      // 解析被砍商品描述
+      const descMatch = rawNote.match(/已取消:\s*(.+)$/);
+      const cancelDesc = descMatch ? descMatch[1].trim() : '';
+      // 订单中的商品列表
+      const itemList = (o.items || []).filter(it => !it.deleted).map(it =>
+        `${escHtml(it.product_name || '未知商品')} ${escHtml(formatUnitLabel(it.spec_name || ''))} ×${formatQtyLabel(it.quantity || 0)}`
+      ).join('、');
+      html += `<div class="card" style="margin-bottom:8px;border-left:3px solid var(--color-danger);padding:12px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-weight:700;font-size:.9375rem">${escHtml(o.customer_name)}</span>
+          <span style="font-size:.8125rem;color:var(--color-text-muted)">砍单时间：${cancelTime}</span>
+        </div>
+        <div style="font-size:.8125rem;color:var(--color-text-secondary);line-height:1.8">
+          <div>原始下单时间：${createTime}</div>
+          <div>商品：${itemList || cancelDesc || '—'}</div>
+          <div>订单金额：¥${Number(o.total_amount || 0).toFixed(2)}</div>
+          ${reason ? `<div style="color:var(--color-danger)">原因：${escHtml(reason)}</div>` : ''}
+        </div>
+      </div>`;
+    });
+  }
 
   el.innerHTML = html;
 }
@@ -3859,31 +3895,26 @@ function adminBatchCancel(customerName, roundId) {
       const cancelDesc = cancelledNames.length > 0 ? ` — 已取消: ${cancelledNames.join('、')}` : '';
       const note = reason ? `[团长砍单] ${reason}${cancelDesc}` : `[团长砍单]${cancelDesc}`;
 
-      for (const o of userOrders) {
-        await adminRpc('admin_cancel_order', { p_order_id: o.id, p_note: note });
-      }
-
-      const keepItems = [];
-      let keepTotal = 0;
+      // 构建砍单商品列表
+      const itemsToCancel = [];
       lineItems.forEach((it, idx) => {
-        const cancelQty = qtyMap[`cancel-${idx}`] || 0;
-        const keepQty = Math.max(0, it.quantity - cancelQty);
-        if (keepQty > 0) {
-          const ratio = keepQty / it.quantity;
-          keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: keepQty, unit_qty: 1, purchase_qty: parseFloat(((it.purchase_qty || it.quantity || 0) * ratio).toFixed(6)), subtotal: parseFloat((it.subtotal * ratio).toFixed(2)), share: it.share, _orig_time: cancelQty > 0 ? new Date().toISOString() : (it._orig_time || null) });
-          keepTotal += parseFloat((it.subtotal * ratio).toFixed(2));
-        }
+        const cq = qtyMap[`cancel-${idx}`] || 0;
+        if (cq > 0) itemsToCancel.push({ product_id: it.product_id, spec_name: it.spec_name, cancel_qty: cq });
       });
 
-      if (keepItems.length > 0) {
-        const combinedNote = notes.filter(Boolean).join(' | ');
-        const origTime = userOrders.reduce((latest, o) => o.created_at > latest ? o.created_at : latest, userOrders[0]?.created_at || new Date().toISOString());
-        await sb.rpc('create_order', { p_customer_name: customerName, p_items: keepItems, p_note: combinedNote, p_total_amount: keepTotal, p_round_id: roundId, p_created_at: origTime });
-      }
+      // 原子砍单：在原订单上直接移除/减少商品项
+      const { data: affected, error } = await adminRpc('admin_remove_order_items', {
+        p_customer_name: customerName,
+        p_round_id: roundId,
+        p_items_to_cancel: itemsToCancel,
+        p_note: note
+      });
+
+      if (error) { toast('砍单失败: ' + error.message, 'error'); return; }
 
       renderAdminTab('orders');
       const totalCancel = Object.values(qtyMap).reduce((s, v) => s + v, 0);
-      toast(`已砍单 ${formatQtyLabel(totalCancel)} 件${keepItems.length > 0 ? '，保留商品已生成新订单' : ''}`);
+      toast(`已砍单 ${formatQtyLabel(totalCancel)} 件，${affected || 0} 笔订单已更新`);
     };
   })();
 }
