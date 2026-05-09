@@ -1017,15 +1017,17 @@ function buildProductSummary(orders) {
   return Object.values(productSales).map(ps => {
     if (ps.hasShare) {
       ps.qty = Math.round(ps.shareTotal * 1000) / 1000;
-      const displayDiff = Math.round((Math.ceil(ps.qty) - ps.qty) * 1000) / 1000;
-      ps.unfilled = displayDiff >= 0.5;
-      ps.missingQty = ps.unfilled ? displayDiff : 0;
+      const nextInt = Math.ceil(ps.qty);
+      const rawDiff = nextInt - ps.qty;
+      ps.unfilled = rawDiff > 0.001;
+      ps.missingQty = ps.unfilled ? Math.round(rawDiff * 1000) / 1000 : 0;
     } else {
       const rounded = Math.round(ps.qty * 1000) / 1000;
-      const displayDiff = Math.round((Math.ceil(rounded) - rounded) * 1000) / 1000;
+      const nextInt = Math.ceil(rounded);
+      const rawDiff = nextInt - rounded;
       ps.qty = rounded;
-      ps.unfilled = ps.isSplitUnit && displayDiff >= 0.5;
-      ps.missingQty = ps.unfilled ? displayDiff : 0;
+      ps.unfilled = ps.isSplitUnit && rawDiff > 0.001;
+      ps.missingQty = ps.unfilled ? Math.round(rawDiff * 1000) / 1000 : 0;
     }
     ps.spec = ps.isSplitUnit ? `拼单规格：${Array.from(ps.specs).sort((a, b) => (parsePurchaseUnit(a) || 0) - (parsePurchaseUnit(b) || 0)).map(formatUnitLabel).join(' 、 ')}` : formatUnitLabel(ps.spec);
     ps.qtyLabel = formatQtyLabel(ps.qty);
@@ -1128,7 +1130,7 @@ function toDisplayFraction(value, maxDenominator = 20) {
 }
 
 function formatQtyLabel(n) {
-  return toDisplayFraction(n) || formatQty(n);
+  return toDisplayFraction(n, 40) || formatQty(n);
 }
 
 function parseWeightEstimateGrams(estimate) {
@@ -2108,10 +2110,11 @@ async function loadCustomerProducts() {
       const pu = parsePurchaseUnit(spec.name);
       // 称重商品用份额汇总，普通商品用 purchase_qty
       const fillQty = p.is_weighted && stats.shareTotal != null ? stats.shareTotal : stats.qty;
-      const displayDiff = Math.round((Math.ceil(fillQty) - fillQty) * 1000) / 1000;
-      const isSplit = pu !== null || (fillQty % 1 >= 0.5) || (p.is_weighted && stats.shareTotal != null);
-      const unfilled = isSplit && displayDiff >= 0.5;
-      const missing = unfilled ? displayDiff : 0;
+      const hasFractional = fillQty % 1 > 0.001;
+      const isSplit = pu !== null || hasFractional || (p.is_weighted && stats.shareTotal != null);
+      const rawDiff = Math.ceil(fillQty) - fillQty;
+      const unfilled = isSplit && rawDiff > 0.001;
+      const missing = unfilled ? Math.round(rawDiff * 1000) / 1000 : 0;
       cachedSummaryByProduct[p.id] = {
         productId: p.id, name: p.name, spec: spec.name || '',
         qty: stats.qty, orderQty: stats.orders, amount: 0,
@@ -2729,10 +2732,11 @@ async function lookupOrders() {
         if (itemRows.length === 0) return;
         itemRows.sort((a,b) => new Date(a.time) - new Date(b.time));
         const totalQty = itemRows.reduce((s, r) => s + r.qty, 0);
-        const displayDiff = Math.round((Math.ceil(totalQty) - totalQty) * 1000) / 1000;
-        const whole = displayDiff < 0.5 ? Math.round(totalQty) : Math.ceil(totalQty);
+        const whole = Math.ceil(totalQty);
         const floorTotal = Math.floor(totalQty);
-        const globalUnfilled = displayDiff >= 0.5;
+        const rawDiff = whole - totalQty;
+        const globalUnfilled = rawDiff > 0.001;
+        const displayDiff = Math.round(rawDiff * 1000) / 1000;
         let cum = 0;
         const perCustomer = {};
         const splitMap = customerSplitMap[pid] || (customerSplitMap[pid] = {});
@@ -3125,9 +3129,10 @@ async function renderOrderManager(el) {
     if (rows.length === 0) return;
     rows.sort((a,b) => new Date(a.time) - new Date(b.time));
     const total = rows.reduce((s,r) => s+r.qty, 0);
-    const displayDiff = Math.round((Math.ceil(total) - total) * 1000) / 1000;
     const floorTotal = Math.floor(total);
-    const filled = displayDiff < 0.5;
+    const rawDiff = Math.ceil(total) - total;
+    const filled = rawDiff <= 0.001;
+    const displayDiff = Math.round(rawDiff * 1000) / 1000;
     let cum = 0;
     rows.forEach((r) => {
       const cumBefore = cum;
