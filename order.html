@@ -2640,9 +2640,120 @@ function showFeedback() {
   document.getElementById('feedback-submit').onclick = submitFeedback;
 }
 
+async function showAfterSalesDetail(roundId, customerName) {
+  const { data: aftersales } = await sb.from('after_sales').select('*').eq('customer_name', customerName).eq('round_id', roundId).order('created_at', { ascending: false });
+  if (!aftersales || aftersales.length === 0) { toast('暂无售后记录', 'info'); return; }
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `<div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <h3 class="section-title" style="margin-bottom:12px">售后详情</h3>
+    ${aftersales.map(a => `<div class="card" style="margin-bottom:8px;padding:12px;opacity:${a.status === 'resolved' ? '.6' : '1'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:600;font-size:.875rem">${escHtml(a.customer_name)}</span>
+        <span class="caption">${new Date(a.created_at).toLocaleString('zh-CN')}</span>
+      </div>
+      <div style="margin-bottom:6px">${(a.items || []).map(it => `<span class="tag-pill" style="margin:2px">${escHtml(it.product_name || '')} ${escHtml(it.spec_name || '')} ×${it.quantity || 0}</span>`).join('')}</div>
+      <p style="font-size:.875rem;margin-bottom:6px;white-space:pre-wrap">${escHtml(a.reason)}</p>
+      <span class="badge ${a.status === 'resolved' ? 'badge-success' : a.status === 'read' ? 'badge-muted' : 'badge-muted'}">${a.status === 'resolved' ? '已处理' : a.status === 'read' ? '已读' : '待处理'}</span>
+    </div>`).join('')}
+    <button class="btn btn-ghost btn-block btn-sm" style="margin-top:12px" onclick="this.closest('.modal-overlay').remove()">关闭</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
 function closeFeedback() {
   unlockScroll();
   document.getElementById('modal-feedback').classList.add('hidden');
+}
+
+async function showAfterSales(roundId, customerName) {
+  // 获取该轮次的有效订单
+  const { data: orders } = await sb.rpc('lookup_orders', { p_customer_name: customerName, p_round_id: roundId });
+  const activeOrders = (orders || []).filter(o => o.status === 'active');
+  if (activeOrders.length === 0) { toast('没有可售后的订单', 'error'); return; }
+
+  // 合并商品
+  const items = [];
+  activeOrders.forEach(o => {
+    (o.items || []).forEach(it => {
+      if (it.deleted) return;
+      items.push({ product_name: it.product_name, spec_name: it.spec_name, quantity: it.quantity });
+    });
+  });
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `<div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <h3 class="section-title" style="margin-bottom:12px">售后申请</h3>
+    <p class="caption" style="margin-bottom:12px">选择需要售后的商品，填写理由后提交</p>
+    <div id="aftersales-items" style="margin-bottom:12px">
+      ${items.map((it, idx) => `<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border-light);cursor:pointer">
+        <input type="checkbox" style="accent-color:var(--color-accent);width:18px;height:18px">
+        <span style="flex:1;font-size:.875rem">${escHtml(it.product_name)} - ${escHtml(it.spec_name)} ×${it.quantity}</span>
+      </label>`).join('')}
+    </div>
+    <div class="form-group">
+      <label class="form-label">售后理由（必填）</label>
+      <textarea id="aftersales-reason" class="form-input" placeholder="描述问题" rows="3" style="resize:vertical;font-family:var(--font-sans);min-height:60px" maxlength="500"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">上传截图（选填）</label>
+      <input type="file" id="aftersales-image" accept="image/*" multiple style="font-family:var(--font-sans);font-size:.875rem">
+    </div>
+    <span class="form-error" id="aftersales-error" style="display:none"></span>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+      <button class="btn btn-primary btn-block btn-lg" id="aftersales-submit">提交售后</button>
+      <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">关闭</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+
+  modal.querySelector('#aftersales-submit').onclick = async function() {
+    const errEl = modal.querySelector('#aftersales-error');
+    const reason = modal.querySelector('#aftersales-reason').value.trim();
+    if (!reason) { errEl.textContent = '请填写售后理由'; errEl.style.display = 'block'; return; }
+
+    // 收集勾选商品
+    const selectedItems = [];
+    modal.querySelectorAll('#aftersales-items input[type=checkbox]').forEach((cb, idx) => {
+      if (cb.checked) selectedItems.push(items[idx]);
+    });
+    if (selectedItems.length === 0) { errEl.textContent = '请至少勾选一件商品'; errEl.style.display = 'block'; return; }
+
+    const btn = modal.querySelector('#aftersales-submit');
+    btn.disabled = true; btn.textContent = '提交中...';
+    let imageUrls = [];
+
+    try {
+      const fileInput = modal.querySelector('#aftersales-image');
+      for (const file of fileInput.files) {
+        if (file.size > 5242880) { errEl.textContent = '图片不能超过 5MB'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = '提交售后'; return; }
+        const ext = file.name.split('.').pop() || 'png';
+        const path = `products/feedback/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+        const { error: uploadErr } = await sb.storage.from('product-images').upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+        if (!uploadErr) {
+          const { data: urlData } = sb.storage.from('product-images').getPublicUrl(path);
+          imageUrls.push(urlData.publicUrl);
+        }
+      }
+
+      const { error } = await sb.from('after_sales').insert({
+        customer_name: customerName,
+        round_id: roundId || null,
+        items: selectedItems,
+        reason: reason,
+        image_url: imageUrls.join(',') || null
+      });
+
+      if (error) { errEl.textContent = '提交失败，请重试'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = '提交售后'; return; }
+      modal.remove();
+      toast('售后申请已提交，团长会尽快处理');
+    } catch(e) { errEl.textContent = '提交失败，请重试'; errEl.style.display = 'block'; }
+    btn.disabled = false; btn.textContent = '提交售后';
+  };
 }
 
 async function submitFeedback() {
@@ -2662,7 +2773,7 @@ async function submitFeedback() {
       const file = fileInput.files[0];
       if (file.size > 5242880) { errEl.textContent = '图片不能超过 5MB'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = '提交反馈'; return; }
       const ext = file.name.split('.').pop() || 'png';
-      const path = `feedback/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+      const path = `products/feedback/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
       const { error: uploadErr } = await sb.storage.from('product-images').upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
       if (!uploadErr) {
         const { data: urlData } = sb.storage.from('product-images').getPublicUrl(path);
@@ -2858,7 +2969,7 @@ async function lookupOrders() {
     } else if (g.hasPendingWeight) {
       statusBadge = `<span class="badge badge-muted">待称重确认</span>`;
     } else if (g.hasActive && g.hasCancelled) {
-      statusBadge = `<span class="badge badge-success">进行中</span>`;
+      statusBadge = `<span class="badge badge-muted">部分已取消</span>`;
     } else if (g.hasActive) {
       statusBadge = `<span class="badge badge-success">已提交</span>`;
     }
@@ -2901,7 +3012,10 @@ async function lookupOrders() {
 
     html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border-light)">
       <span style="font-weight:800">合计: <span style="color:var(--color-accent);font-size:1.1rem">${g.totalAmount.toFixed(2)}</span></span>
-      ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelAllRoundOrders('${rid}', this)">修改/取消订单</button>` : (!g.hasActive ? '' : '<span class="badge badge-muted">已截止</span>')}
+      <span style="display:flex;gap:6px">
+        ${ri.status === '已截止' ? `<button class="btn btn-ghost btn-sm" onclick="showAfterSales('${escAttr(rid)}', document.getElementById('lookup-name').value.trim())">申请售后</button><button class="btn btn-ghost btn-sm" onclick="showAfterSalesDetail('${escAttr(rid)}', document.getElementById('lookup-name').value.trim())">售后详情</button>` : ''}
+        ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelAllRoundOrders('${rid}', this)">修改/取消订单</button>` : (!g.hasActive ? '' : '<span class="badge badge-muted">已截止</span>')}
+      </span>
     </div></div>`;
   });
   resultsEl.innerHTML = html;
@@ -3260,6 +3374,32 @@ async function renderOrderManager(el) {
       </div>`;
     });
   }
+
+  // 查询本轮的售后申请
+  const afterSalesHtml = [];
+  try {
+    const { data: aftersales } = await adminRpc('admin_get_after_sales', { p_round_id: adminRoundId });
+    if (aftersales && aftersales.length > 0) {
+      afterSalesHtml.push(`<div style="margin-top:20px"><h3 class="section-title" style="margin-bottom:12px">售后申请</h3>`);
+      aftersales.forEach(a => {
+        afterSalesHtml.push(`<div class="card" style="margin-bottom:8px;padding:12px;border-left:3px solid var(--color-warning);opacity:${a.status === 'resolved' ? '.6' : '1'}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-weight:600;font-size:.875rem">${escHtml(a.customer_name)}</span>
+            <span class="caption">${new Date(a.created_at).toLocaleString('zh-CN')}</span>
+          </div>
+          <div style="margin-bottom:6px">${(a.items || []).map(it => `<span class="tag-pill" style="margin:2px">${escHtml(it.product_name || '')} ${escHtml(it.spec_name || '')} ×${it.quantity || 0}</span>`).join('')}</div>
+          <p style="font-size:.875rem;margin-bottom:6px;white-space:pre-wrap">${escHtml(a.reason)}</p>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            ${(a.image_url ? a.image_url.split(',').map((url, i) => `<button class="btn btn-ghost btn-sm" onclick="openImagePreview('${escAttr(url.trim())}')">查看图片${a.image_url.split(',').length > 1 ? i+1 : ''}</button>`).join('') : '')}
+            ${a.status === 'unread' ? `<button class="btn btn-ghost btn-sm" onclick="adminUpdateAfterSalesStatus('${a.id}', 'read')">标记已读</button>` : ''}
+            ${a.status !== 'resolved' ? `<button class="btn btn-primary btn-sm" onclick="adminUpdateAfterSalesStatus('${a.id}', 'resolved')">标记已处理</button>` : '<span class="badge badge-muted">已处理</span>'}
+          </div>
+        </div>`);
+      });
+      afterSalesHtml.push('</div>');
+    }
+  } catch(e) {}
+  html += afterSalesHtml.join('');
 
   el.innerHTML = html;
 }
@@ -4083,6 +4223,40 @@ async function changePassword() {
   } catch (e) {
     toast('操作失败，请重新登录后重试', 'error');
   }
+}
+
+async function showAdminAfterSales() {
+  const listEl = document.getElementById('admin-aftersales-list');
+  if (!listEl) return;
+  if (listEl.innerHTML) { listEl.innerHTML = ''; return; }
+
+  listEl.innerHTML = '<div class="skel-line skeleton"></div>';
+  const { data: aftersales, error } = await adminRpc('admin_get_after_sales', { p_round_id: adminRoundId });
+  if (error || !aftersales) { listEl.innerHTML = '<p class="caption">加载失败</p>'; return; }
+  if (aftersales.length === 0) { listEl.innerHTML = '<p class="caption">暂无售后申请</p>'; return; }
+
+  listEl.innerHTML = aftersales.map(a => `
+    <div class="card" style="margin-bottom:8px;padding:12px;opacity:${a.status === 'resolved' ? '.6' : '1'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:600;font-size:.875rem">${escHtml(a.customer_name)}</span>
+        <span class="caption">${new Date(a.created_at).toLocaleString('zh-CN')}</span>
+      </div>
+      <div style="margin-bottom:6px">
+        ${(a.items || []).map(it => `<span class="tag-pill" style="margin:2px">${escHtml(it.product_name || '')} ${escHtml(it.spec_name || '')} ×${it.quantity || 0}</span>`).join('')}
+      </div>
+      <p style="font-size:.875rem;margin-bottom:6px;white-space:pre-wrap">${escHtml(a.reason)}</p>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        ${(a.image_url ? a.image_url.split(',').map((url, i) => `<button class="btn btn-ghost btn-sm" onclick="openImagePreview('${escAttr(url.trim())}')">查看图片${a.image_url.split(',').length > 1 ? i+1 : ''}</button>`).join('') : '')}
+        ${a.status === 'unread' ? `<button class="btn btn-ghost btn-sm" onclick="adminUpdateAfterSalesStatus('${a.id}', 'read')">标记已读</button>` : ''}
+        ${a.status !== 'resolved' ? `<button class="btn btn-primary btn-sm" onclick="adminUpdateAfterSalesStatus('${a.id}', 'resolved')">标记已处理</button>` : '<span class="badge badge-muted">已处理</span>'}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function adminUpdateAfterSalesStatus(id, status) {
+  await adminRpc('admin_update_after_sales_status', { p_id: id, p_status: status });
+  renderAdminTab('orders');
 }
 
 async function showAdminFeedback() {
