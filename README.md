@@ -32,7 +32,7 @@
 4. 在 [GitHub](https://github.com) 创建仓库，上传所有 HTML 文件
 5. 在仓库 Settings → Pages 启用 GitHub Pages
 6. 打开部署好的网址，选择小区预设或手动填入 URL/Key
-7. 网址后加 `#admin`，设置管理密码
+7. 网址后加 `#admin`，使用用户名+密码登录。团长可自助注册账号，超级管理员可管理所有团长和轮次归属
 
 详细步骤见 [setup-guide.html](setup-guide.html)。
 
@@ -52,11 +52,7 @@
 
 ### 忘记管理密码
 
-在 Supabase → SQL Editor 执行：
-```sql
-UPDATE settings SET value = '' WHERE key = 'admin_password';
-```
-然后重新打开 `#admin` 设置新密码。
+超级管理员可在后台 GUI 中直接重置团长密码；或通过 Supabase → SQL Editor 查询 `leaders` 表获取/重置密码。
 
 ---
 
@@ -79,6 +75,8 @@ UPDATE settings SET value = '' WHERE key = 'admin_password';
 | 首次使用小区预设 | 首次打开可选预设小区，无需手动填 URL/Key |
 | 图片预览 | 点击商品图片可放大查看细节 |
 | 库存轮询 | 每 10 秒自动刷新库存，多人同时下单不超卖 |
+| 团长账号体系 | 独立账号+超级管理员+轮次级权限隔离 |
+| 拼单组队 | 顾客发起/加入组队，满员自动生成订单，支持多队伍共存 |
 | 5 秒幂等保护 | 防止重复提交，跨轮次不误杀 |
 
 ---
@@ -103,4 +101,4 @@ UPDATE settings SET value = '' WHERE key = 'admin_password';
 - 前端：单文件 HTML，零构建，打开即用
 - 数据库：Supabase（免费层，500MB 存储 / 月）
 - 托管：GitHub Pages（免费，全球 CDN）
-- 安全：管理密码 SHA-256 哈希存储，RLS 数据隔离，SECURITY DEFINER 函数权限控制，`FOR UPDATE` 行锁防超卖
+- 安全：团长账号认证+基于角色的权限控制（RBAC）+管理密码 SHA-256 哈希存储，RLS 数据隔离，SECURITY DEFINER 函数权限控制，`FOR UPDATE` 行锁防超卖

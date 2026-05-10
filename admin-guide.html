@@ -57,13 +57,15 @@ img{max-width:100%;border-radius:12px;border:1px solid #d8e4f5;margin:12px 0}
     <li><a href="#s6">查看与处理订单</a></li>
     <li><a href="#s7">收款</a></li>
     <li><a href="#s8">常见操作</a></li>
-    <li><a href="#s9">小贴士</a></li>
+    <li><a href="#s10">拼单组队</a></li>
+    <li><a href="#s11">团长账号管理</a></li>
+    <li><a href="#s12">小贴士</a></li>
   </ol>
 </div>
 
 <h2 id="s1">一、登录后台</h2>
 <div class="step">
-  <p>浏览器打开 <code>你的网址#admin</code>，输入管理密码进入后台。</p>
+  <p>浏览器打开 <code>你的网址#admin</code>，输入用户名和密码登录。首次使用可点击「注册团长」自行注册。超级管理员登录后拥有全部权限；普通团长只能编辑自己创建的轮次。</p>
   <p>后台左侧有五个功能标签：<strong>商品管理、订单汇总、收款清单、下单二维码、轮次设置</strong>。</p>
 </div>
 
@@ -179,16 +181,38 @@ img{max-width:100%;border-radius:12px;border:1px solid #d8e4f5;margin:12px 0}
 <h3>整装拆分计算器</h3>
 <div class="step"><p>在添加/编辑商品弹窗中展开计算器，填入整装数量、单位、总价、每份大小，一键添加拆分规格。</p></div>
 
-<h3>修改站点标题和密码</h3>
-<div class="step"><p>轮次设置 → 顾客端标题/管理密码 → 输入新值 → 保存。</p></div>
+<h3>修改站点标题</h3>
+<div class="step"><p>轮次设置 → 顾客端标题 → 输入新值 → 保存。仅超级管理员可操作。</p></div>
+
+<h3>修改密码</h3>
+<div class="step"><p>超级管理员在「团长管理」tab 中可修改任意团长的密码。普通团长暂不支持自行改密。</p></div>
 
 <h3>查看顾客反馈</h3>
 <div class="step"><p>轮次设置 →「顾客反馈」→「查看反馈」，可以看到顾客提交的文字和截图，点击「标记已读」归档。</p></div>
 
 <h3>忘记密码</h3>
-<div class="step"><p>在 Supabase → SQL Editor 执行：<pre>UPDATE settings SET value = '' WHERE key = 'admin_password';</pre>然后重新打开 <code>#admin</code> 设置新密码。</p></div>
+<div class="step"><p>联系超级管理员在后台「团长管理」中重置密码。如果是超级管理员本人忘记密码，需在 Supabase SQL Editor 中查询 leaders 表。</p></div>
 
-<h2 id="s9">九、小贴士</h2>
+<h2 id="s10">八、拼单组队</h2>
+<div class="step">
+  <p>顾客端商品卡片下方可展开「组队」抽屉区域。同一商品可存在多个队伍。</p>
+  <p><strong>发起组队</strong>：顾客设置目标整份数、分成份数和自己要取的份数，确认后系统扣减对应库存。</p>
+  <p><strong>加入队伍</strong>：其他顾客选择份额加入，满员时系统自动为全队生成订单。</p>
+  <p><strong>团长监控</strong>：订单汇总页显示所有活跃队伍，可查看进度。满员后自动生成的订单带「组队」标识。</p>
+</div>
+
+<h2 id="s11">九、团长账号管理（超级管理员）</h2>
+<div class="step">
+  <p><strong>「团长管理」tab</strong> 仅超级管理员可见，用于创建和管理团长账号。</p>
+  <ul>
+    <li><strong>添加团长</strong>：输入用户名+密码创建新团长账号</li>
+    <li><strong>修改密码</strong>：为任意团长重置密码</li>
+    <li><strong>删除团长</strong>：删除团长账号（关联的轮次变为未分配）</li>
+    <li><strong>轮次分配</strong>：在「轮次设置」页面，每个轮次旁有下拉框可重新指定归属团长</li>
+  </ul>
+</div>
+
+<h2 id="s12">十、小贴士</h2>
 <div class="step">
   <ul>
     <li>售罄商品自动沉底，显示「已售罄」标记</li>
