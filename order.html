@@ -544,17 +544,18 @@ body[data-mode="admin"] .cart-bar{display:none}
 
   <!-- ========== ADMIN LOGIN ========== -->
   <div id="mode-admin-login" class="mode-section" style="display:none;min-height:100dvh;display:none;flex-direction:column;align-items:center;justify-content:center">
-    <div style="text-align:center;padding:40px 16px" class="slide-up">
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style="margin-bottom:20px"><rect x="8" y="26" width="32" height="16" rx="4" stroke="var(--color-accent)" stroke-width="2"/><circle cx="24" cy="16" r="6" stroke="var(--color-accent)" stroke-width="2"/></svg>
-      <h1 class="page-title" style="margin-bottom:8px">团长后台</h1>
-      <p class="body-text" style="margin-bottom:24px">输入管理密码进入后台</p>
-      <div class="form-group" style="align-items:center">
-        <input type="password" id="admin-password-input" class="form-input auth-input" maxlength="20" placeholder="****" onkeydown="if(event.key==='Enter')adminLogin()">
-        <input type="password" id="admin-password-confirm" class="form-input auth-input" maxlength="20" placeholder="再输一次" style="margin-top:8px;display:none" onkeydown="if(event.key==='Enter')adminLogin()">
-        <span class="form-error" id="login-error" style="display:none;margin-top:8px"></span>
+    <div style="text-align:center;padding:40px 16px;max-width:320px;width:100%" class="slide-up">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style="margin-bottom:24px"><rect x="8" y="26" width="32" height="16" rx="4" stroke="var(--color-accent)" stroke-width="2"/><circle cx="24" cy="16" r="6" stroke="var(--color-accent)" stroke-width="2"/></svg>
+      <h1 class="page-title" style="margin-bottom:4px">团长后台</h1>
+      <p class="body-text" style="margin-bottom:24px;color:var(--color-text-muted)">登录管理后台</p>
+      <input type="text" id="admin-username-input" class="form-input" style="width:100%;text-align:center;font-size:1.1rem;margin-bottom:12px" maxlength="30" placeholder="用户名" onkeydown="if(event.key==='Enter')document.getElementById('admin-password-input').focus()" autocomplete="username">
+      <input type="password" id="admin-password-input" class="form-input" style="width:100%;text-align:center;font-size:1.1rem;letter-spacing:.3em;margin-bottom:6px" maxlength="20" placeholder="密码" onkeydown="if(event.key==='Enter')adminLogin()" autocomplete="current-password">
+      <span class="form-error" id="login-error" style="display:none;margin-bottom:8px;font-size:.82rem"></span>
+      <button class="btn btn-primary btn-block btn-lg" style="margin-bottom:16px" onclick="adminLogin()">进入后台</button>
+      <div style="display:flex;justify-content:center;gap:16px;font-size:.82rem">
+        <a href="javascript:void(0)" onclick="showRegisterModal()" style="color:var(--color-accent);text-decoration:none">注册团长</a>
+        <a href="javascript:void(0)" onclick="switchMode('customer')" style="color:var(--color-text-muted);text-decoration:none">返回下单</a>
       </div>
-      <button class="btn btn-primary btn-lg" style="margin-top:20px;width:200px" onclick="adminLogin()">进入后台</button>
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="switchMode('customer')">返回下单页面</button>
     </div>
   </div>
 
@@ -569,6 +570,7 @@ body[data-mode="admin"] .cart-bar{display:none}
           <button data-tab="summary" onclick="switchAdminTab('summary')">收款清单</button>
           <button data-tab="qr" onclick="switchAdminTab('qr')">下单二维码</button>
           <button data-tab="settings" onclick="switchAdminTab('settings')">轮次设置</button>
+          <button data-tab="leaders" onclick="switchAdminTab('leaders')" id="nav-leaders" style="display:none">团长管理</button>
         </div>
       </aside>
       <div class="admin-main">
@@ -587,6 +589,7 @@ body[data-mode="admin"] .cart-bar{display:none}
         <div id="admin-tab-summary" class="admin-tab" style="display:none"></div>
         <div id="admin-tab-qr" class="admin-tab" style="display:none"></div>
         <div id="admin-tab-settings" class="admin-tab" style="display:none"></div>
+        <div id="admin-tab-leaders" class="admin-tab" style="display:none"></div>
       </div>
     </div>
   </div>
@@ -761,10 +764,9 @@ async function initApp() {
       if (token) {
         const { data: valid } = await sb.rpc('validate_session', { p_token: token });
         switchMode(valid ? 'admin' : 'admin-login');
-        if (!valid) { localStorage.removeItem(SESSION_KEY); await prepLoginConfirm(); }
+        if (!valid) { localStorage.removeItem(SESSION_KEY); }
       } else {
         switchMode('admin-login');
-        await prepLoginConfirm();
       }
     } else {
       switchMode('customer');
@@ -790,6 +792,11 @@ function switchMode(mode) {
   if (mode !== 'customer') clearInterval(stockPollTimer);
   if (mode === 'customer') { customerRoundId = null; loadCustomerProducts(); }
   if (mode === 'admin') renderAdminTab('products');
+  if (mode === 'admin') {
+    const role = localStorage.getItem('leader_role');
+    const navLeaders = document.getElementById('nav-leaders');
+    if (navLeaders) navLeaders.style.display = role === 'super_admin' ? '' : 'none';
+  }
   if (mode === 'admin-login') document.getElementById('login-error').style.display = 'none';
   if (mode === 'setup') showSetup();
 }
@@ -845,7 +852,6 @@ window.addEventListener('hashchange', async () => {
       localStorage.removeItem(SESSION_KEY);
     }
     switchMode('admin-login');
-    if (sb) await prepLoginConfirm();
   } else {
     switchMode('customer');
   }
@@ -872,45 +878,35 @@ async function hashPassword(pw) {
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-async function prepLoginConfirm() {
-  try {
-    const { data: needsConfirm } = await sb.rpc('needs_admin_password');
-    const el = document.getElementById('admin-password-confirm');
-    if (el) el.style.display = needsConfirm ? 'block' : 'none';
-  } catch(_) {}
-}
-
 async function adminLogin() {
+  const username = document.getElementById('admin-username-input').value.trim();
   const pw = document.getElementById('admin-password-input').value.trim();
-  const confirmEl = document.getElementById('admin-password-confirm');
   const errEl = document.getElementById('login-error');
+  if (!username) { errEl.textContent = '请输入用户名'; errEl.style.display = 'block'; return; }
   if (!pw) { errEl.textContent = '请输入密码'; errEl.style.display = 'block'; return; }
 
-  if (confirmEl && confirmEl.style.display !== 'none') {
-    if (pw !== confirmEl.value.trim()) {
-      errEl.textContent = '两次密码不一致'; errEl.style.display = 'block'; return;
-    }
-    if (pw.length < 4) {
-      errEl.textContent = '密码至少 4 位'; errEl.style.display = 'block'; return;
-    }
-  }
-
   const inputHash = await hashPassword(pw);
-  const { data: token, error } = await sb.rpc('admin_login', { pw_hash: inputHash });
+  const { data, error } = await sb.rpc('admin_login', { p_username: username, p_password_hash: inputHash });
 
   if (error) { errEl.textContent = '系统错误，请重试'; errEl.style.display = 'block'; return; }
-  if (!token) { errEl.textContent = '密码错误'; errEl.style.display = 'block'; return; }
+  if (!data || data.error) { errEl.textContent = data?.error || '用户名或密码错误'; errEl.style.display = 'block'; return; }
 
-  setSession(token);
+  setSession(data.token);
+  localStorage.setItem('leader_role', data.role);
+  localStorage.setItem('leader_username', data.username);
+  localStorage.setItem('leader_id', data.leader_id);
+  document.getElementById('admin-username-input').value = '';
   document.getElementById('admin-password-input').value = '';
-  if (confirmEl) confirmEl.value = '';
   if (window.location.hash !== '#admin') window.location.hash = '#admin';
   switchMode('admin');
-  toast('欢迎回来，团长');
+  toast('欢迎回来，' + data.username);
 }
 
 function adminLogout() {
   clearSession();
+  localStorage.removeItem('leader_role');
+  localStorage.removeItem('leader_username');
+  localStorage.removeItem('leader_id');
   adminRoundId = null;
   adminProductRoundId = null;
   if (window.location.hash === '#admin') history.replaceState(null, '', window.location.pathname);
@@ -953,6 +949,21 @@ async function getRounds() {
   return data || [];
 }
 
+function canEditRound(roundLeaderId) {
+  const role = localStorage.getItem('leader_role');
+  if (role === 'super_admin') return true;
+  if (!roundLeaderId) return false;
+  return roundLeaderId === localStorage.getItem('leader_id');
+}
+
+async function transferRound(roundId, leaderId) {
+  if (!leaderId) { toast('请选择一个团长', 'error'); return; }
+  const { error } = await adminRpc('admin_transfer_round', { p_round_id: roundId, p_leader_id: leaderId });
+  if (error) { toast('转移失败: ' + error.message, 'error'); return; }
+  toast('轮次归属已更新');
+  renderAdminTab('settings');
+}
+
 function switchAdminTab(tab) {
   currentAdminTab = tab;
   document.querySelectorAll('#admin-nav button').forEach(b => b.classList.remove('active'));
@@ -986,7 +997,40 @@ async function renderAdminTab(tab) {
     case 'summary': await renderPaymentSummary(el); break;
     case 'qr': renderQRCode(el); break;
     case 'settings': await renderSettings(el); break;
+    case 'leaders': await renderAdminTabLeaders(); break;
   }
+}
+
+async function renderAdminTabLeaders() {
+  const el = document.getElementById('admin-tab-leaders');
+  el.innerHTML = '<div class="skel-line skeleton"></div>';
+
+  const { data: leaders, error } = await adminRpc('admin_list_leaders');
+  if (error || !leaders) {
+    el.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+    return;
+  }
+
+  let html = '<h3 class="section-title">团长管理</h3>';
+  html += '<button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="showAddLeaderModal()">+ 添加团长</button>';
+  html += '<div style="display:flex;flex-direction:column;gap:8px">';
+  leaders.forEach(l => {
+    const isSuper = l.role === 'super_admin';
+    html += `<div class="card" style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span style="font-weight:600">${escHtml(l.username)}</span>
+        <span class="badge ${isSuper ? 'badge-success' : 'badge-muted'}" style="margin-left:8px;font-size:.7rem">${isSuper ? '超级管理员' : '团长'}</span>
+        ${l.password_plain ? `<span class="caption" style="margin-left:8px;font-family:monospace;background:var(--color-border-light);padding:1px 6px;border-radius:3px">${escHtml(l.password_plain)}</span>` : ''}
+        <span class="caption" style="margin-left:8px">${new Date(l.created_at).toLocaleDateString('zh-CN')}</span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="showResetPasswordModal('${l.id}','${escAttr(l.username)}')">修改密码</button>
+        ${!isSuper ? `<button class="btn btn-ghost btn-sm" style="color:var(--color-danger)" onclick="deleteLeader('${l.id}','${escAttr(l.username)}')">删除</button>` : ''}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
 }
 
 function buildProductSummary(orders) {
@@ -1077,7 +1121,7 @@ function enrichOrdersWithCurrentPrices(orders, priceMap) {
       if (it.deleted) return it;
       const specMap = priceMap.get(it.product_id);
       const currentPrice = specMap ? specMap.get(it.spec_name) : undefined;
-      if (currentPrice == null) return it;
+      if (currentPrice == null) { newTotal += (Number(it.subtotal) || 0); return it; }
       const newSubtotal = parseFloat((currentPrice * (it.quantity || 0)).toFixed(2));
       newTotal += newSubtotal;
       return { ...it, spec_price: currentPrice, subtotal: newSubtotal };
@@ -1109,7 +1153,7 @@ function parsePurchaseUnit(specName) {
 }
 
 function formatQty(n) {
-  return Number(n).toFixed(3).replace(/\.?0+$/, '');
+  return Number(n).toFixed(8).replace(/\.?0+$/, '');
 }
 
 function toDisplayFraction(value, maxDenominator = 20) {
@@ -1511,7 +1555,7 @@ async function renderProductManager(el) {
   if (activeRounds.length > 1) {
     html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">`;
     activeRounds.forEach(r => {
-      html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId='${escAttr(r.id)}';renderAdminTab('products')">${escHtml(r.name)}</button>`;
+      html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId='${escAttr(r.id)}';renderAdminTab('products')">${escHtml(r.name)}${!canEditRound(r.leader_id) ? ' (只读)' : ''}</button>`;
     });
     html += `</div>`;
   }
@@ -1520,14 +1564,19 @@ async function renderProductManager(el) {
     <div class="stat-card"><div class="stat-value">${activeCount}</div><div class="stat-label">已上架商品</div></div>
   </div>`;
   if (currentRound) {
-    html += `<button class="btn btn-primary btn-block" onclick="openProductForm()" style="margin-bottom:16px">
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3v12M3 9h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    添加商品到「${escHtml(currentRound.name)}」
-  </button>`;
+    const canEdit = canEditRound(currentRound.leader_id);
+    if (canEdit) {
+      html += `<button class="btn btn-primary btn-block" onclick="openProductForm()" style="margin-bottom:16px">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3v12M3 9h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      添加商品到「${escHtml(currentRound.name)}」
+    </button>`;
+    } else {
+      html += `<p class="caption" style="color:var(--color-text-muted);margin-bottom:16px;text-align:center">此轮次由其他团长管理，你只能查看商品</p>`;
+    }
   }
   html += `<div style="display:flex;gap:8px;margin-bottom:12px">
     <button class="btn btn-secondary btn-sm" onclick="exportRoundProducts()">导出商品</button>
-    <button class="btn btn-secondary btn-sm" onclick="importRoundProducts()">导入商品</button>
+    ${canEditRound(currentRound?.leader_id) ? `<button class="btn btn-secondary btn-sm" onclick="importRoundProducts()">导入商品</button>` : ''}
   </div>
   <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:12px">
     <div class="tag-list" style="flex:1">
@@ -1579,9 +1628,11 @@ async function renderProductManager(el) {
             ${tags.length ? tags.map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('') : '<span class="tag-pill">未分类</span>'}
           </div>
           <div class="admin-product-actions">
+            ${canEditRound(currentRound?.leader_id) ? `
             <button class="btn btn-secondary btn-sm" data-edit-product="${p.id}">编辑</button>
             <button class="btn btn-ghost btn-sm" data-toggle-product="${p.id}" data-active="${p.is_active}">${p.is_active ? '下架' : '上架'}</button>
             <button class="btn btn-danger btn-sm" data-delete-product="${p.id}">删除</button>
+            ` : '<span class="caption" style="color:var(--color-text-muted)">只读</span>'}
           </div>
         </div>
       </div>`;
@@ -2193,6 +2244,7 @@ function startStockPolling() {
 
 function buildProductCardHtml(p) {
   const isWeighted = p.is_weighted === true;
+  var isInTeam = !!customerTeamProductIds[p.id];
   // 整装规格优先显示，避免拆分占比价误导（如 30/30个/份 优先于 5/30个/份）
   const rawSpecs = p.specs || [];
   const specs = rawSpecs.slice().sort((a, b) => {
@@ -2220,7 +2272,8 @@ function buildProductCardHtml(p) {
     : '';
   const sameProductTotalQty = Object.values(cart).filter(i => i.productId === p.id).reduce((s, i) => s + (parsePurchaseUnit(i.specName) || 1) * i.quantity, 0);
   const atStockLimit = p.stock !== null && sameProductTotalQty >= p.stock;
-  const actionHtml = stockSoldOut
+  const actionHtml = isInTeam ? '<span class="badge badge-muted">已入队</span>'
+    : stockSoldOut
     ? `<span class="badge badge-muted">已售罄</span>`
     : selected
       ? `<div class="qty-ctrl">
@@ -2257,6 +2310,11 @@ function buildProductCardHtml(p) {
       ${isWeighted ? `<p class="caption" style="margin-top:4px;color:var(--color-warning)">规格不对？联系团长自定义</p>` : ''}
     </div>
     <div class="shop-product-action">${actionHtml}</div>
+    ${!isWeighted ? `<div class="team-btn" data-team-product="${escAttr(p.id)}" style="margin-top:8px;width:100%;text-align:center;padding:10px;border-radius:var(--radius-sm);border:1.5px dashed var(--color-accent-border);color:var(--color-accent);font-weight:600;font-size:.85rem;cursor:pointer;background:var(--color-accent-light)" onclick="showTeamModal('${escAttr(p.id)}')">
+      <span class="caption" style="color:var(--color-text-secondary)">👥 组队拼单</span>
+    <div class="team-list" data-team-product="${escAttr(p.id)}" style="display:none;padding:8px 0 4px;font-size:.78rem;cursor:default"></div>
+    </div>` : ''}
+    ${isInTeam ? '<div class="caption" style="color:var(--color-warning);margin-top:6px;font-weight:600">已加入队伍，不可单独下单</div>' : ''}
   </div>`;
 }
 
@@ -2816,7 +2874,7 @@ async function lookupOrders() {
 
   const [{ data: orders, error }, { data: allRounds }] = await Promise.all([
     sb.rpc('lookup_orders', { p_customer_name: name, p_round_id: null }),
-    sb.from('rounds').select('id, name, is_active, cutoff_time')
+    sb.from('rounds').select('id, name, is_active, cutoff_time, leader_id')
   ]);
   const roundInfo = {};
   const now = new Date();
@@ -2826,7 +2884,7 @@ async function lookupOrders() {
     else if (r.is_active && (!r.cutoff_time || new Date(r.cutoff_time) > now)) status = '进行中';
     else if (r.is_active && r.cutoff_time && new Date(r.cutoff_time) <= now) status = '已截止';
     else status = '已停止';
-    roundInfo[r.id] = { name: r.name, status, cutoff_time: r.cutoff_time };
+    roundInfo[r.id] = { name: r.name, status, cutoff_time: r.cutoff_time, leader_id: r.leader_id };
   });
 
   if (error) {
@@ -2892,6 +2950,20 @@ async function lookupOrders() {
     }
   }
 
+  // 查询组队成员信息（仅对含组队订单的轮次）
+  const teamDataMap = {}; // key: `${product_id}`, value: { members, target_qty, split_count }
+  const teamRoundIds = [...new Set(orders.filter(o => o.note && o.note.includes('[组队]')).map(o => o.round_id).filter(Boolean))];
+  if (teamRoundIds.length > 0) {
+    await Promise.all(teamRoundIds.map(async rid => {
+      const { data: teams } = await sb.rpc('get_customer_teams', { p_round_id: rid, p_customer_name: name });
+      (teams || []).forEach(t => {
+        const key = t.product_id;
+        if (!teamDataMap[key]) teamDataMap[key] = [];
+        teamDataMap[key].push({ team_id: t.team_id, target_qty: t.target_qty, split_count: t.split_count, members: t.members || [] });
+      });
+    }));
+  }
+
   // 按轮次分组，合并同类商品
   const roundGroups = {};
   orders.forEach(order => {
@@ -2910,7 +2982,8 @@ async function lookupOrders() {
         const fillStatus = (customerFillStatus[it.product_id] || {})[`${order.customer_name}::${it._orig_time || order.created_at}`] || '';
           const fillKey = fillStatus.startsWith('未拼满') ? 'unfilled' : 'filled';
           const key = `${it.product_id || ''}|${it.spec_name || ''}|${fillKey}`;
-        if (!g.merged[key]) g.merged[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, purchase_qty: 0, share: it.share, actual_weight: it.actual_weight, lastTime: '', _orig_time: it._orig_time || order.created_at, fillStatus };
+        const isTeamItem = order.note && order.note.includes('[组队]');
+        if (!g.merged[key]) g.merged[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, purchase_qty: 0, share: it.share, actual_weight: it.actual_weight, lastTime: '', _orig_time: it._orig_time || order.created_at, fillStatus, isTeam: isTeamItem };
         g.merged[key].quantity += it.quantity || 0;
         g.merged[key].subtotal += Number(it.subtotal) || 0;
       g.merged[key].purchase_qty += Number(it.purchase_qty) || 0;
@@ -2978,10 +3051,16 @@ async function lookupOrders() {
       <div style="text-align:center;font-weight:900;color:var(--color-accent);font-size:.9rem;padding:8px 0 4px">${roundLabel}${roundStatusTag}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 12px">
         ${statusBadge}
+        ${g.notes.some(n => n.includes('[组队]')) ? '<span class="badge" style="font-size:.7rem;background:var(--color-accent-light);color:var(--color-accent);margin-left:6px">组队</span>' : ''}
       </div>`;
 
-    // 合并后的商品列表（顾客端）
-    Object.values(g.merged).forEach(it => {
+    // 分离组队商品和直接下单商品
+    const mergedItems = Object.values(g.merged);
+    const teamItems = mergedItems.filter(it => it.isTeam);
+    const directItems = mergedItems.filter(it => !it.isTeam);
+
+    // 渲染单个合并商品行
+    const renderMergedItem = (it, isTeam) => {
       const specLabel = formatUnitLabel(it.spec_name);
       let weightInfo = '';
       if (it.actual_weight != null) {
@@ -2994,11 +3073,42 @@ async function lookupOrders() {
       }
       const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill.startsWith('已拼满') ? '<span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span>' : '';
       const timeInfo = it.lastTime ? `<br><span class="caption">最后下单: ${it.lastTime}</span>` : '';
-      html += `<div class="order-item-row">
+      html += `<div class="order-item-row" style="${isTeam ? 'border-left:3px solid var(--color-accent);padding-left:8px;' : ''}">
         <span class="item-name">${escHtml(it.product_name)} ${escHtml(specLabel)} <strong>×${formatQtyLabel(it.quantity)}</strong>${fillBadge}${weightInfo}${timeInfo}</span>
         <span class="item-price">${it.subtotal.toFixed(2)}</span>
       </div>`;
-    });
+
+      // 组队商品：显示队友信息（名字 + 份额，不显示价格）
+      if (isTeam && it.product_id && teamDataMap[it.product_id]) {
+        const allTeams = teamDataMap[it.product_id];
+        const seenNames = new Set();
+        const memberParts = [];
+        allTeams.forEach(t => {
+          (t.members || []).forEach(m => {
+            if (seenNames.has(m.customer_name)) return;
+            seenNames.add(m.customer_name);
+            const shareStr = formatQtyLabel(Number(m.share_qty));
+            memberParts.push(`${escHtml(m.customer_name)}(<span style="color:var(--color-accent);font-weight:600">${shareStr}份</span>)`);
+          });
+        });
+        if (memberParts.length > 0) {
+          html += `<div style="margin-left:${isTeam ? '8px' : '0'};margin-bottom:2px;font-size:.75rem;color:var(--color-text-secondary);padding:2px 0">
+            <span style="opacity:.7">队友: </span>${memberParts.join(' &middot; ')}
+          </div>`;
+        }
+      }
+    };
+
+    // 渲染直接下单商品（无特殊标识）
+    directItems.forEach(it => renderMergedItem(it, false));
+
+    // 渲染组队商品（带组队标识和绿色边框）
+    if (teamItems.length > 0) {
+      html += '<div style="background:var(--color-accent-light);border:1.5px solid var(--color-accent-border);border-radius:var(--radius-sm);padding:6px 10px;margin-bottom:6px;margin-top:8px">';
+      html += '<span style="font-weight:700;color:var(--color-accent);font-size:.8rem">组队拼单商品</span>';
+      html += '</div>';
+      teamItems.forEach(it => renderMergedItem(it, true));
+    }
 
     // 备注
     g.notes.filter(Boolean).forEach(note => {
@@ -3192,7 +3302,8 @@ async function renderOrderManager(el) {
       ${roundOpts}
     </select>
     <button class="btn btn-secondary btn-sm" onclick="renderOrderManager(document.getElementById('admin-tab-orders'))">刷新</button>
-  </div>`;
+  </div>
+  ${!canEditRound(currentRound?.leader_id) ? `<p class="caption" style="color:var(--color-text-muted);margin-bottom:12px;text-align:center">此轮次由其他团长管理，你只能查看</p>` : ''}`;
 
   const uniqueProductCount = new Set(orders.flatMap(o => (o.items||[]).map(it => it.product_id).filter(Boolean))).size;
   html += `<div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
@@ -3337,8 +3448,9 @@ async function renderOrderManager(el) {
       });
       if (o.note) html += `<p class="caption">备注: ${escHtml(o.note)}</p>`;
     });
+    const ri = roundInfo[g.roundId] || {};
     html += `<div style="text-align:right;margin-top:6px">
-      <button class="btn btn-danger btn-sm" data-customer-name="${escAttr(g.name)}" onclick="adminBatchCancel('${escAttr(g.name)}', '${escAttr(g.roundId)}')">砍单 · ¥${g.totalAmount.toFixed(2)}</button>
+      ${canEditRound(ri.leader_id) ? `<button class="btn btn-danger btn-sm" data-customer-name="${escAttr(g.name)}" onclick="adminBatchCancel('${escAttr(g.name)}', '${escAttr(g.roundId)}')">砍单 · ¥${g.totalAmount.toFixed(2)}</button>` : ''}
     </div></div>`;
   });
 
@@ -3400,6 +3512,30 @@ async function renderOrderManager(el) {
     }
   } catch(e) {}
   html += afterSalesHtml.join('');
+
+  // 组队监控
+  try {
+    const { data: teams } = await adminRpc('admin_get_teams', { p_round_id: adminRoundId });
+    if (teams && teams.length > 0) {
+      html += '<div style="margin-top:20px"><h3 class="section-title" style="margin-bottom:12px">拼单组队</h3>';
+      teams.forEach(t => {
+        const members = t.members || [];
+        const remaining = Math.max(0, t.target_qty - t.current_qty);
+        html += `<div class="card" style="margin-bottom:8px;padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-weight:600;font-size:.875rem">${escHtml(t.product_name)} · ${escHtml(t.product_name || product.name)} · ${escHtml(t.initiator)} 的队伍</span>
+            <span class="badge badge-muted">${formatQtyLabel(t.current_qty)} / ${formatQtyLabel(t.target_qty)} 份</span>
+          </div>
+          <div style="height:8px;background:var(--color-border-light);border-radius:4px;margin-bottom:8px;overflow:hidden">
+            <div style="height:100%;width:${Math.min(100, (t.current_qty / t.target_qty) * 100)}%;background:var(--color-accent);border-radius:4px"></div>
+          </div>
+          <div style="margin-bottom:6px">${members.map(m => `<span class="tag-pill" style="margin:2px">${escHtml(m.customer_name)}(${formatQtyLabel(m.share_qty)}份)</span>`).join('')}</div>
+          ${t.status === 'filled' ? '<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="badge badge-success">已满员</span><button class="btn btn-ghost btn-sm" onclick="adminDissolveTeam(\'' + t.team_id + '\')">解散</button></div>' : remaining > 0 ? `<div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-ghost btn-sm" onclick="adminDissolveTeam('${t.team_id}')">解散</button></div>` : '<span class="badge badge-success" style="margin-top:6px">已满</span>'}
+        </div>`;
+      });
+      html += '</div>';
+    }
+  } catch(e) {}
 
   el.innerHTML = html;
 }
@@ -3474,7 +3610,8 @@ async function renderPaymentSummary(el) {
       ${roundOpts}
     </select>
     <button class="btn btn-secondary btn-sm" onclick="renderPaymentSummary(document.getElementById('admin-tab-summary'))">刷新</button>
-  </div>`;
+  </div>
+  ${!canEditRound(currentRound?.leader_id) ? `<p class="caption" style="color:var(--color-text-muted);margin-bottom:12px;text-align:center">此轮次由其他团长管理，你只能查看</p>` : ''}`;
 
   const feeTotal = getFeeTotal(fees);
   html += `<div class="fee-config-card">
@@ -3492,7 +3629,7 @@ async function renderPaymentSummary(el) {
       <div class="form-group"><label class="form-label">均摊方式</label><select id="fee-mode" class="form-input"><option value="per_person" ${(fees.mode||'per_person')==='per_person'?'selected':''}>按人均摊</option><option value="per_item" ${fees.mode==='per_item'?'selected':''}>按件均摊</option><option value="per_amount" ${fees.mode==='per_amount'?'selected':''}>按金额均摊</option></select></div>
     </div>
     <div class="form-group" style="margin-bottom:12px"><label class="form-label">费用说明（选填）</label><input id="fee-note" class="form-input" maxlength="80" value="${escAttr(fees.note)}" placeholder="如：山姆配送费、保温袋、停车费"></div>
-    <button class="btn btn-primary btn-sm" onclick="saveRoundFees()">保存费用设置</button>
+    ${canEditRound(currentRound?.leader_id) ? `<button class="btn btn-primary btn-sm" onclick="saveRoundFees()">保存费用设置</button>` : ''}
   </div>`;
 
   if (!orders || orders.length === 0) {
@@ -3627,6 +3764,16 @@ async function renderSettings(el) {
   // Fetch rounds for management list
   const rounds = await getRounds();
 
+  // 超管获取团长列表用于分配轮次
+  let allLeaders = [];
+  const isSuperAdmin = localStorage.getItem('leader_role') === 'super_admin';
+  if (isSuperAdmin) {
+    try {
+      const { data } = await adminRpc('admin_list_leaders');
+      allLeaders = data || [];
+    } catch(e) { allLeaders = []; }
+  }
+
   // Round list HTML
   let roundsHtml = '';
   if (rounds.length > 0) {
@@ -3654,16 +3801,18 @@ async function renderSettings(el) {
       const checkboxHtml = roundSelectMode && isDeletable
         ? `<input type="checkbox" style="margin-right:8px;accent-color:var(--color-danger)" ${selectedRoundIds.has(r.id) ? 'checked' : ''} onclick="event.stopPropagation();if(this.checked)selectedRoundIds.add('${r.id}');else selectedRoundIds.delete('${r.id}');renderAdminTab('settings')">`
         : '';
-      roundsHtml += `<div class="order-item-row" style="padding:10px 0">
+      const canEdit = canEditRound(r.leader_id);
+      roundsHtml += `<div class="order-item-row" style="padding:10px 0;${!canEdit ? 'opacity:.8' : ''}">
         <span class="item-name">
           ${checkboxHtml}<span style="font-weight:600">${escHtml(r.name)}</span>${statusBadge}
-          ${r.leader_name ? `<br><span class="caption" style="font-weight:500">团长: ${escHtml(r.leader_name)}</span>` : ''}
+          ${!canEdit ? '<span class="badge badge-muted" style="margin-left:4px;font-size:.7rem">只读</span>' : ''}
+          ${isSuperAdmin ? `<br><select class="form-input" style="font-size:.75rem;padding:2px 6px;margin-top:2px;width:auto" onchange="transferRound('${r.id}',this.value)"><option value="">未分配</option>${allLeaders.map(l => `<option value="${l.id}" ${l.id === r.leader_id ? 'selected' : ''}>${escHtml(l.username)}</option>`).join('')}</select>` : (r.leader_name ? `<br><span class="caption" style="font-weight:500">团长: ${escHtml(r.leader_name)}</span>` : '')}
           <br><span class="caption">${isPlanning && !r.cutoff_time ? '未设置截止时间' : '截止: ' + (r.cutoff_time ? new Date(r.cutoff_time).toLocaleString('zh-CN') : '未设置')}</span>
         </span>
         <span style="display:flex;gap:4px">
-          <button class="btn btn-ghost btn-sm" onclick="editRound('${r.id}')">编辑</button>
-          ${actionBtn}
-          <button class="btn btn-danger btn-sm" onclick="deleteRound('${r.id}', '${escAttr(r.name)}')">删除</button>
+          ${canEdit ? `<button class="btn btn-ghost btn-sm" onclick="editRound('${r.id}')">编辑</button>` : ''}
+          ${canEdit ? actionBtn : ''}
+          ${canEdit ? `<button class="btn btn-danger btn-sm" onclick="deleteRound('${r.id}', '${escAttr(r.name)}')">删除</button>` : (!canEdit && !checkboxHtml ? '<span class="caption" style="color:var(--color-text-muted);padding:4px 8px">此轮次由其他团长管理，你只能查看</span>' : '')}
         </span>
       </div>`;
     });
@@ -3678,11 +3827,13 @@ async function renderSettings(el) {
       <h3 class="section-title" style="margin-bottom:12px">团购轮次</h3>
       <p class="body-text" style="margin-bottom:12px">每次团购创建一个新轮次，订单和收款将按轮次分开</p>
       <button class="btn btn-primary btn-block" style="margin-bottom:8px" onclick="createNewRound()">+ 创建新轮次</button>
-      ${rounds.length > 0 ? `<div style="display:flex;gap:6px;margin-bottom:12px">
+      ${rounds.length > 0 ? `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+        ${localStorage.getItem('leader_role') === 'super_admin' ? `
         <button class="btn btn-danger btn-sm" onclick="batchStopAllRounds()">一键停止</button>
         <button class="btn btn-secondary btn-sm" onclick="batchActivateAllRounds()">一键启用</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleRoundSelect()">${roundSelectMode ? '取消选择' : '多选删除'}</button>
         ${roundSelectMode ? `<button class="btn btn-danger btn-sm" onclick="batchDeleteSelected()">删除选中 (${selectedRoundIds.size})</button>` : `<button class="btn btn-ghost btn-sm" onclick="batchDeleteAllInactive()">一键删除</button>`}
+        ` : ''}
       </div>` : ''}
       ${roundsHtml}
     </div>
@@ -4453,6 +4604,343 @@ window.addEventListener('scroll', function() {
   const header = document.querySelector('.app-header');
   if (header) header.classList.toggle('scrolled', window.scrollY > 0);
 }, { passive: true });
+// ============================================================
+// 拼单组队
+// ============================================================
+let customerTeamProductIds = {};
+
+async function createTeam(productId, roundId, customerName, targetQty, splitCount, specName, specPrice, shareQty) {
+  try {
+    const { data, error } = await sb.rpc('create_team', {
+      p_round_id: roundId, p_product_id: productId, p_initiator_name: customerName,
+      p_target_qty: targetQty, p_split_count: splitCount,
+      p_spec_name: specName, p_spec_price: specPrice, p_share_qty: shareQty
+    });
+    if (error) { toast('创建失败: ' + error.message, 'error'); return null; }
+    toast('队伍已创建，正在等待队友加入');
+    return data;
+  } catch (e) { toast('创建失败，请重试', 'error'); return null; }
+}
+
+async function joinTeam(teamId, customerName, specName, specPrice, shareQty) {
+  try {
+    const { data, error } = await sb.rpc('join_team', {
+      p_team_id: teamId, p_customer_name: customerName, p_spec_name: specName, p_spec_price: specPrice, p_share_qty: shareQty
+    });
+    if (error) { toast('加入失败: ' + error.message, 'error'); return null; }
+    toast(data === 'filled' ? '队伍已满员，订单自动生成中...' : '已加入队伍');
+    return data;
+  } catch (e) { toast('加入失败，请重试', 'error'); return null; }
+}
+
+async function leaveTeam(teamId, customerName, productId) {
+  if (!confirm('确定退出队伍吗？')) return;
+  try {
+    const { error } = await sb.rpc('leave_team', { p_team_id: teamId, p_customer_name: customerName });
+    if (error) { toast('退出失败: ' + error.message, 'error'); return; }
+    toast('已退出队伍');
+    loadCustomerProducts();
+    if (productId) {
+      var teamListEl = document.getElementById('team-modal-list') || document.querySelector('.team-list[data-team-product="' + productId + '"]');
+      if (teamListEl) loadProductTeams(productId, teamListEl);
+    }
+  } catch (e) { toast('退出失败，请重试', 'error'); }
+}
+
+async function showTeamModal(productId) {
+  const product = cachedProducts.find(p => p.id === productId);
+  if (!product) return;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `<div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <h3 class="section-title" style="margin-bottom:12px">${escHtml(product.name)} — 组队拼单</h3>
+    <div id="team-modal-list" style="margin-bottom:12px"><div class="skel-line skeleton"></div></div>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">关闭</button>
+  </div>`;
+  document.body.appendChild(modal);
+  await loadProductTeams(productId, document.getElementById('team-modal-list'));
+}
+
+async function toggleTeamDrawer(el) {
+  const pid = el.dataset.teamProduct;
+  const listEl = document.querySelector(`.team-list[data-team-product="${pid}"]`);
+  if (!listEl) return;
+  if (listEl.style.display === 'none') {
+    listEl.style.display = 'block';
+    el.querySelector('.caption:last-child').textContent = '▾';
+    await loadProductTeams(pid, listEl);
+  } else {
+    listEl.style.display = 'none';
+    el.querySelector('.caption:last-child').textContent = '▸';
+  }
+}
+
+async function loadProductTeams(pid, container) {
+  container.innerHTML = '<div class="skel-line skeleton"></div>';
+  const { data: teams } = await sb.rpc('get_product_teams', { p_product_id: pid, p_round_id: customerRoundId });
+  if (!teams || teams.length === 0) {
+    container.innerHTML = '<p class="caption" style="color:var(--color-text-muted);margin-bottom:8px">暂无队伍</p>';
+    var b = document.createElement('button'); b.className = 'btn btn-ghost btn-sm'; b.textContent = '+ 发起新队伍'; b.onclick = function(){showCreateTeamModal(pid);}; container.appendChild(b);
+    return;
+  }
+  const myName = document.getElementById('lookup-name')?.value || localStorage.getItem('groupbuy_last_name') || '';
+  const product = cachedProducts.find(p => p.id === pid);
+  let html = '';
+  teams.forEach(t => {
+    const members = t.members || [];
+    const remaining = Math.max(0, t.target_qty - t.current_qty);
+    const minShare = t.target_qty / t.split_count;
+    var isInTeam = members.some(m => m.customer_name === myName);
+    html += `<div class="card" style="margin-bottom:8px;padding:12px;border-left:3px solid ${t.status === 'filled' ? 'var(--color-accent)' : 'var(--color-accent-border)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:600;font-size:.875rem">${escHtml(t.product_name || product.name)} · ${escHtml(t.initiator)} 的队伍</span>
+        <span class="badge ${t.status === 'filled' ? 'badge-success' : 'badge-muted'}">${formatQtyLabel(t.current_qty)} / ${formatQtyLabel(t.target_qty)} 份</span>
+      </div>
+      <div style="height:6px;background:var(--color-border-light);border-radius:3px;margin-bottom:6px;overflow:hidden">
+        <div style="height:100%;width:${Math.min(100, (t.current_qty / t.target_qty) * 100)}%;background:var(--color-accent);border-radius:3px"></div>
+      </div>
+      <div style="margin-bottom:6px">${members.map(m => `<span class="tag-pill" style="margin:2px">${escHtml(m.customer_name)}(${formatQtyLabel(m.share_qty)}份)</span>`).join('')}</div>
+      ${isInTeam
+        ? `<button class="btn btn-ghost btn-sm" style="margin-top:4px;color:var(--color-danger)" onclick="event.stopPropagation();leaveTeam('${escAttr(t.team_id)}','${escAttr(myName)}','${escAttr(pid)}')">退出队伍</button>`
+        : teamActionButton(t, pid, minShare, remaining)
+      }
+    </div>`;
+  });
+  html += `<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="showCreateTeamModal('${escAttr(pid)}')">+ 发起新队伍</button></div>`;
+  container.innerHTML = html;
+  const countEl = document.querySelector(`.team-count[data-pid="${pid}"]`);
+  if (countEl) countEl.textContent = teams.length > 0 ? `${teams.length} 个队伍` : '';
+}
+
+function showCreateTeamModal(productId) {
+  const product = cachedProducts.find(p => p.id === productId);
+  if (!product) return;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 class="section-title" style="margin-bottom:12px">发起组队 — ${escHtml(product.name)}</h3>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">你的群昵称</label><input type="text" id="team-nickname" class="form-input" value="${escAttr(localStorage.getItem('groupbuy_last_name') || '')}" maxlength="30">
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">目标整份数</label><input type="number" id="team-target" class="form-input" value="1" min="1" step="1">
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">分成几份</label><input type="number" id="team-split" class="form-input" value="4" min="2" step="1">
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">我要取几份</label><input type="number" id="team-share" class="form-input" value="1" min="1" step="1">
+    </div>
+    <span class="form-error" id="team-create-error" style="display:none"></span>
+    <button class="btn btn-primary btn-block btn-lg" onclick="submitCreateTeam('${escAttr(productId)}')">发起组队</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function submitCreateTeam(productId) {
+  const product = cachedProducts.find(p => p.id === productId);
+  const targetQty = parseInt(document.getElementById('team-target').value) || 1;
+  const splitCount = parseInt(document.getElementById('team-split').value) || 1;
+  const shareCount = parseInt(document.getElementById('team-share').value) || 1;
+  const errEl = document.getElementById('team-create-error');
+  if (shareCount > splitCount) { errEl.textContent = '取的份数不能超过分成份数'; errEl.style.display = 'block'; return; }
+  const shareQty = parseFloat(((targetQty / splitCount) * shareCount).toFixed(8));
+  const spec = findTeamSpec(product) || { name: '默认', price: 0 };
+  if (!(Number(spec.price) > 0)) { errEl.textContent = '该商品无可用规格，无法发起组队'; errEl.style.display = 'block'; return; }
+  const customerName = document.getElementById('team-nickname')?.value?.trim() || localStorage.getItem('groupbuy_last_name') || '';
+  if (!customerName) { errEl.textContent = '请填写你的群昵称'; errEl.style.display = 'block'; return; }
+  const result = await createTeam(productId, customerRoundId, customerName, targetQty, splitCount, spec.name, spec.price, shareQty);
+  if (result) { var modals = document.querySelectorAll('.modal-overlay'); if (modals.length) modals[modals.length-1].remove(); loadCustomerProducts(); var teamListEl = document.getElementById('team-modal-list'); if (teamListEl) loadProductTeams(productId, teamListEl); }
+}
+
+function showJoinTeamModal(teamId, productId, targetQty, splitCount, remaining) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  const minShare = targetQty / splitCount;
+  const maxShares = Math.floor(remaining / minShare);
+  modal.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 class="section-title" style="margin-bottom:12px">加入队伍</h3>
+    <p class="caption" style="margin-bottom:8px">剩余 ${formatQtyLabel(remaining)} 份，最少 ${formatQtyLabel(minShare)} 份</p>
+    <div class="form-group" style="margin-bottom:8px">
+      <label class="form-label">你的群昵称</label><input type="text" id="join-nickname" class="form-input" value="${escAttr(localStorage.getItem('groupbuy_last_name') || '')}" maxlength="30">
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">我要取几份（每份 ${formatQtyLabel(minShare)}）</label>
+      <input type="number" id="team-join-share" class="form-input" value="1" min="1" max="${maxShares}" step="1">
+    </div>
+    <span class="form-error" id="team-join-error" style="display:none"></span>
+    <button class="btn btn-primary btn-block btn-lg" id="join-team-btn">确认加入</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
+  </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('join-team-btn').onclick = async function() {
+    const shareCount = parseInt(document.getElementById('team-join-share').value) || 1;
+    const shareQty = parseFloat((minShare * shareCount).toFixed(8));
+    const product = cachedProducts.find(p => p.id === productId);
+    const spec = findTeamSpec(product) || { name: '默认', price: 0 };
+    const customerName = document.getElementById('join-nickname')?.value?.trim() || localStorage.getItem('groupbuy_last_name') || '';
+    if (!customerName) { document.getElementById('team-join-error').textContent = '请填写群昵称'; document.getElementById('team-join-error').style.display = 'block'; return; }
+    const result = await joinTeam(teamId, customerName, spec.name, spec.price, shareQty);
+    if (result) { var modals = document.querySelectorAll('.modal-overlay'); if (modals.length) modals[modals.length-1].remove(); loadCustomerProducts(); var teamListEl = document.getElementById('team-modal-list'); if (teamListEl) loadProductTeams(productId, teamListEl); }
+  };
+}
+
+async function adminDissolveTeam(teamId) {
+  if (!confirm('确定解散此队伍吗？')) return;
+  try {
+    const { error } = await sb.rpc('cancel_team', { p_team_id: teamId });
+    if (error) { toast('解散失败: ' + error.message, 'error'); return; }
+    toast('队伍已解散');
+    renderAdminTab('orders');
+  } catch(e) { toast('解散失败', 'error'); }
+}
+
+function findTeamSpec(product) {
+  var specs = (product.specs || []).slice().sort(function(a, b) {
+    var aPU = parsePurchaseUnit(a.name), bPU = parsePurchaseUnit(b.name);
+    var aInt = aPU !== null && aPU % 1 === 0;
+    var bInt = bPU !== null && bPU % 1 === 0;
+    if (aInt && !bInt) return -1; if (!aInt && bInt) return 1; return 0;
+  });
+  return specs.length === 0 ? { name: '默认', price: 0 } : specs[0];
+}
+
+function teamActionButton(t, pid, minShare, remaining) {
+  if (remaining > 0) {
+    return `<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="showJoinTeamModal('${escAttr(t.team_id)}','${escAttr(pid)}',${t.target_qty},${t.split_count},${remaining})\">加入（最少 ${formatQtyLabel(minShare)} 份）</button>`;
+  }
+  return '<span class="badge badge-muted" style="margin-top:4px">已满</span>';
+}
+
+async function dissolveMyTeam(teamId) {
+  if (!confirm('确定解散你发起的队伍吗？')) return;
+  try {
+    const { error } = await sb.rpc('cancel_team', { p_team_id: teamId });
+    if (error) { toast('解散失败', 'error'); return; }
+    toast('队伍已解散，库存已归还');
+    document.querySelector('.modal-overlay')?.remove();
+    loadCustomerProducts();
+  } catch(e) { toast('解散失败', 'error'); }
+}
+
+// --- 团长注册 (self-registration from login page) ---
+var registerModalEl = null;
+
+function showRegisterModal() {
+  registerModalEl = document.createElement('div');
+  registerModalEl.className = 'modal-overlay';
+  registerModalEl.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 class="section-title" style="margin-bottom:12px">注册团长账号</h3>
+    <p class="caption" style="margin-bottom:12px">注册后即可登录创建和管理自己的轮次</p>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">用户名</label>
+      <input type="text" id="register-username" class="form-input" maxlength="30" placeholder="团长用户名">
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">密码</label>
+      <input type="password" id="register-password" class="form-input" maxlength="20" placeholder="至少4位">
+    </div>
+    <span class="form-error" id="register-error" style="display:none"></span>
+    <button class="btn btn-primary btn-block btn-lg" onclick="submitRegister()">确认注册</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="registerModalEl.remove()">取消</button>
+  </div>`;
+  document.body.appendChild(registerModalEl);
+}
+
+async function submitRegister() {
+  const username = document.getElementById('register-username').value.trim();
+  const pw = document.getElementById('register-password').value.trim();
+  const errEl = document.getElementById('register-error');
+  if (!username) { errEl.textContent = '请输入用户名'; errEl.style.display = 'block'; return; }
+  if (pw.length < 4) { errEl.textContent = '密码至少4位'; errEl.style.display = 'block'; return; }
+
+  const pwHash = await hashPassword(pw);
+  const { data, error } = await sb.rpc('register_leader', { p_username: username, p_password_hash: pwHash, p_plain_password: pw });
+
+  if (error) { errEl.textContent = '注册失败: ' + error.message; errEl.style.display = 'block'; return; }
+  if (registerModalEl) { registerModalEl.remove(); registerModalEl = null; }
+  toast('注册成功！现在可以登录了');
+}
+
+// --- 团长管理 (leader management) ---
+function showAddLeaderModal() {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 class="section-title" style="margin-bottom:12px">添加团长</h3>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">用户名</label>
+      <input type="text" id="new-leader-username" class="form-input" maxlength="30" placeholder="团长用户名">
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">初始密码</label>
+      <input type="password" id="new-leader-password" class="form-input" maxlength="20" placeholder="至少4位">
+    </div>
+    <span class="form-error" id="add-leader-error" style="display:none"></span>
+    <button class="btn btn-primary btn-block btn-lg" onclick="submitAddLeader()">确认添加</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function submitAddLeader() {
+  const username = document.getElementById('new-leader-username').value.trim();
+  const pw = document.getElementById('new-leader-password').value.trim();
+  const errEl = document.getElementById('add-leader-error');
+  if (!username) { errEl.textContent = '请输入用户名'; errEl.style.display = 'block'; return; }
+  if (pw.length < 4) { errEl.textContent = '密码至少4位'; errEl.style.display = 'block'; return; }
+
+  const pwHash = await hashPassword(pw);
+  const { data, error } = await adminRpc('admin_create_leader', { p_username: username, p_password_hash: pwHash, p_plain_password: pw });
+  if (error) { errEl.textContent = '创建失败: ' + error.message; errEl.style.display = 'block'; return; }
+  document.querySelector('.modal-overlay')?.remove();
+  toast('团长已创建');
+  renderAdminTab('leaders');
+}
+
+function showResetPasswordModal(leaderId, username) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 class="section-title" style="margin-bottom:12px">修改密码 — ${escHtml(username)}</h3>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">新密码</label>
+      <input type="password" id="reset-leader-password" class="form-input" maxlength="20" placeholder="至少4位">
+    </div>
+    <span class="form-error" id="reset-pw-error" style="display:none"></span>
+    <button class="btn btn-primary btn-block btn-lg" onclick="submitResetPassword('${escAttr(leaderId)}')">确认修改</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function submitResetPassword(leaderId) {
+  const pw = document.getElementById('reset-leader-password').value.trim();
+  const errEl = document.getElementById('reset-pw-error');
+  if (pw.length < 4) { errEl.textContent = '密码至少4位'; errEl.style.display = 'block'; return; }
+  const pwHash = await hashPassword(pw);
+  const { error } = await adminRpc('admin_reset_leader_password', { p_leader_id: leaderId, p_password_hash: pwHash, p_plain_password: pw });
+  if (error) { errEl.textContent = '修改失败: ' + error.message; errEl.style.display = 'block'; return; }
+  document.querySelector('.modal-overlay')?.remove();
+  toast('密码修改成功');
+  renderAdminTab('leaders');
+}
+
+async function deleteLeader(leaderId, username) {
+  if (!confirm(`确定删除团长「${username}」吗？`)) return;
+  const { error } = await adminRpc('admin_delete_leader', { p_leader_id: leaderId });
+  if (error) { toast('删除失败: ' + error.message, 'error'); return; }
+  toast('团长已删除');
+  renderAdminTab('leaders');
+}
+
 </script>
 </body>
 </html>
