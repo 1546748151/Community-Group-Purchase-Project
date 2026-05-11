@@ -283,6 +283,7 @@ body{
 .purchase-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:11px 12px;background:#fff;border:1px solid var(--color-border-light);border-radius:12px}
 .purchase-name{font-weight:850;font-size:.92rem;min-width:0}
 .purchase-spec{display:block;color:var(--color-text-secondary);font-size:.76rem;font-weight:500;margin-top:2px}
+.purchase-price{color:#16a34a;font-size:.82rem;font-weight:600}
 .purchase-qty{font-weight:900;color:var(--color-accent);white-space:nowrap}
 .purchase-amount{font-weight:800;white-space:nowrap;color:var(--color-text)}
 .purchase-badge{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;background:var(--color-warning-light);color:#b45309;font-size:.72rem;font-weight:850;margin-left:6px;vertical-align:middle}
@@ -1049,6 +1050,7 @@ function buildProductSummary(orders) {
           productId: it.product_id || '',
           name,
           spec,
+          specPrice: 0,
           sortUnit: isSplitUnit ? unit : Number.POSITIVE_INFINITY,
           specs: new Set(),
           qty: 0,
@@ -1085,6 +1087,7 @@ function buildProductSummary(orders) {
       ps.missingQty = ps.unfilled ? Math.round(rawDiff * 1000) / 1000 : 0;
     }
     ps.spec = ps.isSplitUnit ? `拼单规格：${Array.from(ps.specs).sort((a, b) => (parsePurchaseUnit(a) || 0) - (parsePurchaseUnit(b) || 0)).map(formatUnitLabel).join(' 、 ')}` : formatUnitLabel(ps.spec);
+    ps.specPrice = ps.qty > 0 ? Math.round(ps.amount / ps.qty * 100) / 100 : 0;
     ps.qtyLabel = formatQtyLabel(ps.qty);
     ps.missingLabel = ps.unfilled ? (toDisplayFraction(ps.missingQty, 40) || formatQty(ps.missingQty)) : '';
     return ps;
@@ -1122,6 +1125,7 @@ function enrichOrdersWithCurrentPrices(orders, priceMap) {
       const specMap = priceMap.get(it.product_id);
       const currentPrice = specMap ? specMap.get(it.spec_name) : undefined;
       if (currentPrice == null) { newTotal += (Number(it.subtotal) || 0); return it; }
+      if (it.actual_weight != null) { newTotal += (Number(it.subtotal) || 0); return it; }
       const newSubtotal = parseFloat((currentPrice * (it.quantity || 0)).toFixed(2));
       newTotal += newSubtotal;
       return { ...it, spec_price: currentPrice, subtotal: newSubtotal };
@@ -3064,7 +3068,7 @@ async function lookupOrders() {
       const specLabel = formatUnitLabel(it.spec_name);
       let weightInfo = '';
       if (it.actual_weight != null) {
-        weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
+        weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQty(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
       }
       let pidFill = it.fillStatus || (customerFillStatus[it.product_id || ''] || {})[name] || '';
       if (!pidFill && it.product_id) {
@@ -3351,7 +3355,7 @@ async function renderOrderManager(el) {
       : (ps.isSplitUnit ? '<span class="purchase-badge ok">已拼满</span>' : '');
     html += `<div class="purchase-row">
       <div class="purchase-name">${escHtml(ps.name)}${statusBadge}<span class="purchase-spec">${escHtml(ps.spec)}</span></div>
-      <div class="purchase-qty">x${escHtml(ps.qtyLabel || formatQtyLabel(ps.qty))}</div>
+      <div style="display:flex;align-items:center;gap:16px"><span class="purchase-price">¥${(ps.specPrice || 0).toFixed(2)}</span><div class="purchase-qty">x${escHtml(ps.qtyLabel || formatQtyLabel(ps.qty))}</div></div>
       <div class="purchase-amount">${ps.amount.toFixed(2)} 元</div>
     </div>`;
   });
@@ -3441,7 +3445,7 @@ async function renderOrderManager(el) {
         const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill === '已拼满' ? '<span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span>' : '';
         let weightInfo = '';
         if (it.actual_weight != null) {
-          weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQtyLabel(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${Number(it.subtotal||0).toFixed(2)}</span>`;
+          weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQty(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${Number(it.subtotal||0).toFixed(2)}</span>`;
         }
         html += `<div class="order-item-row" style="margin-bottom:4px">
           <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity||0)}</strong>${fillBadge} <span class="caption" style="font-size:.7rem">${o.time}</span>${weightInfo}</span>
@@ -3571,11 +3575,35 @@ async function exportOrders() {
     ps.unfilled ? `未拼满，差 ${toDisplayFraction(ps.missingQty, 40) || ps.missingLabel || formatQtyLabel(ps.missingQty)}` : (ps.isSplitUnit ? '已拼满' : '')
   ]));
 
+  // Sheet 3: Orders by person
+  const personMap = {};
+  orders.forEach(o => {
+    if (!personMap[o.customer_name]) personMap[o.customer_name] = { items: [], total: 0 };
+    (o.items || []).forEach(it => {
+      if (it.deleted) return;
+      personMap[o.customer_name].items.push(it);
+    });
+    personMap[o.customer_name].total += Number(o.total_amount) || 0;
+  });
+  const rows3 = [['顾客昵称', '商品名称', '规格', '数量', '单价', '小计', '应付总额', '备注']];
+  Object.entries(personMap).forEach(([name, data]) => {
+    data.items.forEach(it => {
+      rows3.push([name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), it.spec_price, Number(it.subtotal||0).toFixed(2), data.total.toFixed(2), '']);
+    });
+    data.total = data.total;
+    // 每人小计行
+    if (data.items.length > 1) {
+      rows3.push([name, '', '', '', '', '小计', data.total.toFixed(2), '']);
+    }
+  });
+
   const wb = XLSX.utils.book_new();
   const ws1 = XLSX.utils.aoa_to_sheet(rows1);
   const ws2 = XLSX.utils.aoa_to_sheet(rows2);
+  const ws3 = XLSX.utils.aoa_to_sheet(rows3);
   XLSX.utils.book_append_sheet(wb, ws1, '订单明细');
   XLSX.utils.book_append_sheet(wb, ws2, '商品汇总');
+  XLSX.utils.book_append_sheet(wb, ws3, '按人订单明细');
   XLSX.writeFile(wb, `团购订单_${new Date().toISOString().slice(0,10)}.xlsx`);
   toast('Excel 已下载');
 }

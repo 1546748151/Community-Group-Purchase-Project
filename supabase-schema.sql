@@ -1008,7 +1008,6 @@ BEGIN
       new_subtotal := ROUND(spec_price * actual_weight * share_pct, 2);
       new_items := new_items || jsonb_build_array(item || jsonb_build_object(
         'subtotal', new_subtotal,
-        'purchase_qty', actual_weight,
         'actual_weight', actual_weight
       ));
       new_total := new_total + new_subtotal;
