@@ -2918,7 +2918,8 @@ async function lookupOrders() {
         activeOrders.forEach(o => {
           (o.items || []).forEach(it => {
             if (it.deleted || it.product_id !== pid) return;
-            itemRows.push({ customer: o.customer_name, qty: Number(it.purchase_qty) || Number(it.quantity) || 0, time: it._orig_time || o.created_at });
+            const rowQty = (it.actual_weight != null && it.share != null) ? (Number(it.share) || 0) : (Number(it.purchase_qty) || Number(it.quantity) || 0);
+            itemRows.push({ customer: o.customer_name, qty: rowQty, time: it._orig_time || o.created_at });
           });
         });
         if (itemRows.length === 0) return;
@@ -3377,7 +3378,7 @@ async function renderOrderManager(el) {
   uniquePids.forEach(pid => {
     const rows = [];
     orders.filter(o => o.status !== 'cancelled').forEach(o => {
-      (o.items||[]).forEach(it => { if (!it.deleted && it.product_id === pid) rows.push({ customer: o.customer_name, qty: Number(it.purchase_qty)||Number(it.quantity)||0, time: it._orig_time || o.created_at }); });
+      (o.items||[]).forEach(it => { if (!it.deleted && it.product_id === pid) { const rowQty = (it.actual_weight != null && it.share != null) ? (Number(it.share) || 0) : (Number(it.purchase_qty)||Number(it.quantity)||0); rows.push({ customer: o.customer_name, qty: rowQty, time: it._orig_time || o.created_at }); } });
     });
     if (rows.length === 0) return;
     rows.sort((a,b) => new Date(a.time) - new Date(b.time));
@@ -3608,6 +3609,83 @@ async function exportOrders() {
   toast('Excel 已下载');
 }
 
+async function exportPaymentExcel() {
+  if (!adminRoundId) { toast('请先选择轮次', 'error'); return; }
+
+  const [{ data: rawOrders }, { data: curProducts }, allRounds] = await Promise.all([
+    adminRpc('admin_get_orders', { p_round_id: adminRoundId }),
+    adminRpc('admin_get_products', { p_round_id: adminRoundId }),
+    getRounds()
+  ]);
+  if (!rawOrders || rawOrders.length === 0) { toast('没有可导出的订单', 'info'); return; }
+
+  const priceMap = buildPriceMap(curProducts || []);
+  const orders = enrichOrdersWithCurrentPrices(getAdminVisibleOrders(rawOrders), priceMap).filter(o => o.status !== 'pending_weight');
+  const fees = await getRoundFees(adminRoundId);
+
+  // Sheet 1: 订单明细
+  const rows1 = [['顾客昵称', '商品名称', '规格', '购买次数', '折算采购数量', '单价', '小计', '备注', '应付总额', '下单时间']];
+  orders.forEach(o => {
+    (o.items || []).forEach(it => {
+      if (it.deleted) return;
+      rows1.push([o.customer_name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), formatQtyLabel(getItemStockQty(it)), it.spec_price, it.subtotal, o.note || '', o.total_amount, new Date(it._orig_time || o.created_at).toLocaleString('zh-CN')]);
+    });
+  });
+
+  // Sheet 2: 商品汇总
+  const productSales = buildProductSummary(orders);
+  const rows2 = [['商品名称', '规格/拼单说明', '采购数量', '总金额', '拼单状态']];
+  productSales.forEach(ps => rows2.push([ps.name, ps.spec, ps.qtyLabel || formatQtyLabel(ps.qty), ps.amount.toFixed(2), ps.unfilled ? '未拼满，差 ' + (toDisplayFraction(ps.missingQty, 40) || formatQty(ps.missingQty)) : (ps.isSplitUnit ? '已拼满' : '')]));
+
+  // Sheet 3: 按人订单明细
+  const personMap = {};
+  orders.forEach(o => {
+    if (!personMap[o.customer_name]) personMap[o.customer_name] = { items: [], total: 0 };
+    (o.items || []).forEach(it => { if (!it.deleted) personMap[o.customer_name].items.push(it); });
+    personMap[o.customer_name].total += Number(o.total_amount) || 0;
+  });
+  const rows3 = [['顾客昵称', '商品名称', '规格', '数量', '单价', '小计', '应付总额']];
+  Object.entries(personMap).forEach(([name, data]) => {
+    data.items.forEach(it => rows3.push([name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), it.spec_price, Number(it.subtotal||0).toFixed(2), '']));
+    if (data.items.length > 1) rows3.push([name, '', '', '', '', '小计', data.total.toFixed(2)]);
+    else rows3[rows3.length - 1][6] = data.total.toFixed(2);
+  });
+
+  // Sheet 4: 收款清单
+  const feeTotal = getFeeTotal(fees);
+  const personOrderMap = {};
+  orders.forEach(o => { if (!personOrderMap[o.customer_name]) personOrderMap[o.customer_name] = 0; personOrderMap[o.customer_name] += Number(o.total_amount) || 0; });
+  const personCount = Object.keys(personOrderMap).length;
+  const totalAmount = Object.values(personOrderMap).reduce((s, v) => s + v, 0);
+  const totalItems = orders.reduce((s, o) => s + (o.items||[]).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.quantity)||0), 0), 0);
+  const rows4 = [['顾客昵称', '商品名称', '规格', '数量', '单价', '小计', '应付总额']];
+  Object.entries(personMap).forEach(([name, data]) => {
+    data.items.forEach(it => rows4.push([name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), it.spec_price, Number(it.subtotal||0).toFixed(2), '']));
+    let feeShare = 0;
+    if (fees.mode === 'per_item') {
+      const personItems = orders.filter(o => o.customer_name === name).reduce((s, o) => s + (o.items||[]).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.quantity)||0), 0), 0);
+      feeShare = totalItems > 0 ? Math.round(feeTotal * personItems / totalItems * 100) / 100 : 0;
+    } else if (fees.mode === 'per_amount') {
+      feeShare = totalAmount > 0 ? Math.round(feeTotal * data.total / totalAmount * 100) / 100 : 0;
+    } else {
+      feeShare = personCount > 0 ? Math.round(feeTotal / personCount * 100) / 100 : 0;
+    }
+    if (feeShare > 0) rows4.push([name, '运费均摊', '', '', '', feeShare.toFixed(2), '']);
+    const grandTotal = data.total + feeShare;
+    rows4.push([name, '', '', '', '', '小计', grandTotal.toFixed(2)]);
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows1), '订单明细');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows2), '商品汇总');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows3), '按人订单明细');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows4), '收款清单');
+  const round = allRounds.find(r => r.id === adminRoundId);
+  const fname = (round ? round.name : '团购') + '_收款_' + new Date().toISOString().slice(0,10) + '.xlsx';
+  XLSX.writeFile(wb, fname);
+  toast('Excel 已下载');
+}
+
 // ============================================================
 // PAYMENT SUMMARY
 // ============================================================
@@ -3713,6 +3791,7 @@ async function renderPaymentSummary(el) {
 
   lastPurchaseSummaryCopyText = copyText;
   html += `<button class="btn btn-primary btn-block" style="margin-top:16px" data-copy-payment>一键复制收款清单</button>`;
+  html += `<button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="exportPaymentExcel()">导出收款清单 Excel</button>`;
   html += '<p class="caption" style="text-align:center;margin-top:8px">复制后可直接粘贴到微信群收款</p>';
 
   el.innerHTML = html;

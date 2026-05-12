@@ -484,7 +484,7 @@ CREATE OR REPLACE FUNCTION get_round_order_stats(p_round_id UUID)
 RETURNS JSONB AS $$
 SELECT COALESCE(jsonb_agg(s), '[]'::jsonb) FROM (
   SELECT it->>'product_id' as product_id,
-    SUM(COALESCE((it->>'purchase_qty')::numeric, (it->>'quantity')::numeric, 0)) as qty,
+    SUM(CASE WHEN (it->>'actual_weight') IS NOT NULL AND (it->>'share') IS NOT NULL THEN (it->>'share')::numeric ELSE COALESCE((it->>'purchase_qty')::numeric, (it->>'quantity')::numeric, 0) END) as qty,
     SUM(COALESCE((it->>'share')::numeric, null)) as share_total,
     COUNT(*)::int as order_count
   FROM orders o, jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) it
