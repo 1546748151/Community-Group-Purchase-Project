@@ -3657,13 +3657,13 @@ async function exportPaymentExcel() {
   orders.forEach(o => { if (!personOrderMap[o.customer_name]) personOrderMap[o.customer_name] = 0; personOrderMap[o.customer_name] += Number(o.total_amount) || 0; });
   const personCount = Object.keys(personOrderMap).length;
   const totalAmount = Object.values(personOrderMap).reduce((s, v) => s + v, 0);
-  const totalItems = orders.reduce((s, o) => s + (o.items||[]).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.quantity)||0), 0), 0);
+  const totalItems = orders.reduce((s, o) => s + (o.items||[]).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.purchase_qty) || Number(it.quantity) || 0), 0), 0);
   const rows4 = [['顾客昵称', '商品名称', '规格', '数量', '单价', '小计', '应付总额']];
   Object.entries(personMap).forEach(([name, data]) => {
     data.items.forEach(it => rows4.push([name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), it.spec_price, Number(it.subtotal||0).toFixed(2), '']));
     let feeShare = 0;
     if (fees.mode === 'per_item') {
-      const personItems = orders.filter(o => o.customer_name === name).reduce((s, o) => s + (o.items||[]).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.quantity)||0), 0), 0);
+      const personItems = orders.filter(o => o.customer_name === name).reduce((s, o) => s + (o.items||[]).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.purchase_qty) || Number(it.quantity) || 0), 0), 0);
       feeShare = totalItems > 0 ? Math.round(feeTotal * personItems / totalItems * 100) / 100 : 0;
     } else if (fees.mode === 'per_amount') {
       feeShare = totalAmount > 0 ? Math.round(feeTotal * data.total / totalAmount * 100) / 100 : 0;
@@ -3698,9 +3698,13 @@ async function renderPaymentSummary(el) {
   }
   if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : (allRounds[0]?.id || null); }
 
-  let roundOpts = allRounds.map(r =>
-    `<option value="${r.id}" ${r.id === adminRoundId ? 'selected' : ''}>${escHtml(r.name)} ${r.is_active ? '(进行中)' : ''}</option>`
-  ).join('');
+  let roundOpts = allRounds.map(r => {
+    let statusLabel = '';
+    if (r.is_active && r.cutoff_time && new Date(r.cutoff_time) < new Date()) statusLabel = '(已截止)';
+    else if (r.is_active) statusLabel = '(进行中)';
+    else statusLabel = '(已结束)';
+    return `<option value="${r.id}" ${r.id === adminRoundId ? 'selected' : ''}>${escHtml(r.name)} ${statusLabel}</option>`;
+  }).join('');
 
   const { data: rawOrders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
   // 用当前商品价格刷新订单金额
