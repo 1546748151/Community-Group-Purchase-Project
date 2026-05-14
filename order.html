@@ -1468,7 +1468,7 @@ function exportRoundProducts() {
       stock: p.stock != null ? p.stock : ''
     }));
     // 同时保存一份完整 JSON 在隐藏列供导入还原
-    const hidden = data.map(p => JSON.stringify({ name: p.name, specs: p.specs, tags: p.tags, stock: p.stock }));
+    const hidden = data.map(p => JSON.stringify({ name: p.name, specs: p.specs, tags: p.tags, stock: p.stock, image: p.image || null }));
     const ws = XLSX.utils.json_to_sheet(rows);
     // 附加隐藏列（第5列，col E）存 JSON，导入时精确还原
     XLSX.utils.sheet_add_json(ws, hidden.map(v => ({ _json: v })), { header: ['_json'], skipHeader: false, origin: -1 });
@@ -1527,7 +1527,7 @@ function importRoundProducts() {
         if (!item.name || !item.specs || !Array.isArray(item.specs) || item.specs.length === 0) { fail++; errors.push(`${itemName}: 规格数据无效`); continue; }
         try {
           const result = await adminRpc('admin_save_product', {
-            p_id: null, p_name: String(item.name).slice(0, 50), p_image: null,
+            p_id: null, p_name: String(item.name).slice(0, 50), p_image: item.image || null,
             p_specs: item.specs, p_tags: Array.isArray(item.tags) ? item.tags : [],
             p_stock: item.stock != null ? Number(item.stock) : null,
             p_is_active: true, p_round_id: adminProductRoundId

@@ -501,6 +501,7 @@ $$ LANGUAGE sql SECURITY DEFINER;
 DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN);
 DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN, p_round_id UUID);
 DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN, p_round_id UUID, p_is_weighted BOOLEAN);
+DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN, p_round_id UUID, p_is_weighted BOOLEAN, p_weight_estimate TEXT);
 DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN, p_round_id UUID, p_is_weighted BOOLEAN, p_weight_estimate TEXT, p_weight_unit TEXT);
 CREATE OR REPLACE FUNCTION admin_save_product(
   p_token TEXT,
