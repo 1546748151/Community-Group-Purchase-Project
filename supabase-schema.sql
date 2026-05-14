@@ -29,6 +29,8 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_estimate TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_unit TEXT DEFAULT 'kg';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS round_id UUID REFERENCES rounds(id);
 ALTER TABLE products ALTER COLUMN stock TYPE NUMERIC(10,3) USING stock::numeric;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS is_team BOOLEAN DEFAULT false;
+COMMENT ON COLUMN products.is_team IS '是否允许组队拼单，默认关闭，团长在编辑商品时勾选';
 
 COMMENT ON TABLE products IS '商品表';
 COMMENT ON COLUMN products.specs IS '规格数组，如 [{"name":"500g","price":15},{"name":"1kg","price":28}]';
@@ -499,6 +501,7 @@ $$ LANGUAGE sql SECURITY DEFINER;
 DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN);
 DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN, p_round_id UUID);
 DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN, p_round_id UUID, p_is_weighted BOOLEAN);
+DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN, p_round_id UUID, p_is_weighted BOOLEAN, p_weight_estimate TEXT, p_weight_unit TEXT);
 CREATE OR REPLACE FUNCTION admin_save_product(
   p_token TEXT,
   p_id UUID,
@@ -511,7 +514,8 @@ CREATE OR REPLACE FUNCTION admin_save_product(
   p_round_id UUID DEFAULT NULL,
   p_is_weighted BOOLEAN DEFAULT false,
   p_weight_estimate TEXT DEFAULT NULL,
-  p_weight_unit TEXT DEFAULT 'kg'
+  p_weight_unit TEXT DEFAULT 'kg',
+  p_is_team BOOLEAN DEFAULT false
 )
 RETURNS UUID AS $$
 DECLARE
@@ -531,9 +535,16 @@ BEGIN
   IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_specs) AS s WHERE (s->>'price')::numeric <= 0 OR (s->>'name') IS NULL OR trim(s->>'name') = '') THEN
     RAISE EXCEPTION 'each spec must have a name and a positive price';
   END IF;
+  -- 编辑时取消组队：检查是否有活跃队伍
+  IF p_id IS NOT NULL AND p_is_team = false THEN
+    PERFORM 1 FROM products WHERE id = p_id FOR UPDATE;
+    IF EXISTS (SELECT 1 FROM teams WHERE product_id = p_id AND status = 'active') THEN
+      RAISE EXCEPTION '该商品有活跃组队，请先解散后再取消组队';
+    END IF;
+  END IF;
   IF p_id IS NULL THEN
-    INSERT INTO products (name, image, specs, tags, stock, is_active, round_id, is_weighted, weight_estimate, weight_unit)
-    VALUES (p_name, p_image, COALESCE(p_specs, '[]'::jsonb), COALESCE(p_tags, '[]'::jsonb), p_stock, COALESCE(p_is_active, true), p_round_id, COALESCE(p_is_weighted, false), NULLIF(p_weight_estimate, ''), COALESCE(p_weight_unit, 'kg'))
+    INSERT INTO products (name, image, specs, tags, stock, is_active, round_id, is_weighted, weight_estimate, weight_unit, is_team)
+    VALUES (p_name, p_image, COALESCE(p_specs, '[]'::jsonb), COALESCE(p_tags, '[]'::jsonb), p_stock, COALESCE(p_is_active, true), p_round_id, COALESCE(p_is_weighted, false), NULLIF(p_weight_estimate, ''), COALESCE(p_weight_unit, 'kg'), COALESCE(p_is_team, false))
     RETURNING id INTO new_id;
   ELSE
     UPDATE products
@@ -546,7 +557,8 @@ BEGIN
            round_id = COALESCE(p_round_id, round_id),
            is_weighted = COALESCE(p_is_weighted, false),
            weight_estimate = NULLIF(p_weight_estimate, ''),
-           weight_unit = COALESCE(p_weight_unit, 'kg')
+           weight_unit = COALESCE(p_weight_unit, 'kg'),
+           is_team = COALESCE(p_is_team, false)
      WHERE id = p_id
     RETURNING id INTO new_id;
   END IF;
@@ -829,6 +841,20 @@ BEGIN
       UPDATE products SET stock = stock + qty
        WHERE id = (item->>'product_id')::uuid AND stock IS NOT NULL;
     END IF;
+    -- 组队订单取消时同步清理队伍成员
+    IF order_row.note = '[组队]' AND order_row.round_id IS NOT NULL THEN
+      DELETE FROM team_members tm
+      USING teams t
+      WHERE t.id = tm.team_id
+        AND t.round_id = order_row.round_id
+        AND t.product_id = (item->>'product_id')::uuid
+        AND tm.customer_name = order_row.customer_name;
+      UPDATE teams SET status = 'cancelled'
+      WHERE round_id = order_row.round_id
+        AND product_id = (item->>'product_id')::uuid
+        AND status = 'filled'
+        AND NOT EXISTS (SELECT 1 FROM team_members WHERE team_id = teams.id);
+    END IF;
   END LOOP;
   RETURN true;
 END;
@@ -1055,6 +1081,20 @@ BEGIN
     IF qty > 0 THEN
       UPDATE products SET stock = stock + qty
        WHERE id = (item->>'product_id')::uuid AND stock IS NOT NULL;
+    END IF;
+    -- 组队订单取消时同步清理队伍成员
+    IF order_row.note = '[组队]' AND order_row.round_id IS NOT NULL THEN
+      DELETE FROM team_members tm
+      USING teams t
+      WHERE t.id = tm.team_id
+        AND t.round_id = order_row.round_id
+        AND t.product_id = (item->>'product_id')::uuid
+        AND tm.customer_name = order_row.customer_name;
+      UPDATE teams SET status = 'cancelled'
+      WHERE round_id = order_row.round_id
+        AND product_id = (item->>'product_id')::uuid
+        AND status = 'filled'
+        AND NOT EXISTS (SELECT 1 FROM team_members WHERE team_id = teams.id);
     END IF;
   END LOOP;
   RETURN true;
@@ -1324,6 +1364,11 @@ BEGIN
            END
      WHERE id = order_row.id;
 
+    -- 所有商品都被砍掉时，标记订单为已取消
+    IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(new_items) AS it WHERE (it->>'deleted') IS DISTINCT FROM 'true') THEN
+      UPDATE orders SET status = 'cancelled' WHERE id = order_row.id;
+    END IF;
+
     affected_orders := affected_orders + 1;
   END LOOP;
 
@@ -1380,6 +1425,11 @@ BEGIN
   -- 互斥规则已移除：允许同一顾客在同一商品加入多个队伍、同时独立下单
 
   SELECT * INTO v_product FROM products WHERE id = p_product_id FOR UPDATE;
+
+  IF v_product.is_team IS NOT TRUE THEN
+    RAISE EXCEPTION '该商品不支持组队';
+  END IF;
+
   IF v_product.stock IS NOT NULL AND v_product.stock < p_share_qty THEN
     RAISE EXCEPTION 'insufficient stock: requested %, available %', p_share_qty, v_product.stock;
   END IF;
