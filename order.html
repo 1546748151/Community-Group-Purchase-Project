@@ -1066,6 +1066,8 @@ function buildProductSummary(orders) {
       }
       const quantity = Number(it.quantity) || 0;
       productSales[key].specs.add(spec);
+      // 修正 hasShare 顺序依赖：任意 item 有 share 则整组按份额汇总
+      if (hasShare) productSales[key].hasShare = true;
       productSales[key].qty += hasShare ? 0 : getItemStockQty(it);
       productSales[key].shareTotal += hasShare ? (Number(it.share) || 0) : 0;
       productSales[key].orderQty += quantity;
@@ -1572,14 +1574,12 @@ async function renderProductManager(el) {
   const currentRound = activeRounds.find(r => r.id === adminProductRoundId);
 
   let html = '';
-  // 轮次选择器（只显示进行中/策划中的轮次）
-  if (activeRounds.length > 1) {
-    html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">`;
-    activeRounds.forEach(r => {
-      html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId='${escAttr(r.id)}';renderAdminTab('products')">${escHtml(r.name)}${!canEditRound(r.leader_id) ? ' (只读)' : ''}</button>`;
-    });
-    html += `</div>`;
-  }
+  // 轮次选择器（显示所有进行中/策划中的轮次）
+  html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">`;
+  activeRounds.forEach(r => {
+    html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId='${escAttr(r.id)}';renderAdminTab('products')">${escHtml(r.name)}${!canEditRound(r.leader_id) ? ' (只读)' : ''}</button>`;
+  });
+  html += `</div>`;
   html += `<div class="stat-row">
     <div class="stat-card"><div class="stat-value" style="color:var(--color-accent)">${productCount}</div><div class="stat-label">全部商品</div></div>
     <div class="stat-card"><div class="stat-value">${activeCount}</div><div class="stat-label">已上架商品</div></div>
@@ -3320,6 +3320,7 @@ async function renderOrderManager(el) {
     return;
   }
   if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : (allRounds[0]?.id || null); }
+  const roundId = adminRoundId; // 局部快照，防止渲染过程中切换轮次导致数据错位
 
   // Build round selector
   let roundOpts = allRounds.map(r => {
@@ -3327,13 +3328,13 @@ async function renderOrderManager(el) {
     if (r.is_active && r.cutoff_time && new Date(r.cutoff_time) < new Date()) statusLabel = '(已截止)';
     else if (r.is_active) statusLabel = '(进行中)';
     else statusLabel = '(已结束)';
-    return `<option value="${r.id}" ${r.id === adminRoundId ? 'selected' : ''}>${escHtml(r.name)} ${statusLabel}</option>`;
+    return `<option value="${r.id}" ${r.id === roundId ? 'selected' : ''}>${escHtml(r.name)} ${statusLabel}</option>`;
   }).join('');
 
   // Fetch orders for selected round
   const [{ data: rawOrders, error }, { data: cancelledOrders }] = await Promise.all([
-    adminRpc('admin_get_orders', { p_round_id: adminRoundId }),
-    adminRpc('admin_get_cancelled_orders', { p_round_id: adminRoundId })
+    adminRpc('admin_get_orders', { p_round_id: roundId }),
+    adminRpc('admin_get_cancelled_orders', { p_round_id: roundId })
   ]);
 
   if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab(\'orders\')">重试</button></div>'; return; }
@@ -3341,10 +3342,10 @@ async function renderOrderManager(el) {
   const orders0 = getAdminVisibleOrders(rawOrders);
   // 用当前商品价格刷新订单金额
   let curProducts = [];
-  try { const r = await adminRpc('admin_get_products', { p_round_id: adminRoundId }); curProducts = r.data || []; } catch(e) {}
+  try { const r = await adminRpc('admin_get_products', { p_round_id: roundId }); curProducts = r.data || []; } catch(e) {}
   const priceMap = buildPriceMap(curProducts);
   const orders = enrichOrdersWithCurrentPrices(orders0, priceMap);
-  const currentRound = allRounds.find(r => r.id === adminRoundId);
+  const currentRound = allRounds.find(r => r.id === roundId);
   const roundLabel = currentRound ? currentRound.name : '本轮团购';
   const totalOrders = orders?.length || 0;
   const totalAmount = orders?.reduce((s, o) => s + parseFloat(o.total_amount), 0) || 0;
@@ -3414,7 +3415,7 @@ async function renderOrderManager(el) {
     html += `<div style="margin:16px 0"><button class="btn btn-warning btn-block" onclick="showWeightAllocation()" style="background:var(--color-warning-light);color:#92400e;border:1px solid #fcd34d">称重分配 · ${orders.filter(o => o.status === 'pending_weight').length} 单待确认</button></div>`;
   }
 
-  html += '<h3 class="section-title" style="margin:20px 0 12px">按人订单明细</h3>';
+  html += `<h3 class="section-title" style="margin:20px 0 12px">按人订单明细 <span style="font-weight:400;font-size:.75rem;color:var(--color-text-muted)">· ${escHtml(roundLabel)}</span></h3>`;
 
   // 👥 计算每位顾客的拼单归属
   const adminFillStatus = {};
@@ -3509,7 +3510,7 @@ async function renderOrderManager(el) {
   // 砍单记录
   const adminCancelled = (cancelledOrders || []).filter(o => o.note && o.note.includes('[团长砍单]'));
   if (adminCancelled.length > 0) {
-    html += `<h3 class="section-title" style="margin:24px 0 12px">砍单记录 <span style="font-size:.8rem;font-weight:500;color:var(--color-text-muted)">(${adminCancelled.length})</span></h3>`;
+    html += `<h3 class="section-title" style="margin:24px 0 12px">砍单记录 <span style="font-size:.8rem;font-weight:500;color:var(--color-text-muted)">(${adminCancelled.length})</span> <span style="font-weight:400;font-size:.75rem;color:var(--color-text-muted)">· ${escHtml(roundLabel)}</span></h3>`;
     adminCancelled.forEach(o => {
       const cancelTime = new Date(o.updated_at).toLocaleString('zh-CN');
       const createTime = new Date(o.created_at).toLocaleString('zh-CN');
@@ -3542,9 +3543,9 @@ async function renderOrderManager(el) {
   // 查询本轮的售后申请
   const afterSalesHtml = [];
   try {
-    const { data: aftersales } = await adminRpc('admin_get_after_sales', { p_round_id: adminRoundId });
+    const { data: aftersales } = await adminRpc('admin_get_after_sales', { p_round_id: roundId });
     if (aftersales && aftersales.length > 0) {
-      afterSalesHtml.push(`<div style="margin-top:20px"><h3 class="section-title" style="margin-bottom:12px">售后申请</h3>`);
+      afterSalesHtml.push(`<div style="margin-top:20px"><h3 class="section-title" style="margin-bottom:12px">售后申请 <span style="font-weight:400;font-size:.75rem;color:var(--color-text-muted)">· ${escHtml(roundLabel)}</span></h3>`);
       aftersales.forEach(a => {
         afterSalesHtml.push(`<div class="card" style="margin-bottom:8px;padding:12px;border-left:3px solid var(--color-warning);opacity:${a.status === 'resolved' ? '.6' : '1'}">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -3567,9 +3568,9 @@ async function renderOrderManager(el) {
 
   // 组队监控
   try {
-    const { data: teams } = await adminRpc('admin_get_teams', { p_round_id: adminRoundId });
+    const { data: teams } = await adminRpc('admin_get_teams', { p_round_id: roundId });
     if (teams && teams.length > 0) {
-      html += '<div style="margin-top:20px"><h3 class="section-title" style="margin-bottom:12px">拼单组队</h3>';
+      html += `<div style="margin-top:20px"><h3 class="section-title" style="margin-bottom:12px">拼单组队 <span style="font-weight:400;font-size:.75rem;color:var(--color-text-muted)">· ${escHtml(roundLabel)}</span></h3>`;
       teams.forEach(t => {
         const members = t.members || [];
         const remaining = Math.max(0, t.target_qty - t.current_qty);
@@ -3742,24 +3743,25 @@ async function renderPaymentSummary(el) {
     return;
   }
   if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : (allRounds[0]?.id || null); }
+  const roundId = adminRoundId; // 局部快照
 
   let roundOpts = allRounds.map(r => {
     let statusLabel = '';
     if (r.is_active && r.cutoff_time && new Date(r.cutoff_time) < new Date()) statusLabel = '(已截止)';
     else if (r.is_active) statusLabel = '(进行中)';
     else statusLabel = '(已结束)';
-    return `<option value="${r.id}" ${r.id === adminRoundId ? 'selected' : ''}>${escHtml(r.name)} ${statusLabel}</option>`;
+    return `<option value="${r.id}" ${r.id === roundId ? 'selected' : ''}>${escHtml(r.name)} ${statusLabel}</option>`;
   }).join('');
 
-  const { data: rawOrders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
+  const { data: rawOrders } = await adminRpc('admin_get_orders', { p_round_id: roundId });
   // 用当前商品价格刷新订单金额
   let curProducts = [];
-  try { const r = await adminRpc('admin_get_products', { p_round_id: adminRoundId }); curProducts = r.data || []; } catch(e) {}
+  try { const r = await adminRpc('admin_get_products', { p_round_id: roundId }); curProducts = r.data || []; } catch(e) {}
   const priceMap = buildPriceMap(curProducts);
   const orders = enrichOrdersWithCurrentPrices(getAdminVisibleOrders(rawOrders), priceMap).filter(o => o.status !== 'pending_weight');
-  const fees = adminRoundId ? await getRoundFees(adminRoundId) : normalizeFeeConfig({});
+  const fees = roundId ? await getRoundFees(roundId) : normalizeFeeConfig({});
 
-  const currentRound = allRounds.find(r => r.id === adminRoundId);
+  const currentRound = allRounds.find(r => r.id === roundId);
   let roundLabel = currentRound ? currentRound.name : '';
 
   let html = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">

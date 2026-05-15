@@ -1570,9 +1570,8 @@ BEGIN
       'spec_price', ROUND(v_member.spec_price / v_team.split_count, 2),
       'quantity', ROUND(v_member.share_qty / (v_team.target_qty / v_team.split_count))::int,
       'unit_qty', v_team.target_qty / v_team.split_count,
-      'purchase_qty', v_member.share_qty,
+      'purchase_qty', ROUND(v_member.share_qty * v_team.target_qty / v_team.split_count, 6),
       'subtotal', ROUND(v_member.spec_price * v_member.share_qty / v_team.target_qty, 2),
-      'share', v_member.share_qty,
       '_orig_time', now()::text
     ));
 
