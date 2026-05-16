@@ -1572,20 +1572,24 @@ async function renderProductManager(el) {
   // Fetch active rounds for selector
   const rounds = await getRounds();
   const activeRounds = rounds.filter(r => r.is_active || (r.is_active === false && !r.cutoff_time));
-  // 确保 adminProductRoundId 始终指向一个可用轮次
+  // 自动选当前用户拥有的轮次，没有则保持 null（避免 owner check 拒绝）
   if (!adminProductRoundId || !activeRounds.some(r => r.id === adminProductRoundId)) {
-    adminProductRoundId = activeRounds.length > 0 ? activeRounds[0].id : null;
+    const owned = activeRounds.filter(r => canEditRound(r.leader_id));
+    adminProductRoundId = owned.length > 0 ? owned[0].id : (activeRounds.length > 0 ? null : null);
   }
 
-  const { data: products, error } = await adminRpc('admin_get_products', { p_round_id: adminProductRoundId });
+  const currentRound = activeRounds.find(r => r.id === adminProductRoundId);
+  const canEditCurrent = canEditRound(currentRound?.leader_id);
+  // 非自己的轮次不传 p_round_id，避免 check_round_owner 拒绝；前端自行过滤
+  const { data: productsRaw, error } = await adminRpc('admin_get_products', { p_round_id: canEditCurrent ? adminProductRoundId : undefined });
+  const products = !canEditCurrent ? (productsRaw || []).filter(p => p.round_id === adminProductRoundId) : productsRaw;
 
-  if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab(\'products\')">重试</button></div>'; return; }
+  if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="adminProductRoundId=null;renderAdminTab(\'products\')">重试</button></div>'; return; }
 
   const productCount = products?.length || 0;
   const activeCount = (products || []).filter(p => p.is_active).length;
   const allTags = collectTags(products || []);
   const visibleProducts = (products || []).filter(p => productMatchesFilter(p, '', adminProductTagFilter));
-  const currentRound = activeRounds.find(r => r.id === adminProductRoundId);
 
   let html = '';
   // 轮次选择器（显示所有进行中/策划中的轮次）
@@ -3375,8 +3379,15 @@ async function renderOrderManager(el) {
     el.innerHTML = `<div class="empty-state"><p>查询轮次失败：${escHtml(lastRoundsError.message || '未知错误')}</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab('orders')">重试</button></div>`;
     return;
   }
-  if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : (allRounds[0]?.id || null); }
-  const roundId = adminRoundId; // 局部快照，防止渲染过程中切换轮次导致数据错位
+  if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const owned = allRounds.filter(r => canEditRound(r.leader_id)); const active = owned.find(r => r.is_active); adminRoundId = active ? active.id : (owned[0]?.id || null); }
+  const roundId = adminRoundId; // 局部快照
+  const roundOwnerEdit = allRounds.find(r => r.id === roundId);
+
+  // 非自己的轮次无法查看订单详情
+  if (roundId && !canEditRound(roundOwnerEdit?.leader_id)) {
+    el.innerHTML = `<div class="empty-state"><p>此轮次由其他团长管理，无法查看订单</p><button class="btn btn-primary btn-sm" onclick="adminRoundId=null;renderAdminTab('orders')">回到我的轮次</button></div>`;
+    return;
+  }
 
   // Build round selector
   let roundOpts = allRounds.map(r => {
@@ -3393,7 +3404,7 @@ async function renderOrderManager(el) {
     adminRpc('admin_get_cancelled_orders', { p_round_id: roundId })
   ]);
 
-  if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab(\'orders\')">重试</button></div>'; return; }
+  if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="adminRoundId=null;renderAdminTab(\'orders\')">重试</button></div>'; return; }
 
   const orders0 = getAdminVisibleOrders(rawOrders);
   // 用当前商品价格刷新订单金额
@@ -3798,8 +3809,15 @@ async function renderPaymentSummary(el) {
     el.innerHTML = `<div class="empty-state"><p>查询轮次失败：${escHtml(lastRoundsError.message || '未知错误')}</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab('summary')">重试</button></div>`;
     return;
   }
-  if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const active = allRounds.find(r => r.is_active); adminRoundId = active ? active.id : (allRounds[0]?.id || null); }
-  const roundId = adminRoundId; // 局部快照
+  if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const owned = allRounds.filter(r => canEditRound(r.leader_id)); const active = owned.find(r => r.is_active); adminRoundId = active ? active.id : (owned[0]?.id || null); }
+  const roundId = adminRoundId;
+  const roundOwnerEdit = allRounds.find(r => r.id === roundId);
+
+  // 非自己的轮次无法查看收款清单
+  if (roundId && !canEditRound(roundOwnerEdit?.leader_id)) {
+    el.innerHTML = `<div class="empty-state"><p>此轮次由其他团长管理，无法查看收款清单</p><button class="btn btn-primary btn-sm" onclick="adminRoundId=null;renderAdminTab('summary')">回到我的轮次</button></div>`;
+    return;
+  }
 
   let roundOpts = allRounds.map(r => {
     let statusLabel = '';

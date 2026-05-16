@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS leaders (
 );
 
 ALTER TABLE leaders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE leaders ADD COLUMN IF NOT EXISTS password_plain TEXT;
+
 
 DROP POLICY IF EXISTS "Anyone can read leaders" ON leaders;
 CREATE POLICY "Anyone can read leaders" ON leaders FOR SELECT USING (true);
@@ -178,6 +178,11 @@ CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_name);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_rounds_active ON rounds (is_active);
 
+-- 性能优化：补 FK 查询索引（2026-05-15 audit I1）
+CREATE INDEX IF NOT EXISTS idx_after_sales_round ON after_sales (round_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_round ON feedback (round_id);
+CREATE INDEX IF NOT EXISTS idx_teams_product_round_status ON teams (product_id, round_id, status);
+
 -- ============================================================================
 -- 自动更新 updated_at 触发器
 -- ============================================================================
@@ -210,13 +215,13 @@ RETURNS BOOLEAN AS $$
    RETURNING 1
   )
   SELECT EXISTS(SELECT 1 FROM updated);
-$$ LANGUAGE sql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION restore_stock(p_id UUID, qty NUMERIC)
 RETURNS VOID AS $$
   UPDATE products SET stock = stock + qty
    WHERE id = p_id AND stock IS NOT NULL;
-$$ LANGUAGE sql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================================
 -- 管理员认证（服务端 session token）
@@ -260,7 +265,7 @@ BEGIN
     END IF;
   END IF;
 
-  v_token := encode(gen_random_bytes(32), 'hex');
+  v_token := md5(random()::text || clock_timestamp()::text);
   INSERT INTO admin_sessions (token, expires_at, leader_id)
   VALUES (v_token, now() + INTERVAL '24 hours', v_leader.id);
 
@@ -271,7 +276,7 @@ BEGIN
     'leader_id', v_leader.id
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 验证 session token 是否有效
 CREATE OR REPLACE FUNCTION validate_session(p_token TEXT)
@@ -280,25 +285,26 @@ RETURNS BOOLEAN AS $$
     SELECT 1 FROM admin_sessions
     WHERE token = p_token AND expires_at > now()
   );
-$$ LANGUAGE sql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
 
 -- 清除 session（退出登录）
 CREATE OR REPLACE FUNCTION clear_session(p_token TEXT)
 RETURNS VOID AS $$
   DELETE FROM admin_sessions WHERE token = p_token;
-$$ LANGUAGE sql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
 
 -- 自动清理过期 session
 CREATE OR REPLACE FUNCTION cleanup_sessions()
 RETURNS VOID AS $$
   DELETE FROM admin_sessions WHERE expires_at < now();
-$$ LANGUAGE sql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
 
 DROP FUNCTION IF EXISTS require_admin(TEXT);
 CREATE OR REPLACE FUNCTION require_admin(p_token TEXT)
 RETURNS TABLE(leader_id UUID, role TEXT) AS $$
 BEGIN
-  SELECT s.leader_id, l.role INTO require_admin.leader_id, require_admin.role
+  RETURN QUERY
+  SELECT s.leader_id, l.role
   FROM admin_sessions s
   JOIN leaders l ON l.id = s.leader_id
   WHERE s.token = p_token AND s.expires_at > now();
@@ -306,7 +312,7 @@ BEGIN
     RAISE EXCEPTION 'invalid admin session';
   END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION check_round_owner(p_leader_id UUID, p_role TEXT, p_round_id UUID)
 RETURNS VOID AS $$
@@ -319,7 +325,7 @@ BEGIN
     RAISE EXCEPTION 'permission denied: you are not the owner of this round';
   END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION check_super_admin(p_role TEXT)
 RETURNS VOID AS $$
@@ -328,9 +334,9 @@ BEGIN
     RAISE EXCEPTION 'permission denied: super admin only';
   END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-CREATE OR REPLACE FUNCTION admin_create_leader(p_token TEXT, p_username TEXT, p_password_hash TEXT, p_plain_password TEXT)
+CREATE OR REPLACE FUNCTION admin_create_leader(p_token TEXT, p_username TEXT, p_password_hash TEXT)
 RETURNS UUID AS $$
 DECLARE
   v_leader_id UUID;
@@ -339,10 +345,10 @@ DECLARE
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
   PERFORM check_super_admin(v_role);
-  INSERT INTO leaders (username, password_hash, password_plain) VALUES (p_username, p_password_hash, p_plain_password) RETURNING id INTO v_new_id;
+  INSERT INTO leaders (username, password_hash) VALUES (p_username, p_password_hash) RETURNING id INTO v_new_id;
   RETURN v_new_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_delete_leader(p_token TEXT, p_leader_id UUID)
 RETURNS BOOLEAN AS $$
@@ -357,22 +363,22 @@ BEGIN
   DELETE FROM leaders WHERE id = p_leader_id AND role <> 'super_admin';
   RETURN FOUND;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP FUNCTION IF EXISTS admin_list_leaders(TEXT);
 CREATE OR REPLACE FUNCTION admin_list_leaders(p_token TEXT)
-RETURNS TABLE(id UUID, username TEXT, role TEXT, password_plain TEXT, created_at TIMESTAMPTZ) AS $$
+RETURNS TABLE(id UUID, username TEXT, role TEXT, created_at TIMESTAMPTZ) AS $$
 DECLARE
   v_leader_id UUID;
   v_role TEXT;
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
   PERFORM check_super_admin(v_role);
-  RETURN QUERY SELECT l.id, l.username, l.role, l.password_plain, l.created_at FROM leaders l ORDER BY l.created_at;
+  RETURN QUERY SELECT l.id, l.username, l.role, l.created_at FROM leaders l ORDER BY l.created_at;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-CREATE OR REPLACE FUNCTION admin_reset_leader_password(p_token TEXT, p_leader_id UUID, p_password_hash TEXT, p_plain_password TEXT)
+CREATE OR REPLACE FUNCTION admin_reset_leader_password(p_token TEXT, p_leader_id UUID, p_password_hash TEXT)
 RETURNS BOOLEAN AS $$
 DECLARE
   v_leader_id UUID;
@@ -380,12 +386,12 @@ DECLARE
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
   PERFORM check_super_admin(v_role);
-  UPDATE leaders SET password_hash = p_password_hash, password_plain = p_plain_password WHERE id = p_leader_id;
+  UPDATE leaders SET password_hash = p_password_hash WHERE id = p_leader_id;
   RETURN FOUND;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-CREATE OR REPLACE FUNCTION register_leader(p_username TEXT, p_password_hash TEXT, p_plain_password TEXT)
+CREATE OR REPLACE FUNCTION register_leader(p_username TEXT, p_password_hash TEXT)
 RETURNS UUID AS $$
 DECLARE
   v_new_id UUID;
@@ -393,10 +399,10 @@ BEGIN
   IF EXISTS (SELECT 1 FROM leaders WHERE username = p_username) THEN
     RAISE EXCEPTION 'username already exists';
   END IF;
-  INSERT INTO leaders (username, password_hash, password_plain) VALUES (p_username, p_password_hash, p_plain_password) RETURNING id INTO v_new_id;
+  INSERT INTO leaders (username, password_hash) VALUES (p_username, p_password_hash) RETURNING id INTO v_new_id;
   RETURN v_new_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_transfer_round(p_token TEXT, p_round_id UUID, p_leader_id UUID)
 RETURNS BOOLEAN AS $$
@@ -409,7 +415,7 @@ BEGIN
   UPDATE rounds SET leader_id = p_leader_id WHERE id = p_round_id;
   RETURN FOUND;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION needs_admin_password()
 RETURNS BOOLEAN AS $$
@@ -417,17 +423,17 @@ RETURNS BOOLEAN AS $$
     SELECT 1 FROM settings
     WHERE key = 'admin_password' AND value <> ''
   );
-$$ LANGUAGE sql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION get_group_names()
 RETURNS TEXT AS $$
   SELECT COALESCE((SELECT value FROM settings WHERE key = 'group_names'), '山姆群,美食群');
-$$ LANGUAGE sql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION get_site_title()
 RETURNS TEXT AS $$
   SELECT COALESCE((SELECT value FROM settings WHERE key = 'site_title'), '美好小区团购群');
-$$ LANGUAGE sql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_get_products(p_token TEXT, p_round_id UUID DEFAULT NULL)
 RETURNS SETOF products AS $$
@@ -436,11 +442,12 @@ DECLARE
   v_role TEXT;
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
+  IF p_round_id IS NOT NULL THEN PERFORM check_round_owner(v_leader_id, v_role, p_round_id); END IF;
   RETURN QUERY SELECT * FROM products
     WHERE (p_round_id IS NULL OR round_id = p_round_id)
     ORDER BY created_at DESC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_get_product(p_token TEXT, p_id UUID)
 RETURNS products AS $$
@@ -450,10 +457,11 @@ DECLARE
   row products;
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
+  PERFORM check_round_owner(v_leader_id, v_role, (SELECT round_id FROM products WHERE id = p_id));
   SELECT * INTO row FROM products WHERE id = p_id;
   RETURN row;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_get_orders(p_token TEXT, p_round_id UUID)
 RETURNS SETOF orders AS $$
@@ -462,13 +470,14 @@ DECLARE
   v_role TEXT;
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
+  PERFORM check_round_owner(v_leader_id, v_role, p_round_id);
   RETURN QUERY
     SELECT * FROM orders
      WHERE status IN ('active', 'pending_weight')
        AND (p_round_id IS NULL OR round_id = p_round_id)
      ORDER BY created_at;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION lookup_orders(p_customer_name TEXT, p_round_id UUID)
 RETURNS SETOF orders AS $$
@@ -479,7 +488,7 @@ BEGIN
        AND (p_round_id IS NULL OR round_id = p_round_id)
      ORDER BY created_at DESC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 公开：返回某轮次各商品的汇总数量（用于前端显示"已拼满/未拼满"）
 CREATE OR REPLACE FUNCTION get_round_order_stats(p_round_id UUID)
@@ -495,7 +504,7 @@ SELECT COALESCE(jsonb_agg(s), '[]'::jsonb) FROM (
     AND (it->>'product_id') IS NOT NULL
   GROUP BY it->>'product_id'
 ) s;
-$$ LANGUAGE sql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
 
 -- 清理旧版本避免重载冲突
 DROP FUNCTION IF EXISTS admin_save_product(p_token TEXT, p_id UUID, p_name TEXT, p_image TEXT, p_specs JSONB, p_tags JSONB, p_stock NUMERIC, p_is_active BOOLEAN);
@@ -565,7 +574,7 @@ BEGIN
   END IF;
   RETURN new_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_toggle_product(p_token TEXT, p_id UUID, p_is_active BOOLEAN)
 RETURNS VOID AS $$
@@ -577,7 +586,7 @@ BEGIN
   PERFORM check_round_owner(v_leader_id, v_role, (SELECT round_id FROM products WHERE id = p_id));
   UPDATE products SET is_active = p_is_active WHERE id = p_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_delete_product(p_token TEXT, p_id UUID)
 RETURNS VOID AS $$
@@ -589,7 +598,7 @@ BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
   PERFORM check_round_owner(v_leader_id, v_role, (SELECT round_id FROM products WHERE id = p_id));
   -- 解散该商品上所有活跃队伍（归还库存）
-  PERFORM cancel_team(t.id) FROM teams t WHERE t.product_id = p_id AND t.status = 'active';
+  PERFORM cancel_team(t.id) FROM teams t WHERE t.product_id = p_id AND t.status IN ('active', 'filled');
   -- 标记所有活动订单中该商品的记录为已删除（跨所有轮次）
   WITH rebuilt AS (
     SELECT
@@ -637,7 +646,7 @@ BEGIN
 
   DELETE FROM products WHERE id = p_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION mark_missing_order_products_deleted()
 RETURNS VOID AS $$
@@ -702,7 +711,7 @@ BEGIN
    WHERE o.id = rebuilt.id
      AND (rebuilt.has_missing_product OR rebuilt.has_deleted_product);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 SELECT mark_missing_order_products_deleted();
 
@@ -716,7 +725,7 @@ BEGIN
   PERFORM check_super_admin(v_role);
   UPDATE settings SET value = p_pw_hash WHERE key = 'admin_password';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_set_group_names(p_token TEXT, p_names TEXT)
 RETURNS VOID AS $$
@@ -729,7 +738,7 @@ BEGIN
   INSERT INTO settings (key, value) VALUES ('group_names', p_names)
   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_set_site_title(p_token TEXT, p_title TEXT)
 RETURNS VOID AS $$
@@ -743,7 +752,7 @@ BEGIN
   VALUES ('site_title', NULLIF(TRIM(p_title), ''))
   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_get_round_fee_map(p_token TEXT)
 RETURNS JSONB AS $$
@@ -756,7 +765,7 @@ BEGIN
   SELECT value INTO raw_value FROM settings WHERE key = 'round_fees';
   RETURN COALESCE(raw_value, '{}')::jsonb;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_save_round_fees(p_token TEXT, p_round_id UUID, p_fees JSONB)
 RETURNS VOID AS $$
@@ -772,7 +781,7 @@ BEGIN
      SET value = jsonb_set(COALESCE(fee_map, '{}'::jsonb), ARRAY[p_round_id::text], COALESCE(p_fees, '{}'::jsonb), true)::text
    WHERE key = 'round_fees';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_create_round(p_token TEXT, p_name TEXT, p_cutoff_time TIMESTAMPTZ, p_leader_name TEXT DEFAULT NULL)
 RETURNS UUID AS $$
@@ -782,12 +791,16 @@ DECLARE
   new_id UUID;
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
+  -- 未指定团长名称时，默认使用创建者的用户名
+  IF p_leader_name IS NULL OR p_leader_name = '' THEN
+    SELECT username INTO p_leader_name FROM leaders WHERE id = v_leader_id;
+  END IF;
   INSERT INTO rounds (name, cutoff_time, is_active, leader_name, leader_id)
   VALUES (p_name, p_cutoff_time, false, NULLIF(p_leader_name, ''), v_leader_id)
   RETURNING id INTO new_id;
   RETURN new_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_update_round(p_token TEXT, p_id UUID, p_name TEXT, p_cutoff_time TIMESTAMPTZ, p_leader_name TEXT DEFAULT NULL)
 RETURNS VOID AS $$
@@ -799,7 +812,7 @@ BEGIN
   PERFORM check_round_owner(v_leader_id, v_role, p_id);
   UPDATE rounds SET name = p_name, cutoff_time = p_cutoff_time, leader_name = NULLIF(p_leader_name, '') WHERE id = p_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_activate_round(p_token TEXT, p_id UUID)
 RETURNS VOID AS $$
@@ -811,7 +824,7 @@ BEGIN
   PERFORM check_round_owner(v_leader_id, v_role, p_id);
   UPDATE rounds SET is_active = true WHERE id = p_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 管理员砍单（不受截止时间限制，支持备注砍单原因）
 CREATE OR REPLACE FUNCTION admin_cancel_order(p_token TEXT, p_order_id UUID, p_note TEXT DEFAULT NULL)
@@ -855,11 +868,17 @@ BEGIN
         AND product_id = (item->>'product_id')::uuid
         AND status = 'filled'
         AND NOT EXISTS (SELECT 1 FROM team_members WHERE team_id = teams.id);
+      -- 已满队伍有队员退出但仍有余留：回退为 active 允许补位
+      UPDATE teams SET status = 'active'
+      WHERE round_id = order_row.round_id
+        AND product_id = (item->>'product_id')::uuid
+        AND status = 'filled'
+        AND EXISTS (SELECT 1 FROM team_members WHERE team_id = teams.id);
     END IF;
   END LOOP;
   RETURN true;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_stop_round(p_token TEXT, p_id UUID)
 RETURNS VOID AS $$
@@ -871,7 +890,7 @@ BEGIN
   PERFORM check_round_owner(v_leader_id, v_role, p_id);
   UPDATE rounds SET is_active = false, cutoff_time = now() WHERE id = p_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_delete_round(p_token TEXT, p_id UUID)
 RETURNS VOID AS $$
@@ -884,11 +903,15 @@ BEGIN
   IF EXISTS (SELECT 1 FROM rounds WHERE id = p_id AND is_active = true AND (cutoff_time IS NULL OR cutoff_time > now())) THEN
     RAISE EXCEPTION 'cannot delete active round';
   END IF;
+  DELETE FROM after_sales WHERE round_id = p_id;
+  UPDATE feedback SET round_id = NULL WHERE round_id = p_id;
+  DELETE FROM team_members WHERE team_id IN (SELECT id FROM teams WHERE round_id = p_id);
+  DELETE FROM teams WHERE round_id = p_id;
   DELETE FROM orders WHERE round_id = p_id;
   DELETE FROM products WHERE round_id = p_id;
   DELETE FROM rounds WHERE id = p_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP FUNCTION IF EXISTS create_order(TEXT, JSONB, TEXT, NUMERIC, UUID);
 CREATE OR REPLACE FUNCTION create_order(
@@ -916,7 +939,7 @@ DECLARE
   new_id UUID;
   round_row rounds;
 BEGIN
-  SELECT * INTO round_row FROM rounds WHERE id = p_round_id AND is_active = true;
+  SELECT * INTO round_row FROM rounds WHERE id = p_round_id AND is_active = true FOR UPDATE;
   IF round_row.id IS NULL THEN
     RAISE EXCEPTION 'round is not active';
   END IF;
@@ -924,8 +947,9 @@ BEGIN
     RAISE EXCEPTION 'round is closed';
   END IF;
 
-  -- 幂等保护：同一顾客 5 秒内在同一轮次重复提交视为重放
+  -- 幂等保护：用 advisory lock 串行化同一顾客+轮次的并发提交
   -- 互斥规则已移除：允许同一顾客在同一商品有活跃队伍的同时独立下单
+  PERFORM pg_advisory_xact_lock(hashtext(p_customer_name || ':' || p_round_id::text));
 
   IF EXISTS (
     SELECT 1 FROM orders
@@ -999,7 +1023,7 @@ BEGIN
   RETURNING id INTO new_id;
   RETURN new_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 称重商品确认：录入实际重量后确认订单
 CREATE OR REPLACE FUNCTION admin_confirm_order_weight(p_token TEXT, p_order_id UUID, p_weights JSONB)
@@ -1047,7 +1071,7 @@ BEGIN
   UPDATE orders SET items = new_items, total_amount = ROUND(new_total, 2), status = 'active' WHERE id = p_order_id;
   RETURN true;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION cancel_order(p_order_id UUID, p_customer_name TEXT)
 RETURNS BOOLEAN AS $$
@@ -1096,11 +1120,17 @@ BEGIN
         AND product_id = (item->>'product_id')::uuid
         AND status = 'filled'
         AND NOT EXISTS (SELECT 1 FROM team_members WHERE team_id = teams.id);
+      -- 已满队伍有队员退出但仍有余留：回退为 active 允许补位
+      UPDATE teams SET status = 'active'
+      WHERE round_id = order_row.round_id
+        AND product_id = (item->>'product_id')::uuid
+        AND status = 'filled'
+        AND EXISTS (SELECT 1 FROM team_members WHERE team_id = teams.id);
     END IF;
   END LOOP;
   RETURN true;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 REVOKE EXECUTE ON FUNCTION deduct_stock(UUID, NUMERIC) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION restore_stock(UUID, NUMERIC) FROM PUBLIC, anon, authenticated;
@@ -1147,7 +1177,6 @@ ALTER TABLE after_sales ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL
 
 ALTER TABLE after_sales ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can insert after_sales" ON after_sales;
-DROP POLICY IF EXISTS "Anyone can insert after_sales" ON after_sales;
 CREATE POLICY "Anyone can insert after_sales" ON after_sales FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Anyone can read own after_sales" ON after_sales;
 CREATE POLICY "Anyone can read own after_sales" ON after_sales FOR SELECT USING (true);
@@ -1160,11 +1189,12 @@ DECLARE
   v_role TEXT;
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
+  IF p_round_id IS NOT NULL THEN PERFORM check_round_owner(v_leader_id, v_role, p_round_id); END IF;
   RETURN QUERY SELECT * FROM after_sales
     WHERE (p_round_id IS NULL OR round_id = p_round_id)
     ORDER BY created_at DESC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_update_after_sales_status(p_token TEXT, p_id UUID, p_status TEXT)
 RETURNS VOID AS $$
@@ -1174,9 +1204,12 @@ DECLARE
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
   PERFORM check_round_owner(v_leader_id, v_role, (SELECT round_id FROM after_sales WHERE id = p_id));
+  IF p_status NOT IN ('unread', 'read', 'resolved') THEN
+    RAISE EXCEPTION 'invalid status: %', p_status;
+  END IF;
   UPDATE after_sales SET status = p_status WHERE id = p_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 DROP POLICY IF EXISTS "Anyone can insert feedback" ON feedback;
 CREATE POLICY "Anyone can insert feedback" ON feedback FOR INSERT WITH CHECK (true);
 
@@ -1188,9 +1221,16 @@ DECLARE
   v_role TEXT;
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
-  RETURN QUERY SELECT * FROM feedback ORDER BY created_at DESC;
+  IF v_role = 'super_admin' THEN
+    RETURN QUERY SELECT * FROM feedback ORDER BY created_at DESC;
+  ELSE
+    RETURN QUERY SELECT f.* FROM feedback f
+      JOIN rounds r ON r.id = f.round_id
+      WHERE r.leader_id = v_leader_id
+      ORDER BY f.created_at DESC;
+  END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 标记已读
 CREATE OR REPLACE FUNCTION admin_mark_feedback_read(p_token TEXT, p_id UUID)
@@ -1203,7 +1243,7 @@ BEGIN
   PERFORM check_round_owner(v_leader_id, v_role, (SELECT round_id FROM feedback WHERE id = p_id));
   UPDATE feedback SET status = 'read' WHERE id = p_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================================
 -- Storage Bucket: 商品图片存储
@@ -1235,13 +1275,14 @@ DECLARE
   v_role TEXT;
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
+  PERFORM check_round_owner(v_leader_id, v_role, p_round_id);
   RETURN QUERY
     SELECT * FROM orders
      WHERE status = 'cancelled'
        AND round_id = p_round_id
      ORDER BY updated_at DESC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================================
 -- 原子砍单：在原订单上直接移除/减少商品项，更新金额
@@ -1375,7 +1416,7 @@ BEGIN
 
   RETURN affected_orders;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================================
 -- 拼单组队
@@ -1422,8 +1463,17 @@ CREATE OR REPLACE FUNCTION create_team(
 DECLARE
   v_team_id UUID;
   v_product products%ROWTYPE;
+  v_round rounds%ROWTYPE;
 BEGIN
   -- 互斥规则已移除：允许同一顾客在同一商品加入多个队伍、同时独立下单
+
+  SELECT * INTO v_round FROM rounds WHERE id = p_round_id AND is_active = true FOR UPDATE;
+  IF v_round.id IS NULL THEN
+    RAISE EXCEPTION 'round is not active';
+  END IF;
+  IF v_round.cutoff_time IS NOT NULL AND v_round.cutoff_time <= now() THEN
+    RAISE EXCEPTION 'round is closed';
+  END IF;
 
   SELECT * INTO v_product FROM products WHERE id = p_product_id FOR UPDATE;
 
@@ -1448,7 +1498,7 @@ BEGIN
   END IF;
   RETURN v_team_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION join_team(
   p_team_id UUID, p_customer_name TEXT,
@@ -1464,7 +1514,7 @@ BEGIN
 
   -- 互斥规则已移除：允许同一顾客在同一商品加入多个队伍、同时独立下单
 
-  SELECT COALESCE(SUM(share_qty), 0) INTO v_current FROM team_members WHERE team_id = p_team_id;
+  SELECT COALESCE(ROUND(SUM(share_qty), 3), 0) INTO v_current FROM team_members WHERE team_id = p_team_id;
   IF ROUND(v_current + p_share_qty, 3) > v_team.target_qty THEN
     RAISE EXCEPTION 'share would exceed target: current %, adding %, target %', v_current, p_share_qty, v_team.target_qty;
   END IF;
@@ -1481,14 +1531,14 @@ BEGIN
     UPDATE products SET stock = stock - p_share_qty WHERE id = v_team.product_id;
   END IF;
 
-  SELECT COALESCE(SUM(share_qty), 0) INTO v_current FROM team_members WHERE team_id = p_team_id;
+  SELECT COALESCE(ROUND(SUM(share_qty), 3), 0) INTO v_current FROM team_members WHERE team_id = p_team_id;
   IF ROUND(v_current, 3) >= v_team.target_qty THEN
     PERFORM create_team_orders(p_team_id);
     RETURN 'filled';
   END IF;
   RETURN 'joined';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION leave_team(p_team_id UUID, p_customer_name TEXT)
 RETURNS BOOLEAN AS $$
@@ -1512,7 +1562,7 @@ BEGIN
   END IF;
   RETURN true;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION cancel_team(p_team_id UUID)
 RETURNS BOOLEAN AS $$
@@ -1540,7 +1590,7 @@ BEGIN
   UPDATE teams SET status = 'cancelled' WHERE id = p_team_id;
   RETURN true;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION create_team_orders(p_team_id UUID)
 RETURNS INT AS $$
@@ -1566,7 +1616,7 @@ BEGIN
     v_items := jsonb_build_array(jsonb_build_object(
       'product_id', v_team.product_id,
       'product_name', (SELECT name FROM products WHERE id = v_team.product_id),
-      'spec_name', REGEXP_REPLACE(v_member.spec_name, '^(\d+(?:\.\d+)?)', (ROUND((REGEXP_MATCH(v_member.spec_name, '^(\d+(?:\.\d+)?)'))[1]::numeric / v_team.split_count, 2))::text),
+      'spec_name', COALESCE(REGEXP_REPLACE(v_member.spec_name, '^(\d+(?:\.\d+)?)', (ROUND((REGEXP_MATCH(v_member.spec_name, '^(\d+(?:\.\d+)?)'))[1]::numeric / v_team.split_count, 2))::text), v_member.spec_name),
       'spec_price', ROUND(v_member.spec_price / v_team.split_count, 2),
       'quantity', ROUND(v_member.share_qty / (v_team.target_qty / v_team.split_count))::int,
       'unit_qty', v_team.target_qty / v_team.split_count,
@@ -1586,7 +1636,7 @@ BEGIN
   UPDATE teams SET status = 'filled' WHERE id = p_team_id;
   RETURN v_orders;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION get_product_teams(p_product_id UUID, p_round_id UUID)
 RETURNS TABLE (
@@ -1606,7 +1656,7 @@ BEGIN
   WHERE t.product_id = p_product_id AND t.round_id = p_round_id AND t.status IN ('active', 'filled')
   ORDER BY t.created_at;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION admin_get_teams(p_token TEXT, p_round_id UUID)
 RETURNS TABLE (
@@ -1618,6 +1668,7 @@ DECLARE
   v_role TEXT;
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
+  PERFORM check_round_owner(v_leader_id, v_role, p_round_id);
   RETURN QUERY
   SELECT t.id, p.name, t.initiator_name, t.target_qty, t.split_count,
     COALESCE(m.total_qty, 0), t.status, t.created_at, COALESCE(m.members_json, '[]'::jsonb)
@@ -1631,7 +1682,7 @@ BEGIN
   WHERE (p_round_id IS NULL OR t.round_id = p_round_id) AND t.status IN ('active', 'filled')
   ORDER BY t.created_at DESC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION auto_dissolve_expired_teams()
 RETURNS INT AS $$
@@ -1646,7 +1697,7 @@ BEGIN
   END LOOP;
   RETURN v_count;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION get_customer_teams(p_round_id UUID, p_customer_name TEXT)
 RETURNS TABLE (
@@ -1669,11 +1720,16 @@ BEGIN
   ) m ON true
   WHERE t.round_id = p_round_id AND t.status IN ('active', 'filled');
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================================
 -- Seed 超级管理员（首次部署，密码 hash 对应 'admin123'）
 -- ============================================================================
-INSERT INTO leaders (username, password_hash, role, password_plain)
-SELECT 'admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'super_admin', 'admin123'
+INSERT INTO leaders (username, password_hash, role)
+SELECT 'admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'super_admin'
 WHERE NOT EXISTS (SELECT 1 FROM leaders WHERE username = 'admin');
+
+-- ============================================================================
+-- 刷新 PostgREST schema 缓存（每次部署后必须执行）
+-- ============================================================================
+NOTIFY pgrst, 'reload schema';
