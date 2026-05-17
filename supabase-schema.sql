@@ -3,8 +3,6 @@
 -- 使用方法：复制到 Supabase SQL Editor 中执行
 -- ============================================================================
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 -- 1. 商品表
 CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
