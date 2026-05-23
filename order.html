@@ -931,6 +931,9 @@ let customerSearchQuery = '';
 let cutoffCountdownTimer = null;
 let customerSelectedTag = '全部';
 let adminProductTagFilter = '全部';
+let adminProductSearchKeyword = '';
+let adminOrderSearchKeyword = '';
+let adminPaymentSearchKeyword = '';
 
 async function getActiveRound() {
   // Prefer active rounds that haven't expired (no cutoff, or cutoff still in the future)
@@ -997,6 +1000,10 @@ async function renderAdminTab(tab) {
   if (tab === 'products' && !adminProductRoundId && adminRoundId) {
     adminProductRoundId = adminRoundId;
   }
+  // Reset search keywords when switching away from a tab
+  if (tab !== 'products') adminProductSearchKeyword = '';
+  if (tab !== 'orders') adminOrderSearchKeyword = '';
+  if (tab !== 'summary') adminPaymentSearchKeyword = '';
   switch(tab) {
     case 'products': await renderProductManager(el); break;
     case 'orders': await renderOrderManager(el); break;
@@ -1589,13 +1596,13 @@ async function renderProductManager(el) {
   const productCount = products?.length || 0;
   const activeCount = (products || []).filter(p => p.is_active).length;
   const allTags = collectTags(products || []);
-  const visibleProducts = (products || []).filter(p => productMatchesFilter(p, '', adminProductTagFilter));
+  const visibleProducts = (products || []).filter(p => productMatchesFilter(p, adminProductSearchKeyword, adminProductTagFilter));
 
   let html = '';
   // 轮次选择器（显示所有进行中/策划中的轮次）
   html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">`;
   activeRounds.forEach(r => {
-    html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId='${escAttr(r.id)}';renderAdminTab('products')">${escHtml(r.name)}${!canEditRound(r.leader_id) ? ' (只读)' : ''}</button>`;
+    html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId='${escAttr(r.id)}';adminProductSearchKeyword='';renderAdminTab('products')">${escHtml(r.name)}${!canEditRound(r.leader_id) ? ' (只读)' : ''}</button>`;
   });
   html += `</div>`;
   html += `<div class="stat-row">
@@ -1616,8 +1623,9 @@ async function renderProductManager(el) {
   html += `<div style="display:flex;gap:8px;margin-bottom:12px">
     <button class="btn btn-secondary btn-sm" onclick="exportRoundProducts()">导出商品</button>
     ${canEditRound(currentRound?.leader_id) ? `<button class="btn btn-secondary btn-sm" onclick="importRoundProducts()">导入商品</button>` : ''}
-  </div>
-  <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:12px">
+  </div>`;
+  html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-product-search" placeholder="搜索商品名称、规格或标签" value="${escAttr(adminProductSearchKeyword)}" oninput="adminProductSearchKeyword=this.value;renderAdminTab('products')"></label>`;
+  html += `<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:12px">
     <div class="tag-list" style="flex:1">
       ${['全部', ...allTags].map(tag => `<button class="tag-pill ${adminProductTagFilter === tag ? 'active' : ''}" onclick="adminProductTagFilter='${escAttr(tag)}';renderAdminTab('products')">${escHtml(tag)}</button>`).join('')}
     </div>
@@ -1890,13 +1898,12 @@ async function openProductForm(id) {
         btn.disabled = false; btn.textContent = isEdit ? '保存修改' : '添加商品';
         return;
       }
-      const extMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' };
-      const ext = extMap[file.type] || 'jpg';
+      const compressed = await compressImage(file);
       const randomPart = crypto.getRandomValues(new Uint32Array(2));
-      const path = `products/${Date.now()}-${randomPart[0].toString(36)}${randomPart[1].toString(36)}.${ext}`;
-      const { error: uploadErr } = await sb.storage.from('product-images').upload(path, file, {
-        contentType: file.type,
-        cacheControl: '3600',
+      const path = `products/${Date.now()}-${randomPart[0].toString(36)}${randomPart[1].toString(36)}.jpg`;
+      const { error: uploadErr } = await sb.storage.from('product-images').upload(path, compressed, {
+        contentType: 'image/jpeg',
+        cacheControl: '31536000',
         upsert: false
       });
       if (uploadErr) {
@@ -2878,9 +2885,9 @@ async function showAfterSales(roundId, customerName) {
       const fileInput = modal.querySelector('#aftersales-image');
       for (const file of fileInput.files) {
         if (file.size > 5242880) { errEl.textContent = '图片不能超过 5MB'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = '提交售后'; return; }
-        const ext = file.name.split('.').pop() || 'png';
-        const path = `products/feedback/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-        const { error: uploadErr } = await sb.storage.from('product-images').upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+        const compressed = await compressImage(file);
+        const path = `products/feedback/${Date.now()}-${Math.random().toString(36).slice(2,8)}.jpg`;
+        const { error: uploadErr } = await sb.storage.from('product-images').upload(path, compressed, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
         if (!uploadErr) {
           const { data: urlData } = sb.storage.from('product-images').getPublicUrl(path);
           imageUrls.push(urlData.publicUrl);
@@ -2919,9 +2926,9 @@ async function submitFeedback() {
     if (fileInput.files.length > 0) {
       const file = fileInput.files[0];
       if (file.size > 5242880) { errEl.textContent = '图片不能超过 5MB'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = '提交反馈'; return; }
-      const ext = file.name.split('.').pop() || 'png';
-      const path = `products/feedback/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-      const { error: uploadErr } = await sb.storage.from('product-images').upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+      const compressed = await compressImage(file);
+      const path = `products/feedback/${Date.now()}-${Math.random().toString(36).slice(2,8)}.jpg`;
+      const { error: uploadErr } = await sb.storage.from('product-images').upload(path, compressed, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
       if (!uploadErr) {
         const { data: urlData } = sb.storage.from('product-images').getPublicUrl(path);
         imageUrl = urlData.publicUrl;
@@ -3418,7 +3425,7 @@ async function renderOrderManager(el) {
   const totalAmount = orders?.reduce((s, o) => s + parseFloat(o.total_amount), 0) || 0;
 
   let html = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-    <select class="form-input" style="flex:1;min-width:120px" onchange="adminRoundId=this.value;renderOrderManager(document.getElementById('admin-tab-orders'))">
+    <select class="form-input" style="flex:1;min-width:120px" onchange="adminRoundId=this.value;adminOrderSearchKeyword='';renderOrderManager(document.getElementById('admin-tab-orders'))">
       ${roundOpts}
     </select>
     <button class="btn btn-secondary btn-sm" onclick="renderOrderManager(document.getElementById('admin-tab-orders'))">刷新</button>
@@ -3442,6 +3449,15 @@ async function renderOrderManager(el) {
   </div>`;
 
   html += `<button class="btn btn-secondary btn-sm" style="margin-bottom:16px" onclick="exportOrders()">导出 Excel</button>`;
+
+  // Search filter
+  const keyword = (adminOrderSearchKeyword || '').trim().toLowerCase();
+  const visibleOrders = !keyword ? orders : orders.filter(o => {
+    if ((o.customer_name || '').toLowerCase().includes(keyword)) return true;
+    return (o.items || []).some(it => !it.deleted && (it.product_name || '').toLowerCase().includes(keyword));
+  });
+
+  html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-order-search" placeholder="搜索顾客名或商品名" value="${escAttr(adminOrderSearchKeyword)}" oninput="adminOrderSearchKeyword=this.value;renderAdminTab('orders')"></label>`;
 
   if (!orders || orders.length === 0) {
     html += '<div class="empty-state"><p>该轮次暂无订单</p></div>';
@@ -3519,7 +3535,7 @@ async function renderOrderManager(el) {
 
   // Group by customer + round, keep per-order items
   const grouped = {};
-  orders.forEach(o => {
+  visibleOrders.forEach(o => {
     const key = `${o.customer_name}||${o.round_id || ''}`;
     if (!grouped[key]) grouped[key] = { name: o.customer_name, roundId: o.round_id, orders: [], totalAmount: 0, notes: [] };
     const g = grouped[key];
@@ -3839,7 +3855,7 @@ async function renderPaymentSummary(el) {
   let roundLabel = currentRound ? currentRound.name : '';
 
   let html = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-    <select class="form-input" style="flex:1;min-width:120px" onchange="adminRoundId=this.value;renderPaymentSummary(document.getElementById('admin-tab-summary'))">
+    <select class="form-input" style="flex:1;min-width:120px" onchange="adminRoundId=this.value;adminPaymentSearchKeyword='';renderPaymentSummary(document.getElementById('admin-tab-summary'))">
       ${roundOpts}
     </select>
     <button class="btn btn-secondary btn-sm" onclick="renderPaymentSummary(document.getElementById('admin-tab-summary'))">刷新</button>
@@ -3865,6 +3881,12 @@ async function renderPaymentSummary(el) {
     ${canEditRound(currentRound?.leader_id) ? `<button class="btn btn-primary btn-sm" onclick="saveRoundFees()">保存费用设置</button>` : ''}
   </div>`;
 
+  // Payment search filter
+  const payKeyword = (adminPaymentSearchKeyword || '').trim().toLowerCase();
+  const visiblePaymentOrders = !payKeyword ? orders : orders.filter(o => (o.customer_name || '').toLowerCase().includes(payKeyword));
+
+  html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-payment-search" placeholder="搜索顾客名" value="${escAttr(adminPaymentSearchKeyword)}" oninput="adminPaymentSearchKeyword=this.value;renderAdminTab('summary')"></label>`;
+
   if (!orders || orders.length === 0) {
     html += '<div class="empty-state"><p>该轮次暂无订单可汇总</p></div>';
     el.innerHTML = html;
@@ -3873,7 +3895,7 @@ async function renderPaymentSummary(el) {
 
   const grouped = {};
   const groupedQtys = {};
-  orders.forEach(o => {
+  visiblePaymentOrders.forEach(o => {
     if (!grouped[o.customer_name]) { grouped[o.customer_name] = 0; groupedQtys[o.customer_name] = 0; }
     grouped[o.customer_name] += parseFloat(o.total_amount);
     (o.items||[]).forEach(it => { if (!it.deleted) groupedQtys[o.customer_name] += Number(it.purchase_qty) || Number(it.quantity) || 0; });
@@ -4722,6 +4744,27 @@ function openImagePreview(url) {
   overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
   document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', esc); } });
   document.body.appendChild(overlay);
+}
+
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (w > 800) { h = Math.round(h * 800 / w); w = 800; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob);
+        else reject(new Error('compress failed'));
+      }, 'image/jpeg', 0.8);
+    };
+    img.onerror = () => reject(new Error('image load failed'));
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 function escHtml(s) {

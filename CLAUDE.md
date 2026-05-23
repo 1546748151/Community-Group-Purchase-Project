@@ -179,7 +179,7 @@ Layer 3: check_round_owner(leader_id, role, round_id)
 **组队系统：**
 - `create_team(p_round_id, p_product_id, ...)` — 创建队伍（含轮次状态 FOR UPDATE 检查 + is_team 校验）
 - `join_team(p_team_id, ...)` — 加入队伍（ROUND(SUM(share_qty), 3) 拼满判断）
-- `create_team_orders(p_team_id)` — 队伍满员自动生成订单（purchase_qty = share_qty × target_qty / split_count）
+- `create_team_orders(p_team_id)` — 队伍满员自动生成订单（quantity=1每人一条，purchase_qty = share_qty，前端已预除 split_count）
 - `get_product_teams(p_product_id, p_round_id)` — 查商品队伍列表
 - `admin_get_teams(p_token, p_round_id)` — 团长端队伍视图（含 round_owner 校验）
 - `cancel_team(p_team_id)` — 解散队伍（filled 状态同步取消关联的组队订单）
@@ -227,7 +227,7 @@ CREATE INDEX IF NOT EXISTS idx_teams_product_round_status ON teams (product_id, 
 如果从旧版 schema 升级，需手动执行：
 ```sql
 ALTER TABLE leaders DROP COLUMN IF EXISTS password_plain;
--- 如果旧版 create_team_orders 的 purchase_qty 公式有误，需批量修正历史数据
+-- 2026-05-22: purchase_qty 历史数据修正已加入 supabase-schema.sql 末尾（quantity * unit_qty 重算）
 ```
 
 ---
@@ -357,6 +357,76 @@ OpenSpec 变更管理（`openspec/changes/<name>/`）：
 - `/opsx:propose <描述>` — 创建变更（自动生成 proposal/design/specs/tasks）
 - `/opsx:apply [name]` — 执行 tasks.md 中的任务列表
 - `/opsx:archive [name]` — 归档已完成变更
+
+---
+
+## 2026-05-22 组队商品采购量修复
+
+### 问题1: purchase_qty 双重除法
+
+**根因**：`create_team_orders` 对 `share_qty` 重复除以 `split_count`。
+
+前端计算 `shareQty` 时已经除了 `split_count`：
+```js
+// order.html:5008
+const shareQty = parseFloat(((targetQty / splitCount) * shareCount).toFixed(8));
+// 例：1份分2份取1份 → shareQty = (1/2)*1 = 0.5  ← 已经是实际采购量
+```
+
+但 SQL 又除了一次：
+```sql
+-- 修复前 (supabase-schema.sql:1621)
+'purchase_qty', ROUND(v_member.share_qty * v_team.target_qty / v_team.split_count, 6)
+-- 例：0.5 * 1 / 2 = 0.25  ← 多除了一次！
+```
+
+**修复**：`purchase_qty` 直接用 `share_qty`（它本身就是采购量）。
+```sql
+'purchase_qty', ROUND(v_member.share_qty, 6),
+```
+
+**约定**：`team_members.share_qty` 存的就是实际采购量（前端预除过），SQL 层不应再除。
+
+### 问题2: quantity 语义错位（份数 vs 购买件数）
+
+**根因**：`create_team_orders` 把 `quantity` 设为份数（5/5 → quantity=5），但前端 10+ 处展示都把 `quantity` 当购买件数渲染。
+
+**方案选择**：改 SQL 一行 vs 改前端 10+ 处 → 选 SQL。一劳永逸，且语义更正确（每人一条订单记录，quantity=1）。
+
+**修复**：
+```sql
+-- 修复前
+'quantity', ROUND(v_member.share_qty / (v_team.target_qty / v_team.split_count))::int,  -- 份数
+-- 修复后
+'quantity', 1,  -- 每人一条订单记录，实际采购量见 purchase_qty
+```
+
+**约定**：组队订单 quantity 恒为 1。份数信息保留在 `unit_qty`（每份量）和 `purchase_qty`（总采购量）。
+
+### 历史数据修正
+
+`supabase-schema.sql` 末尾新增 `DO $$ ... END $$` 块：
+- 遍历所有 `note='[组队]'` 的订单
+- 用 `quantity * unit_qty` 重算正确的 `purchase_qty`（两个字段原本就是对的）
+- **不修改历史 quantity**（可能被部分砍单修改过）
+
+### 影响范围（两个修复合计）
+
+| 位置 | 之前 | 修复后 |
+|------|------|--------|
+| Excel 导出-折算采购数量 | 1/4, 1/9 | 1/2, 1/3 |
+| 收款清单-商品行 | ×5（5/5时） | ×1 |
+| 订单管理-取消弹窗 | max=5 | max=1 |
+| 收款清单-按件均摊 | 比例失真 | 正确 |
+| 拼满状态判断 | 可能误判 | 正确 |
+| 砍单/取消-库存退回 | 退少了 | 正确 |
+
+### 待办
+
+- [ ] 部署 `create_team_orders` 到 Supabase SQL Editor
+- [ ] 执行历史数据修正 DO 块
+- [ ] `NOTIFY pgrst, 'reload schema'`
+- [ ] `order.html` 无需修改（前端只读 display，SQL 源数据修了自动对）
 
 ---
 

@@ -1616,9 +1616,9 @@ BEGIN
       'product_name', (SELECT name FROM products WHERE id = v_team.product_id),
       'spec_name', COALESCE(REGEXP_REPLACE(v_member.spec_name, '^(\d+(?:\.\d+)?)', (ROUND((REGEXP_MATCH(v_member.spec_name, '^(\d+(?:\.\d+)?)'))[1]::numeric / v_team.split_count, 2))::text), v_member.spec_name),
       'spec_price', ROUND(v_member.spec_price / v_team.split_count, 2),
-      'quantity', ROUND(v_member.share_qty / (v_team.target_qty / v_team.split_count))::int,
+      'quantity', 1,  -- 组队订单每人一条记录，quantity=1；实际采购量见 purchase_qty
       'unit_qty', v_team.target_qty / v_team.split_count,
-      'purchase_qty', ROUND(v_member.share_qty * v_team.target_qty / v_team.split_count, 6),
+      'purchase_qty', ROUND(v_member.share_qty, 6),
       'subtotal', ROUND(v_member.spec_price * v_member.share_qty / v_team.target_qty, 2),
       '_orig_time', now()::text
     ));
@@ -1726,6 +1726,39 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 INSERT INTO leaders (username, password_hash, role)
 SELECT 'admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'super_admin'
 WHERE NOT EXISTS (SELECT 1 FROM leaders WHERE username = 'admin');
+
+-- ============================================================================
+-- 修正历史组队订单的 purchase_qty（2026-05-22）
+-- 根因: create_team_orders 对 share_qty 重复除以 split_count，导致 purchase_qty 少算
+-- 修复: purchase_qty = quantity * unit_qty（两个字段都是正确的）
+-- ============================================================================
+DO $$
+DECLARE
+  v_order RECORD;
+  v_new_items JSONB;
+  v_item JSONB;
+  v_fixed INT := 0;
+BEGIN
+  FOR v_order IN
+    SELECT id, items FROM orders WHERE note = '[组队]'
+  LOOP
+    v_new_items := '[]'::jsonb;
+    FOR v_item IN SELECT * FROM jsonb_array_elements(v_order.items)
+    LOOP
+      v_new_items := v_new_items || jsonb_build_array(
+        v_item || jsonb_build_object(
+          'purchase_qty', ROUND(
+            COALESCE((v_item->>'quantity')::numeric, 0) *
+            COALESCE((v_item->>'unit_qty')::numeric, 1), 6
+          )
+        )
+      );
+    END LOOP;
+    UPDATE orders SET items = v_new_items WHERE id = v_order.id;
+    v_fixed := v_fixed + 1;
+  END LOOP;
+  RAISE NOTICE 'Fixed % team orders', v_fixed;
+END $$;
 
 -- ============================================================================
 -- 刷新 PostgREST schema 缓存（每次部署后必须执行）
