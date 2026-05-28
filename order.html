@@ -717,6 +717,9 @@ const DEFAULT_SUPABASE_CONFIG = {
 };
 function debounce(fn, ms) { let t; return function(...a) { clearTimeout(t); t = setTimeout(() => fn.apply(this, a), ms); }; }
 const debouncedSearchLoad = debounce(() => loadCustomerProducts(), 300);
+const debouncedAdminProductSearch = debounce(() => { const inp = document.getElementById('admin-product-search'); if (inp) adminProductSearchKeyword = inp.value; refreshAdminProductList(); }, 300);
+const debouncedAdminOrderSearch = debounce(() => { const inp = document.getElementById('admin-order-search'); if (inp) adminOrderSearchKeyword = inp.value; const el = document.getElementById('admin-tab-orders'); if (el) renderOrderManager(el); }, 300);
+const debouncedAdminPaymentSearch = debounce(() => { const inp = document.getElementById('admin-payment-search'); if (inp) adminPaymentSearchKeyword = inp.value; const el = document.getElementById('admin-tab-summary'); if (el) renderPaymentSummary(el); }, 300);
 
 async function getGroupNames() {
   try {
@@ -934,6 +937,10 @@ let adminProductTagFilter = '全部';
 let adminProductSearchKeyword = '';
 let adminOrderSearchKeyword = '';
 let adminPaymentSearchKeyword = '';
+let _adminProducts = [];
+let _adminOrders = [];
+let _adminPaymentOrders = [];
+let _adminCanEditCurrent = false;
 
 async function getActiveRound() {
   // Prefer active rounds that haven't expired (no cutoff, or cutoff still in the future)
@@ -1587,9 +1594,11 @@ async function renderProductManager(el) {
 
   const currentRound = activeRounds.find(r => r.id === adminProductRoundId);
   const canEditCurrent = canEditRound(currentRound?.leader_id);
+  _adminCanEditCurrent = canEditCurrent;
   // 非自己的轮次不传 p_round_id，避免 check_round_owner 拒绝；前端自行过滤
   const { data: productsRaw, error } = await adminRpc('admin_get_products', { p_round_id: canEditCurrent ? adminProductRoundId : undefined });
   const products = !canEditCurrent ? (productsRaw || []).filter(p => p.round_id === adminProductRoundId) : productsRaw;
+  _adminProducts = products || [];
 
   if (error) { el.innerHTML = '<div class="empty-state"><p>加载失败</p><button class="btn btn-primary btn-sm" onclick="adminProductRoundId=null;renderAdminTab(\'products\')">重试</button></div>'; return; }
 
@@ -1624,13 +1633,15 @@ async function renderProductManager(el) {
     <button class="btn btn-secondary btn-sm" onclick="exportRoundProducts()">导出商品</button>
     ${canEditRound(currentRound?.leader_id) ? `<button class="btn btn-secondary btn-sm" onclick="importRoundProducts()">导入商品</button>` : ''}
   </div>`;
-  html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-product-search" placeholder="搜索商品名称、规格或标签" value="${escAttr(adminProductSearchKeyword)}" oninput="adminProductSearchKeyword=this.value;renderAdminTab('products')"></label>`;
+  html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-product-search" placeholder="搜索商品名称、规格或标签" value="${escAttr(adminProductSearchKeyword)}" oninput="debouncedAdminProductSearch()"></label>`;
   html += `<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:12px">
     <div class="tag-list" style="flex:1">
       ${['全部', ...allTags].map(tag => `<button class="tag-pill ${adminProductTagFilter === tag ? 'active' : ''}" onclick="adminProductTagFilter='${escAttr(tag)}';renderAdminTab('products')">${escHtml(tag)}</button>`).join('')}
     </div>
     ${allTags.length > 1 ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-top:2px" onclick="openTagOrderEditor()" title="自定义标签排序">排序</button>` : ''}
   </div>`;
+
+  html += '<div id="admin-product-results">';
 
   if (!products || products.length === 0) {
     html += `<div class="empty-state">
@@ -1675,7 +1686,71 @@ async function renderProductManager(el) {
             ${tags.length ? tags.map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('') : '<span class="tag-pill">未分类</span>'}
           </div>
           <div class="admin-product-actions">
-            ${canEditRound(currentRound?.leader_id) ? `
+            ${canEditCurrent ? `
+            <button class="btn btn-secondary btn-sm" data-edit-product="${p.id}">编辑</button>
+            <button class="btn btn-ghost btn-sm" data-toggle-product="${p.id}" data-active="${p.is_active}">${p.is_active ? '下架' : '上架'}</button>
+            <button class="btn btn-danger btn-sm" data-delete-product="${p.id}">删除</button>
+            ` : '<span class="caption" style="color:var(--color-text-muted)">只读</span>'}
+          </div>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function refreshAdminProductList() {
+  const el = document.getElementById('admin-product-results');
+  if (!el) return;
+  const products = _adminProducts;
+  const visibleProducts = (products || []).filter(p => productMatchesFilter(p, adminProductSearchKeyword, adminProductTagFilter));
+  let html = '';
+  if (!products || products.length === 0) {
+    html = `<div class="empty-state">
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none"><rect x="8" y="8" width="40" height="40" rx="6" stroke="var(--color-text-muted)" stroke-width="2"/><path d="M20 28h16M28 20v16" stroke="var(--color-text-muted)" stroke-width="2" stroke-linecap="round"/></svg>
+      <p style="font-weight:600;color:var(--color-text);margin-bottom:4px">还没有商品</p>
+      <p>点击上方按钮添加第一个商品</p>
+    </div>`;
+  } else if (visibleProducts.length === 0) {
+    html = `<div class="empty-state"><p>当前标签下暂无商品</p></div>`;
+  } else {
+    html = '<div class="admin-product-list">';
+    visibleProducts.forEach(p => {
+      const specs = (p.specs || []).slice().sort((a, b) => {
+        const aPU = parsePurchaseUnit(a.name);
+        const bPU = parsePurchaseUnit(b.name);
+        const aInt = aPU !== null && aPU % 1 === 0;
+        const bInt = bPU !== null && bPU % 1 === 0;
+        if (aInt && !bInt) return -1;
+        if (!aInt && bInt) return 1;
+        return 0;
+      });
+      const specStr = specs.map(s => `${formatUnitLabel(s.name)} / ¥${s.price}`).join(' 、 ');
+      const stockInfo = p.stock !== null ? `库存: ${formatQtyLabel(p.stock)}` : '不限库存';
+      const tags = getProductTags(p);
+      const statusBadge = p.is_active ? '<span class="badge badge-success">上架</span>' : '<span class="badge badge-muted">已下架</span>';
+      const weightedBadge = p.is_weighted ? '<span class="badge badge-muted" style="margin-left:4px">称重</span>' : '';
+      html += `<div class="admin-product-card">
+        ${p.image ? `<img class="admin-product-thumb" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" style="cursor:pointer" onclick="openImagePreview('${escAttr(p.image)}')" onerror="this.outerHTML='<div class=&quot;admin-product-thumb placeholder&quot;>邻选</div>'">` : '<div class="admin-product-thumb placeholder">邻选</div>'}
+        <div class="admin-product-info">
+          <div class="admin-product-head">
+            <div class="admin-product-name product-name">${escHtml(p.name)}</div>
+            <div style="flex-shrink:0">
+              ${statusBadge}${weightedBadge}
+            </div>
+          </div>
+          <div class="admin-product-meta">
+            <span class="product-price">${escHtml(specStr || '未设置规格')}</span>
+            <span class="stock-info">${escHtml(stockInfo)}</span>
+            ${p.weight_estimate ? `<span class="caption" style="display:block;margin-top:2px">预估: ${escHtml(p.weight_estimate)}</span>` : ''}
+          </div>
+          <div class="admin-product-tags">
+            ${tags.length ? tags.map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('') : '<span class="tag-pill">未分类</span>'}
+          </div>
+          <div class="admin-product-actions">
+            ${_adminCanEditCurrent ? `
             <button class="btn btn-secondary btn-sm" data-edit-product="${p.id}">编辑</button>
             <button class="btn btn-ghost btn-sm" data-toggle-product="${p.id}" data-active="${p.is_active}">${p.is_active ? '下架' : '上架'}</button>
             <button class="btn btn-danger btn-sm" data-delete-product="${p.id}">删除</button>
@@ -3457,7 +3532,7 @@ async function renderOrderManager(el) {
     return (o.items || []).some(it => !it.deleted && (it.product_name || '').toLowerCase().includes(keyword));
   });
 
-  html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-order-search" placeholder="搜索顾客名或商品名" value="${escAttr(adminOrderSearchKeyword)}" oninput="adminOrderSearchKeyword=this.value;renderAdminTab('orders')"></label>`;
+  html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-order-search" placeholder="搜索顾客名或商品名" value="${escAttr(adminOrderSearchKeyword)}" oninput="debouncedAdminOrderSearch()"></label>`;
 
   if (!orders || orders.length === 0) {
     html += '<div class="empty-state"><p>该轮次暂无订单</p></div>';
@@ -3885,7 +3960,7 @@ async function renderPaymentSummary(el) {
   const payKeyword = (adminPaymentSearchKeyword || '').trim().toLowerCase();
   const visiblePaymentOrders = !payKeyword ? orders : orders.filter(o => (o.customer_name || '').toLowerCase().includes(payKeyword));
 
-  html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-payment-search" placeholder="搜索顾客名" value="${escAttr(adminPaymentSearchKeyword)}" oninput="adminPaymentSearchKeyword=this.value;renderAdminTab('summary')"></label>`;
+  html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-payment-search" placeholder="搜索顾客名" value="${escAttr(adminPaymentSearchKeyword)}" oninput="debouncedAdminPaymentSearch()"></label>`;
 
   if (!orders || orders.length === 0) {
     html += '<div class="empty-state"><p>该轮次暂无订单可汇总</p></div>';
