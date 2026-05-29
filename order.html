@@ -2309,15 +2309,31 @@ async function loadCustomerProducts() {
   // Fetch order stats for "已拼满/未拼满" display
   const { data: orderStats } = await sb.rpc('get_round_order_stats', { p_round_id: customerRoundId });
   if (_loadGen !== loadGen) return;
+  // 诊断：打印所有组队相关商品的原始统计
   const orderStatsMap = {};
   (orderStats || []).forEach(s => { orderStatsMap[s.product_id] = { qty: s.qty, shareTotal: s.share_total, orders: s.order_count }; });
+  console.log('[fill-debug] loadCustomerProducts round=', customerRoundId, 'orderStats count=', (orderStats||[]).length, 'statsMap keys=', Object.keys(orderStatsMap).slice(0, 20));
   cachedSummaryByProduct = {};
+  // 先为所有商品创建默认条目（确保 lookupOrders 中 globalSum 永不为 undefined）
+  products.forEach(p => {
+    const spec = (p.specs || [])[0] || {};
+    cachedSummaryByProduct[p.id] = {
+      productId: p.id, name: p.name, spec: spec.name || '',
+      qty: 0, orderQty: 0, amount: 0,
+      isSplitUnit: false,
+      unfilled: false,
+      missingQty: 0,
+      missingLabel: '',
+      fillLabel: '',
+      qtyLabel: '0'
+    };
+  });
+  // 再用订单统计覆盖有订单的商品
   products.forEach(p => {
     const stats = orderStatsMap[p.id];
     if (stats) {
       const spec = (p.specs || [])[0] || {};
       const pu = parsePurchaseUnit(spec.name);
-      // 称重商品用份额汇总，普通商品用 purchase_qty
       const fillQty = Math.round((p.is_weighted && stats.shareTotal != null ? stats.shareTotal : stats.qty) * 1000) / 1000;
       const hasFractional = fillQty % 1 > 0.001;
       const isSplit = pu !== null || hasFractional || (p.is_weighted && stats.shareTotal != null);
@@ -2349,15 +2365,37 @@ async function loadCustomerProducts() {
     } catch(e) {}
   }
 
-  // 查询当前轮次所有活跃队伍数量（按商品分组，用于组队按钮计数）
+  // 查询当前轮次所有队伍（按商品分组，用于组队按钮计数和拼满状态覆盖）
   teamCountMap = new Map();
+  const filledTeamProductIds = new Set(); // 有已满员队伍的商品
   try {
-    const { data: allTeams } = await sb.from('teams').select('product_id').eq('round_id', customerRoundId).in('status', ['active', 'filled']);
+    const { data: allTeams } = await sb.from('teams').select('product_id,status').eq('round_id', customerRoundId).in('status', ['active', 'filled']);
     if (_loadGen !== loadGen) return;
     (allTeams || []).forEach(t => {
       teamCountMap.set(t.product_id, (teamCountMap.get(t.product_id) || 0) + 1);
+      if (t.status === 'filled') filledTeamProductIds.add(t.product_id);
     });
   } catch(e) {}
+
+  // 组队商品强制标记为拆分单位；已满员队伍覆盖 fillLabel（队伍状态是拼满的权威来源）
+  for (const [pid] of teamCountMap) {
+    const entry = cachedSummaryByProduct[pid];
+    if (entry) {
+      entry.isSplitUnit = true;
+      if (filledTeamProductIds.has(pid) && entry.qty > 0) {
+        // 有已满员队伍：强制标记为已拼满，覆盖 order stats 可能的计算误差
+        entry.unfilled = false;
+        entry.missingQty = 0;
+        entry.missingLabel = '';
+        entry.fillLabel = '已拼满';
+      } else if (!entry.unfilled && entry.qty > 0) {
+        entry.fillLabel = '已拼满';
+      }
+      if (entry.unfilled && !entry.missingLabel) {
+        entry.missingLabel = toDisplayFraction(entry.missingQty, 40) || formatQty(entry.missingQty);
+      }
+    }
+  }
 
   let html = '';
   let hitSoldOut = false;
@@ -3122,6 +3160,11 @@ async function lookupOrders() {
         // 诊断日志
         const prodName = (itemRows[0] && activeOrders.find(o => (o.items||[]).some(it => it.product_id === pid))) ? (activeOrders.find(o => (o.items||[]).some(it => it.product_id === pid))?.items?.find(it => it.product_id === pid)?.product_name || pid.slice(0,8)) : pid.slice(0,8);
         console.log('[fill-debug] rows', prodName, `total=${formatQty(totalQty)} whole=${whole} unfilled=${globalUnfilled}`, 'rows:', rowNames, 'fcMap:', JSON.stringify(perCustomer));
+        // 关键对比：customerFillStatus(totalQty) vs cachedSummaryByProduct
+        const cacheEntry = cachedSummaryByProduct[pid];
+        console.log('[fill-debug] COMPARE', prodName,
+          `rowsTotal=${formatQty(totalQty)} rowsUnfilled=${globalUnfilled}`,
+          `cacheQty=${cacheEntry ? formatQty(cacheEntry.qty) : 'MISSING'} cacheUnfilled=${cacheEntry ? cacheEntry.unfilled : 'MISSING'} cacheFillLabel="${cacheEntry ? cacheEntry.fillLabel : 'MISSING'}"`);
       });
     }
   }
@@ -3202,6 +3245,38 @@ async function lookupOrders() {
     g.merged = newMerged;
   });
 
+  // Fallback: 缓存缺失时实时查询全局统计（防御性，正常路径不会触发）
+  const fallbackFillMap = {};
+  const missingProductIds = new Set();
+  Object.values(roundGroups).forEach(g => {
+    Object.values(g.merged).forEach(item => {
+      if (item.product_id && !cachedSummaryByProduct[item.product_id]) {
+        missingProductIds.add(item.product_id);
+      }
+    });
+  });
+  if (missingProductIds.size > 0) {
+    console.log('[fill-debug] fallback triggered: cache_miss', [...missingProductIds].slice(0, 10));
+    const roundIds = Object.keys(roundGroups).filter(rid => rid !== '__no_round__');
+    await Promise.all(roundIds.map(async rid => {
+      const { data: stats } = await sb.rpc('get_round_order_stats', { p_round_id: rid });
+      (stats || []).forEach(s => {
+        if (missingProductIds.has(s.product_id)) {
+          const fillQty = Math.round((s.share_total != null ? s.share_total : s.qty) * 1000) / 1000;
+          const hasFractional = fillQty % 1 > 0.001;
+          const rawDiff = Math.ceil(fillQty) - fillQty;
+          const unfilled = hasFractional && rawDiff > 0.001;
+          const missing = unfilled ? Math.round(rawDiff * 1000) / 1000 : 0;
+          fallbackFillMap[s.product_id] = {
+            fillLabel: (hasFractional || s.share_total != null) && !unfilled && fillQty > 0 ? '已拼满' : '',
+            unfilled: unfilled,
+            missingLabel: (hasFractional || s.share_total != null) ? (toDisplayFraction(missing, 40) || formatQty(missing)) : '',
+          };
+        }
+      });
+    }));
+  }
+
   let html = '';
   Object.entries(roundGroups).forEach(([rid, g]) => {
     const ri = roundInfo[rid] || { name: '历史轮次', status: '' };
@@ -3242,23 +3317,28 @@ async function lookupOrders() {
       if (it.actual_weight != null) {
         weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQty(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
       }
-      // 优先从全局商品统计获取拼满状态，避免逐客户逐行排序的误判
-      let pidFill = '';
-      const globalSum = cachedSummaryByProduct[it.product_id || ''];
-      if (globalSum) {
-        pidFill = globalSum.fillLabel || (globalSum.unfilled ? `未拼满，差 ${globalSum.missingLabel}` : '');
-      }
-      // 回退到逐行计算（未加载商品页直接查单时）
+      // 逐客户拼满状态：优先用时间排序的 customerFillStatus（能正确区分不同客户归属），
+      // 全局缓存 cachedSummaryByProduct 只能反映"还需多少凑整"，不适合逐客户判断
+      let pidFill = it.fillStatus || '';
+      let fillSource = pidFill ? 'row' : 'none';
       if (!pidFill) {
-        pidFill = it.fillStatus || (customerFillStatus[it.product_id || ''] || {})[name] || '';
-        if (!pidFill && it.product_id) {
-          const split = (customerSplitMap[it.product_id] || {});
-          for (const k of Object.keys(split)) { if (k.startsWith(name + '::')) { pidFill = '已拼满'; break; } }
+        const globalSum = cachedSummaryByProduct[it.product_id || ''];
+        if (globalSum) {
+          pidFill = globalSum.fillLabel || (globalSum.unfilled ? `未拼满，差 ${globalSum.missingLabel}` : '');
+          fillSource = globalSum.fillLabel ? 'cached' : (globalSum.unfilled ? 'cached' : 'cached-nosplit');
+        } else {
+          const fb = fallbackFillMap[it.product_id || ''];
+          if (fb) {
+            pidFill = fb.fillLabel || (fb.unfilled ? `未拼满，差 ${fb.missingLabel}` : '');
+            fillSource = 'fallback-rpc';
+          }
         }
       }
-      const fillSource = globalSum ? 'cached' : (pidFill ? 'row' : 'split');
-      if (isTeam || (globalSum && globalSum.unfilled)) {
-        console.log('[fill-debug] final', it.product_name, `cached:${globalSum ? `fillLabel=${globalSum.fillLabel} unfilled=${globalSum.unfilled} missing=${globalSum.missingLabel}` : 'EMPTY'}`, `row: fillStatus=${it.fillStatus} csFS=${(customerFillStatus[it.product_id||'']||{})[name]}`, `source=${fillSource} pidFill="${pidFill}"`);
+      const globalSum = cachedSummaryByProduct[it.product_id || ''];
+      const fillReason = !pidFill ? 'empty' : (fillSource === 'row' ? '' : (fillSource === 'cached-nosplit' ? 'fillLabel_empty' : ''));
+      if (isTeam || (globalSum && globalSum.unfilled) || fillReason) {
+        const cacheKeys = Object.keys(cachedSummaryByProduct).slice(0, 10).join(',');
+        console.log('[fill-debug] final', it.product_name, `row:fillStatus=${it.fillStatus}`, `cached:${globalSum ? `fillLabel=${globalSum.fillLabel} unfilled=${globalSum.unfilled} missing=${globalSum.missingLabel} isSplit=${globalSum.isSplitUnit}` : 'EMPTY'}`, `fallback:${fallbackFillMap[it.product_id || ''] ? 'yes' : 'no'}`, `source=${fillSource} pidFill="${pidFill}"`);
       }
       const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill.startsWith('已拼满') ? '<span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span>' : '';
       const timeInfo = it.lastTime ? `<br><span class="caption">最后下单: ${it.lastTime}</span>` : '';
