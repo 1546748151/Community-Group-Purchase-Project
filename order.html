@@ -709,11 +709,11 @@ function lockScroll() { if (!modalDepth++) document.body.style.overflow = 'hidde
 function unlockScroll() { if (modalDepth > 0 && !--modalDepth) document.body.style.overflow = ''; }
 let SESSION_KEY = 'groupbuy_admin_session';
 const COMMUNITY_PRESETS = {
-  '韭菜楼小区': { url: 'https://gdjgfpxijsivtalsyplt.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkamdmcHhpanNpdnRhbHN5cGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NjU3MDcsImV4cCI6MjA5MzE0MTcwN30.j1prKBVJO8GsuvMxxUOuypVxBAm3FE7qr_NzcV4baBo' }
+  '韭菜楼小区': { url: 'https://vvheubkkooyxknfrpibg.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2aGV1Ymtrb295eGtuZnJwaWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNjk1NTcsImV4cCI6MjA5NTk0NTU1N30.dAwF3JcGDDeLL7OWThBoFZfI88mB8JDsum9nZz_jNq8' }
 };
 const DEFAULT_SUPABASE_CONFIG = {
-  url: '',
-  key: ''
+  url: 'https://vvheubkkooyxknfrpibg.supabase.co',
+  key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2aGV1Ymtrb295eGtuZnJwaWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNjk1NTcsImV4cCI6MjA5NTk0NTU1N30.dAwF3JcGDDeLL7OWThBoFZfI88mB8JDsum9nZz_jNq8'
 };
 function debounce(fn, ms) { let t; return function(...a) { clearTimeout(t); t = setTimeout(() => fn.apply(this, a), ms); }; }
 const debouncedSearchLoad = debounce(() => loadCustomerProducts(), 300);

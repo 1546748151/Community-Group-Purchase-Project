@@ -25,7 +25,6 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DE
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_weighted BOOLEAN DEFAULT false;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_estimate TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_unit TEXT DEFAULT 'kg';
-ALTER TABLE products ADD COLUMN IF NOT EXISTS round_id UUID REFERENCES rounds(id);
 ALTER TABLE products ALTER COLUMN stock TYPE NUMERIC(10,3) USING stock::numeric;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_team BOOLEAN DEFAULT false;
 COMMENT ON COLUMN products.is_team IS '是否允许组队拼单，默认关闭，团长在编辑商品时勾选';
@@ -111,6 +110,7 @@ ALTER TABLE rounds ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT t
 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS leader_name TEXT;
 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS leader_id UUID REFERENCES leaders(id);
 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE products ADD COLUMN IF NOT EXISTS round_id UUID REFERENCES rounds(id);
 
 COMMENT ON TABLE rounds IS '团购轮次表，每次团购为一个轮次';
 COMMENT ON COLUMN rounds.is_active IS '是否为活跃轮次，允许多轮次同时 active';
@@ -175,11 +175,6 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_name);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_rounds_active ON rounds (is_active);
-
--- 性能优化：补 FK 查询索引（2026-05-15 audit I1）
-CREATE INDEX IF NOT EXISTS idx_after_sales_round ON after_sales (round_id);
-CREATE INDEX IF NOT EXISTS idx_feedback_round ON feedback (round_id);
-CREATE INDEX IF NOT EXISTS idx_teams_product_round_status ON teams (product_id, round_id, status);
 
 -- ============================================================================
 -- 自动更新 updated_at 触发器
@@ -1150,6 +1145,7 @@ ALTER TABLE feedback ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE feedback ADD COLUMN IF NOT EXISTS round_id UUID REFERENCES rounds(id);
 ALTER TABLE feedback ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'unread';
 ALTER TABLE feedback ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS idx_feedback_round ON feedback (round_id);
 
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 
@@ -1172,6 +1168,7 @@ ALTER TABLE after_sales ADD COLUMN IF NOT EXISTS reason TEXT DEFAULT '';
 ALTER TABLE after_sales ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE after_sales ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'unread';
 ALTER TABLE after_sales ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS idx_after_sales_round ON after_sales (round_id);
 
 ALTER TABLE after_sales ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can insert after_sales" ON after_sales;
@@ -1452,6 +1449,7 @@ CREATE POLICY "Anyone can read team_members" ON team_members FOR SELECT USING (t
 
 -- 防止同一顾客在同一队伍重复加入
 CREATE UNIQUE INDEX IF NOT EXISTS idx_team_member_unique ON team_members (team_id, customer_name);
+CREATE INDEX IF NOT EXISTS idx_teams_product_round_status ON teams (product_id, round_id, status);
 
 CREATE OR REPLACE FUNCTION create_team(
   p_round_id UUID, p_product_id UUID, p_initiator_name TEXT,
