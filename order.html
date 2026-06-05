@@ -702,9 +702,6 @@ body[data-mode="admin"] .cart-bar{display:none}
 // ============================================================
 let sb = null;
 let CONFIG_KEY = 'groupbuy_config';
-const LEGACY_SUPABASE_HOSTS = [
-  'gdjgfpxijsivtalsyplt.supabase.co'
-];
 
 // 弹窗栈计数器：开 +1 关 -1，归零才解锁 body 滚动
 let modalDepth = 0;
@@ -736,18 +733,9 @@ function getConfig() {
     const saved = JSON.parse(localStorage.getItem(CONFIG_KEY)) || {};
     // 优先 localStorage，其次预设小区
     const preset = saved.preset ? COMMUNITY_PRESETS[saved.preset] : null;
-    const defaultUrl = preset ? preset.url : DEFAULT_SUPABASE_CONFIG.url;
-    const defaultKey = preset ? preset.key : DEFAULT_SUPABASE_CONFIG.key;
-    const savedUrl = saved.url || '';
-    const savedKey = saved.key || '';
-    if (defaultUrl && LEGACY_SUPABASE_HOSTS.some(host => savedUrl.includes(host))) {
-      const migrated = { url: defaultUrl, key: defaultKey, preset: saved.preset || '' };
-      saveConfig(migrated);
-      return migrated;
-    }
     return {
-      url: savedUrl || defaultUrl,
-      key: savedKey || defaultKey,
+      url: saved.url || (preset ? preset.url : DEFAULT_SUPABASE_CONFIG.url),
+      key: saved.key || (preset ? preset.key : DEFAULT_SUPABASE_CONFIG.key),
       preset: saved.preset || ''
     };
   } catch(e) {
@@ -1595,16 +1583,17 @@ function importRoundProducts() {
 async function renderProductManager(el) {
   el.innerHTML = '<div class="skel-card skeleton"></div><div class="skel-card skeleton"></div>';
 
-  // Fetch active rounds for selector
+  // 商品管理也要能查看历史轮次，不能只显示进行中/未开始轮次
   const rounds = await getRounds();
-  const activeRounds = rounds.filter(r => r.is_active || (r.is_active === false && !r.cutoff_time));
-  // 自动选当前用户拥有的轮次，没有则保持 null（避免 owner check 拒绝）
-  if (!adminProductRoundId || !activeRounds.some(r => r.id === adminProductRoundId)) {
-    const owned = activeRounds.filter(r => canEditRound(r.leader_id));
-    adminProductRoundId = owned.length > 0 ? owned[0].id : (activeRounds.length > 0 ? null : null);
+  const selectableRounds = rounds;
+  // 自动选当前用户拥有的轮次；优先进行中的轮次，否则退到最新的自有轮次
+  if (!adminProductRoundId || !selectableRounds.some(r => r.id === adminProductRoundId)) {
+    const owned = selectableRounds.filter(r => canEditRound(r.leader_id));
+    const active = owned.find(r => r.is_active);
+    adminProductRoundId = active ? active.id : (owned[0]?.id || null);
   }
 
-  const currentRound = activeRounds.find(r => r.id === adminProductRoundId);
+  const currentRound = selectableRounds.find(r => r.id === adminProductRoundId);
   const canEditCurrent = canEditRound(currentRound?.leader_id);
   _adminCanEditCurrent = canEditCurrent;
   // 非自己的轮次不传 p_round_id，避免 check_round_owner 拒绝；前端自行过滤
@@ -1620,10 +1609,14 @@ async function renderProductManager(el) {
   const visibleProducts = (products || []).filter(p => productMatchesFilter(p, adminProductSearchKeyword, adminProductTagFilter));
 
   let html = '';
-  // 轮次选择器（显示所有进行中/策划中的轮次）
+  // 轮次选择器（显示全部轮次，包含已结束轮次）
   html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">`;
-  activeRounds.forEach(r => {
-    html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId='${escAttr(r.id)}';adminProductSearchKeyword='';renderAdminTab('products')">${escHtml(r.name)}${!canEditRound(r.leader_id) ? ' (只读)' : ''}</button>`;
+  selectableRounds.forEach(r => {
+    let statusLabel = '';
+    if (r.is_active && r.cutoff_time && new Date(r.cutoff_time) < new Date()) statusLabel = ' (已截止)';
+    else if (r.is_active) statusLabel = ' (进行中)';
+    else statusLabel = ' (已结束)';
+    html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId='${escAttr(r.id)}';adminProductSearchKeyword='';renderAdminTab('products')">${escHtml(r.name)}${statusLabel}${!canEditRound(r.leader_id) ? ' (只读)' : ''}</button>`;
   });
   html += `</div>`;
   html += `<div class="stat-row">
