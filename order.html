@@ -1137,22 +1137,9 @@ function buildPriceMap(products) {
   return map;
 }
 
-// 用当前商品价格刷新订单数据（不修改原始对象）
+// 订单金额必须以订单快照为准，后台不能用当前商品价格重算历史订单。
 function enrichOrdersWithCurrentPrices(orders, priceMap) {
-  return (orders || []).map(o => {
-    let newTotal = 0;
-    const newItems = (o.items || []).map(it => {
-      if (it.deleted) return it;
-      const specMap = priceMap.get(it.product_id);
-      const currentPrice = specMap ? specMap.get(it.spec_name) : undefined;
-      if (currentPrice == null) { newTotal += (Number(it.subtotal) || 0); return it; }
-      if (it.actual_weight != null) { newTotal += (Number(it.subtotal) || 0); return it; }
-      const newSubtotal = parseFloat((currentPrice * (it.quantity || 0)).toFixed(2));
-      newTotal += newSubtotal;
-      return { ...it, spec_price: currentPrice, subtotal: newSubtotal };
-    });
-    return { ...o, items: newItems, total_amount: parseFloat(newTotal.toFixed(2)) };
-  });
+  return orders || [];
 }
 
 function parsePurchaseUnit(specName) {
@@ -3594,7 +3581,7 @@ async function renderOrderManager(el) {
   </div>
   ${!canEditRound(currentRound?.leader_id) ? `<p class="caption" style="color:var(--color-text-muted);margin-bottom:12px;text-align:center">此轮次由其他团长管理，你只能查看</p>` : ''}`;
 
-  const uniqueProductCount = new Set(orders.flatMap(o => (o.items||[]).map(it => it.product_id).filter(Boolean))).size;
+  const uniqueProductCount = new Set(orders.flatMap(o => (o.items||[]).filter(it => !it.deleted).map(it => it.product_id).filter(Boolean))).size;
   html += `<div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
     <div class="stat-card">
       <div class="stat-value" style="color:var(--color-accent)">${totalOrders}</div>
