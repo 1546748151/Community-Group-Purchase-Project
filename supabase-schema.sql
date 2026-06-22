@@ -1378,10 +1378,11 @@ BEGIN
           'quantity', remaining_qty,
           'unit_qty', COALESCE((item_rec->>'unit_qty')::numeric, 1),
           'purchase_qty', ROUND(COALESCE((item_rec->>'purchase_qty')::numeric, orig_qty) * ratio, 6),
-          'subtotal', ROUND(orig_price * remaining_qty, 2),
+          'subtotal', ROUND(orig_subtotal * ratio, 2),
           'share', COALESCE((item_rec->>'share')::numeric, null),
           '_orig_time', COALESCE(item_rec->>'_orig_time', order_row.created_at::text)
         );
+        new_total := new_total + ROUND(orig_subtotal * ratio, 2);
         -- 恢复部分库存
         UPDATE products SET stock = stock + ROUND(COALESCE((item_rec->>'purchase_qty')::numeric, orig_qty) * (1 - ratio), 6)
          WHERE id = (item_rec->>'product_id')::uuid AND stock IS NOT NULL;
@@ -1460,6 +1461,7 @@ DECLARE
   v_team_id UUID;
   v_product products%ROWTYPE;
   v_round rounds%ROWTYPE;
+  v_reserved_qty NUMERIC;
 BEGIN
   -- 互斥规则已移除：允许同一顾客在同一商品加入多个队伍、同时独立下单
 
@@ -1477,8 +1479,15 @@ BEGIN
     RAISE EXCEPTION '该商品不支持组队';
   END IF;
 
-  IF v_product.stock IS NOT NULL AND v_product.stock < p_share_qty THEN
-    RAISE EXCEPTION 'insufficient stock: requested %, available %', p_share_qty, v_product.stock;
+  IF p_target_qty <= 0 OR p_split_count <= 0 OR p_share_qty <= 0 THEN
+    RAISE EXCEPTION 'invalid team quantity';
+  END IF;
+
+  -- share_qty 用于队伍进度；库存与采购量统一使用整箱/整件占比。
+  v_reserved_qty := ROUND(p_share_qty / p_target_qty, 8);
+
+  IF v_product.stock IS NOT NULL AND v_product.stock < v_reserved_qty THEN
+    RAISE EXCEPTION 'insufficient stock: requested %, available %', v_reserved_qty, v_product.stock;
   END IF;
 
   INSERT INTO teams (round_id, product_id, initiator_name, target_qty, split_count)
@@ -1487,10 +1496,10 @@ BEGIN
 
   INSERT INTO team_members (team_id, customer_name, spec_name, spec_price, share_qty, reserved_qty)
   VALUES (v_team_id, p_initiator_name, p_spec_name, p_spec_price,
-    ROUND(p_share_qty, 8), ROUND(p_share_qty, 8));
+    ROUND(p_share_qty, 8), v_reserved_qty);
 
   IF v_product.stock IS NOT NULL THEN
-    UPDATE products SET stock = stock - p_share_qty WHERE id = p_product_id;
+    UPDATE products SET stock = stock - v_reserved_qty WHERE id = p_product_id;
   END IF;
   RETURN v_team_id;
 END;
@@ -1504,6 +1513,7 @@ DECLARE
   v_team teams%ROWTYPE;
   v_product products%ROWTYPE;
   v_current NUMERIC;
+  v_reserved_qty NUMERIC;
 BEGIN
   SELECT * INTO v_team FROM teams WHERE id = p_team_id AND status = 'active' FOR UPDATE;
   IF v_team.id IS NULL THEN RAISE EXCEPTION 'team not found or not active'; END IF;
@@ -1516,15 +1526,21 @@ BEGIN
   END IF;
 
   SELECT * INTO v_product FROM products WHERE id = v_team.product_id FOR UPDATE;
-  IF v_product.stock IS NOT NULL AND v_product.stock < p_share_qty THEN
+  IF v_team.target_qty <= 0 OR p_share_qty <= 0 THEN
+    RAISE EXCEPTION 'invalid team quantity';
+  END IF;
+
+  v_reserved_qty := ROUND(p_share_qty / v_team.target_qty, 8);
+
+  IF v_product.stock IS NOT NULL AND v_product.stock < v_reserved_qty THEN
     RAISE EXCEPTION 'insufficient stock';
   END IF;
 
   INSERT INTO team_members (team_id, customer_name, spec_name, spec_price, share_qty, reserved_qty)
-  VALUES (p_team_id, p_customer_name, p_spec_name, p_spec_price, ROUND(p_share_qty, 8), ROUND(p_share_qty, 8));
+  VALUES (p_team_id, p_customer_name, p_spec_name, p_spec_price, ROUND(p_share_qty, 8), v_reserved_qty);
 
   IF v_product.stock IS NOT NULL THEN
-    UPDATE products SET stock = stock - p_share_qty WHERE id = v_team.product_id;
+    UPDATE products SET stock = stock - v_reserved_qty WHERE id = v_team.product_id;
   END IF;
 
   SELECT COALESCE(ROUND(SUM(share_qty), 3), 0) INTO v_current FROM team_members WHERE team_id = p_team_id;
@@ -1615,9 +1631,10 @@ BEGIN
       'spec_name', COALESCE(REGEXP_REPLACE(v_member.spec_name, '^(\d+(?:\.\d+)?)', (ROUND((REGEXP_MATCH(v_member.spec_name, '^(\d+(?:\.\d+)?)'))[1]::numeric / v_team.split_count, 2))::text), v_member.spec_name),
       'spec_price', ROUND(v_member.spec_price / v_team.split_count, 2),
       'quantity', 1,  -- 组队订单每人一条记录，quantity=1；实际采购量见 purchase_qty
-      'unit_qty', v_team.target_qty / v_team.split_count,
-      'purchase_qty', ROUND(v_member.share_qty, 6),
+      'unit_qty', ROUND(v_member.share_qty / v_team.target_qty, 8),
+      'purchase_qty', ROUND(v_member.share_qty / v_team.target_qty, 6),
       'subtotal', ROUND(v_member.spec_price * v_member.share_qty / v_team.target_qty, 2),
+      'team_id', v_team.id,
       '_orig_time', now()::text
     ));
 
@@ -1726,9 +1743,8 @@ SELECT 'admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a
 WHERE NOT EXISTS (SELECT 1 FROM leaders WHERE username = 'admin');
 
 -- ============================================================================
--- 修正历史组队订单的 purchase_qty（2026-05-22）
--- 根因: create_team_orders 对 share_qty 重复除以 split_count，导致 purchase_qty 少算
--- 修复: purchase_qty = quantity * unit_qty（两个字段都是正确的）
+-- 兼容旧组队订单：仅在 purchase_qty 缺失时按 quantity * unit_qty 补齐。
+-- 已有 purchase_qty 可能包含人工修正，完整 schema 重跑时不得覆盖。
 -- ============================================================================
 DO $$
 DECLARE
@@ -1744,12 +1760,14 @@ BEGIN
     FOR v_item IN SELECT * FROM jsonb_array_elements(v_order.items)
     LOOP
       v_new_items := v_new_items || jsonb_build_array(
-        v_item || jsonb_build_object(
-          'purchase_qty', ROUND(
-            COALESCE((v_item->>'quantity')::numeric, 0) *
-            COALESCE((v_item->>'unit_qty')::numeric, 1), 6
+        CASE WHEN v_item ? 'purchase_qty' THEN v_item ELSE
+          v_item || jsonb_build_object(
+            'purchase_qty', ROUND(
+              COALESCE((v_item->>'quantity')::numeric, 0) *
+              COALESCE((v_item->>'unit_qty')::numeric, 1), 6
+            )
           )
-        )
+        END
       );
     END LOOP;
     UPDATE orders SET items = v_new_items WHERE id = v_order.id;
