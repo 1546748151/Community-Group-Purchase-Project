@@ -1308,22 +1308,48 @@ DECLARE
   orig_price NUMERIC;
   remaining_qty NUMERIC;
   ratio NUMERIC;
+  order_changed BOOLEAN;
+  cancel_key TEXT;
+  remaining_cancel_qty NUMERIC;
+  v_cancel_budget JSONB := '{}'::jsonb;
 BEGIN
   SELECT * INTO v_leader_id, v_role FROM require_admin(p_token);
   PERFORM check_round_owner(v_leader_id, v_role, p_round_id);
 
+  FOR cancel_item IN SELECT * FROM jsonb_array_elements(COALESCE(p_items_to_cancel, '[]'::jsonb))
+  LOOP
+    cancel_product_id := cancel_item->>'product_id';
+    cancel_spec_name := cancel_item->>'spec_name';
+    cancel_qty := COALESCE((cancel_item->>'cancel_qty')::numeric, 0);
+    IF cancel_product_id IS NOT NULL AND cancel_spec_name IS NOT NULL AND cancel_qty > 0 THEN
+      cancel_key := cancel_product_id || '|' || cancel_spec_name;
+      v_cancel_budget := jsonb_set(
+        v_cancel_budget,
+        ARRAY[cancel_key],
+        to_jsonb(COALESCE((v_cancel_budget->>cancel_key)::numeric, 0) + cancel_qty),
+        true
+      );
+    END IF;
+  END LOOP;
+
   -- 遍历该顾客的活跃订单
   FOR order_row IN
-    SELECT * FROM orders
-    WHERE customer_name = p_customer_name
-      AND round_id = p_round_id
-      AND status IN ('active', 'pending_weight')
-    ORDER BY created_at
+    SELECT * FROM orders o
+    WHERE o.customer_name = p_customer_name
+      AND o.round_id = p_round_id
+      AND o.status IN ('active', 'pending_weight')
+      AND COALESCE(o.note, '') NOT LIKE '%[组队]%'
+      AND NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) AS it
+        WHERE it ? 'team_id'
+      )
+    ORDER BY o.created_at
     FOR UPDATE
   LOOP
     new_items := '[]'::jsonb;
     new_total := 0;
     item_count := 0;
+    order_changed := false;
 
     FOR item_rec IN SELECT * FROM jsonb_array_elements(COALESCE(order_row.items, '[]'::jsonb))
     LOOP
@@ -1332,16 +1358,14 @@ BEGIN
         CONTINUE;
       END IF;
 
-      -- 检查是否需要从该商品中扣减
-      cancel_qty := 0;
-      FOR cancel_item IN SELECT * FROM jsonb_array_elements(p_items_to_cancel)
-      LOOP
-        IF (cancel_item->>'product_id') = (item_rec->>'product_id')
-           AND (cancel_item->>'spec_name') = (item_rec->>'spec_name') THEN
-          cancel_qty := COALESCE((cancel_item->>'cancel_qty')::numeric, 0);
-          EXIT;
-        END IF;
-      END LOOP;
+      orig_qty := COALESCE((item_rec->>'quantity')::numeric, 0);
+      orig_subtotal := COALESCE((item_rec->>'subtotal')::numeric, 0);
+      orig_price := COALESCE((item_rec->>'spec_price')::numeric, 0);
+
+      -- 检查该商品的全局剩余砍单额度，命中后递减，避免跨订单重复扣减
+      cancel_key := (item_rec->>'product_id') || '|' || (item_rec->>'spec_name');
+      remaining_cancel_qty := COALESCE((v_cancel_budget->>cancel_key)::numeric, 0);
+      cancel_qty := LEAST(remaining_cancel_qty, orig_qty);
 
       IF cancel_qty <= 0 THEN
         -- 不砍该商品，保留原样
@@ -1350,9 +1374,13 @@ BEGIN
         CONTINUE;
       END IF;
 
-      orig_qty := COALESCE((item_rec->>'quantity')::numeric, 0);
-      orig_subtotal := COALESCE((item_rec->>'subtotal')::numeric, 0);
-      orig_price := COALESCE((item_rec->>'spec_price')::numeric, 0);
+      order_changed := true;
+      v_cancel_budget := jsonb_set(
+        v_cancel_budget,
+        ARRAY[cancel_key],
+        to_jsonb(GREATEST(remaining_cancel_qty - cancel_qty, 0)),
+        true
+      );
 
       remaining_qty := GREATEST(orig_qty - cancel_qty, 0);
 
@@ -1390,6 +1418,10 @@ BEGIN
 
       item_count := item_count + 1;
     END LOOP;
+
+    IF NOT order_changed THEN
+      CONTINUE;
+    END IF;
 
     -- 更新订单
     UPDATE orders

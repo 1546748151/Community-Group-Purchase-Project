@@ -3067,6 +3067,10 @@ function focusLookupResults() {
   }
 }
 
+function isTeamOrder(order) {
+  return !!(order && ((order.note && order.note.includes('[组队]')) || (order.items || []).some(it => it && it.team_id)));
+}
+
 async function lookupOrders() {
   const name = document.getElementById('lookup-name').value.trim();
   const resultsEl = document.getElementById('lookup-results');
@@ -3165,7 +3169,7 @@ async function lookupOrders() {
 
   // 查询组队成员信息（仅对含组队订单的轮次）
   const teamDataMap = {}; // key: `${product_id}`, value: { members, target_qty, split_count }
-  const teamRoundIds = [...new Set(orders.filter(o => o.note && o.note.includes('[组队]')).map(o => o.round_id).filter(Boolean))];
+  const teamRoundIds = [...new Set(orders.filter(o => isTeamOrder(o)).map(o => o.round_id).filter(Boolean))];
   if (teamRoundIds.length > 0) {
     await Promise.all(teamRoundIds.map(async rid => {
       const { data: teams } = await sb.rpc('get_customer_teams', { p_round_id: rid, p_customer_name: name });
@@ -3181,9 +3185,10 @@ async function lookupOrders() {
   const roundGroups = {};
   orders.forEach(order => {
     const rid = order.round_id || '__no_round__';
-    if (!roundGroups[rid]) roundGroups[rid] = { orders: [], merged: {}, totalAmount: 0, notes: [], hasActive: false, hasPendingWeight: false, hasCancelled: false, isAdminCancelled: false };
+    if (!roundGroups[rid]) roundGroups[rid] = { orders: [], merged: {}, totalAmount: 0, notes: [], hasActive: false, hasPendingWeight: false, hasCancelled: false, isAdminCancelled: false, hasTeam: false };
     const g = roundGroups[rid];
     g.orders.push(order);
+    if (isTeamOrder(order)) g.hasTeam = true;
     if (order.status === 'pending_weight') {
       g.hasPendingWeight = true;
       g.hasActive = true;
@@ -3195,7 +3200,7 @@ async function lookupOrders() {
         const fillStatus = (customerFillStatus[it.product_id] || {})[`${order.customer_name}::${it._orig_time || order.created_at}`] || '';
           const fillKey = fillStatus.startsWith('未拼满') ? 'unfilled' : 'filled';
           const key = `${it.product_id || ''}|${it.spec_name || ''}|${fillKey}`;
-        const isTeamItem = order.note && order.note.includes('[组队]');
+        const isTeamItem = isTeamOrder(order);
         if (!g.merged[key]) g.merged[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, purchase_qty: 0, share: it.share, actual_weight: it.actual_weight, lastTime: '', _orig_time: it._orig_time || order.created_at, fillStatus, isTeam: isTeamItem };
         g.merged[key].quantity += it.quantity || 0;
         g.merged[key].subtotal += Number(it.subtotal) || 0;
@@ -3208,7 +3213,7 @@ async function lookupOrders() {
       g.hasCancelled = true;
       if (order.note && order.note.includes('[团长砍单]')) g.isAdminCancelled = true;
     }
-    if (order.note) g.notes.push(order.note);
+    if (order.status !== 'cancelled' && order.note) g.notes.push(order.note);
   });
   // 后处理：拆分跨边界订单商品
   Object.entries(roundGroups).forEach(([rid, g]) => {
@@ -3296,7 +3301,7 @@ async function lookupOrders() {
       <div style="text-align:center;font-weight:900;color:var(--color-accent);font-size:.9rem;padding:8px 0 4px">${roundLabel}${roundStatusTag}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 12px">
         ${statusBadge}
-        ${g.notes.some(n => n.includes('[组队]')) ? '<span class="badge" style="font-size:.7rem;background:var(--color-accent-light);color:var(--color-accent);margin-left:6px">组队</span>' : ''}
+        ${g.hasTeam ? '<span class="badge" style="font-size:.7rem;background:var(--color-accent-light);color:var(--color-accent);margin-left:6px">组队</span>' : ''}
       </div>`;
 
     // 分离组队商品和直接下单商品
@@ -3374,7 +3379,12 @@ async function lookupOrders() {
     }
 
     // 备注
+    const activeProductNames = new Set(Object.values(g.merged).map(it => it.product_name).filter(Boolean));
     g.notes.filter(Boolean).forEach(note => {
+      if (note.includes('[团长砍单]') && note.includes('已取消:')) {
+        const matchesCurrentProduct = [...activeProductNames].some(name => note.includes(name));
+        if (!matchesCurrentProduct) return;
+      }
       const isAdminNote = note.includes('[团长砍单]');
       const noteStyle = isAdminNote
         ? 'margin-top:4px;background:var(--color-danger-light);color:var(--color-danger);padding:6px 10px;border-radius:var(--radius-sm);font-size:.82rem'
@@ -3422,8 +3432,8 @@ async function cancelAllRoundOrders(roundId, btn) {
   if (!name) return;
 
   const { data: orders } = await sb.rpc('lookup_orders', { p_customer_name: name, p_round_id: roundId });
-  const activeOrders = (orders || []).filter(o => o.status === 'active');
-  if (activeOrders.length === 0) { toast('本轮没有可取消的订单'); return; }
+  const activeOrders = (orders || []).filter(o => o.status === 'active' && !isTeamOrder(o));
+  if (activeOrders.length === 0) { toast('本轮没有可修改的普通订单，组队订单请在组队入口处理'); return; }
 
   // 合并同类商品
   const mergedItems = {};
@@ -4543,8 +4553,8 @@ function adminBatchCancel(customerName, roundId) {
     try { const r = await adminRpc('admin_get_products', { p_round_id: roundId }); curProducts = r.data || []; } catch(e) {}
     const priceMap = buildPriceMap(curProducts);
     const orders = enrichOrdersWithCurrentPrices(rawOrders, priceMap);
-    const userOrders = (orders || []).filter(o => o.customer_name === customerName && o.status !== 'cancelled');
-    if (userOrders.length === 0) { toast('该顾客没有可砍单的订单', 'error'); return; }
+    const userOrders = (orders || []).filter(o => o.customer_name === customerName && o.status !== 'cancelled' && !isTeamOrder(o));
+    if (userOrders.length === 0) { toast('该顾客没有可砍单的普通订单，组队订单请在组队入口处理', 'error'); return; }
 
     // 合并同类商品
     const mergedItems = {};
