@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
 <style>
 /* ============================================================
@@ -1707,6 +1707,108 @@ async function saveRoundFees() {
   }
 }
 
+
+// ============================================================
+// EXCEL 导出样式增强（xlsx-js-style：与 xlsx 同 API，额外支持单元格样式 cell.s）
+// ============================================================
+const XL_PALETTE = {
+  headerBg: 'FF15803D',   // 表头-品牌绿
+  headerFg: 'FFFFFFFF',
+  zebraBg:  'FFF4F8F4',   // 斑马纹-浅绿灰
+  border:   'FFD8DEE4',   // 边框-浅灰
+  teamBg:   'FFE8F1FF', teamFg: 'FF1D4ED8',   // [组队] 行-浅蓝
+  wgtBg:    'FFFFFBE6', wgtFg: 'FFA16207',   // 待称重 行-浅黄
+  okBg:     'FFDCF3E3', okFg: 'FF15803D',    // 已拼满-浅绿
+  warnBg:   'FFFFE3C2', warnFg: 'FFC2410C',  // 未拼满-浅橙
+  subBg:    'FFEAF6EC', subFg: 'FF166534',   // 小计-浅绿
+  feeBg:    'FFF1E9FF', feeFg: 'FF6D28D9',   // 运费均摊-浅紫
+  grandBg:  'FFFFF6D9', grandFg: 'FF92400E'  // 合计/总计-浅黄
+};
+function xlCell(ws, r, c) { return ws[XLSX.utils.encode_cell({ r: r, c: c })]; }
+// 深合并：font/fill/alignment/border 内部键合并，保证先设的字号/边框不被覆盖
+function xlSet(ws, r, c, style) {
+  const cell = xlCell(ws, r, c);
+  if (!cell) return;
+  const s = cell.s = Object.assign({}, cell.s || {});
+  ['font', 'fill', 'alignment', 'border'].forEach(k => {
+    if (style[k]) s[k] = Object.assign({}, s[k] || {}, style[k]);
+  });
+  Object.keys(style).forEach(k => {
+    if (k !== 'font' && k !== 'fill' && k !== 'alignment' && k !== 'border') s[k] = style[k];
+  });
+}
+function xlBorderStyle() {
+  const b = { style: 'thin', color: { rgb: XL_PALETTE.border } };
+  return { top: b, bottom: b, left: b, right: b };
+}
+function xlFillStyle(bg) { return { patternType: 'solid', fgColor: { rgb: bg } }; }
+
+// 统一润色：表头品牌绿白字居中、全表细边框、数据区斑马纹、金额/数量列右对齐、列宽、行高
+// opts: { headerRows, rightAligned, widths, dataSz(明细字号,默认10), headerH(表头行高pt,默认22), dataH(明细行高pt,默认17) }
+function xlPolishSheet(ws, opts) {
+  opts = opts || {};
+  if (!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const headerRows = opts.headerRows || 1;
+  const dataSz = opts.dataSz == null ? 10 : opts.dataSz;
+  const headerH = opts.headerH == null ? 22 : opts.headerH;
+  const dataH = opts.dataH == null ? 17 : opts.dataH;
+  const e = range.e;
+  for (let r = 0; r < headerRows; r++) {
+    for (let c = range.s.c; c <= e.c; c++) {
+      xlSet(ws, r, c, {
+        fill: xlFillStyle(XL_PALETTE.headerBg),
+        font: { bold: true, color: { rgb: XL_PALETTE.headerFg }, sz: 11 },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        border: xlBorderStyle()
+      });
+    }
+  }
+  for (let r = headerRows; r <= e.r; r++) {
+    const zebra = (r - headerRows) % 2 === 1;
+    for (let c = range.s.c; c <= e.c; c++) {
+      xlSet(ws, r, c, { border: xlBorderStyle(), font: { sz: dataSz } });
+      if (zebra) xlSet(ws, r, c, { fill: xlFillStyle(XL_PALETTE.zebraBg) });
+    }
+  }
+  (opts.rightAligned || []).forEach(c => {
+    for (let r = headerRows; r <= e.r; r++) {
+      xlSet(ws, r, c, { alignment: { horizontal: 'right', vertical: 'center' } });
+    }
+  });
+  if (opts.widths) ws['!cols'] = opts.widths.map(w => ({ wch: w }));
+  // 行高：表头 + 明细统一高度（强调行随后用 hpt 抬高）
+  const rows = [];
+  for (let r = range.s.r; r <= e.r; r++) rows.push({ hpt: r < headerRows ? headerH : dataH });
+  ws['!rows'] = rows;
+  return ws;
+}
+
+// 按某一列文本命中给整行着色/强调（用于 拼单状态/小计/合计/运费均摊 等语义行）
+// style: { bg, fg, sz(字号), hpt(行高pt) }
+function xlColorRowsByText(ws, col, test, style, rowStart) {
+  style = style || {};
+  rowStart = rowStart == null ? 1 : rowStart;
+  if (!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let r = rowStart; r <= range.e.r; r++) {
+    const cell = xlCell(ws, r, col);
+    if (!cell) continue;
+    const v = String(cell.v == null ? '' : cell.v);
+    if (!test(v)) continue;
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      xlSet(ws, r, c, {
+        fill: xlFillStyle(style.bg),
+        font: { bold: true, color: { rgb: style.fg } }
+      });
+      if (style.sz != null) xlSet(ws, r, c, { font: { sz: style.sz } });
+    }
+    if (style.hpt && ws['!rows'] && ws['!rows'][r]) {
+      ws['!rows'][r].hpt = Math.max(ws['!rows'][r].hpt || 0, style.hpt);
+    }
+  }
+}
+
 // ============================================================
 // PRODUCT IMPORT / EXPORT
 // ============================================================
@@ -1728,6 +1830,9 @@ function exportRoundProducts() {
     // 设置 _json 列为隐藏（在 Excel 中不可见，但 xlsx 读取时仍可获取）
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '商品');
+    // 视觉增强：表头品牌绿 + 斑马纹 + 列宽；最后一列 _json 隐藏（仅用于导入还原）
+    xlPolishSheet(ws, { widths: [16, 30, 14, 10, 4] });
+    if (ws['!cols'] && ws['!cols'][4]) ws['!cols'][4].hidden = true;
     const rname = (document.querySelector('.admin-product-list')?.closest('#admin-tab-products')?.querySelector('.round-chip.active')?.textContent || '商品').trim();
     XLSX.writeFile(wb, rname + '.xlsx');
     toast(`已导出 ${data.length} 个商品`);
@@ -4417,10 +4522,14 @@ async function lookupOrders() {
     const roundLabel = escHtml(ri.name);
     const roundCutoff = ri.cutoff_time ? new Date(ri.cutoff_time) : null;
     const canCancel = g.hasActive && (!roundCutoff || new Date() < roundCutoff);
-    const statusColor = ri.status === '进行中' ? 'badge-success' : ri.status === '已截止' || ri.status === '已停止' ? 'badge-danger' : 'badge-muted';
-    const roundStatusTag = ri.status ? `<span class="badge ${statusColor}" style="margin-left:6px;font-size:.72rem">${escHtml(ri.status)}</span>` : '';
+    // 轮次状态降级为说明文案（避免与订单状态徽章双胶囊叠放）
+    let roundNote = '';
+    if (ri.status === '进行中') roundNote = g.hasActive ? '轮次进行中 · 可修改或取消订单' : '轮次进行中';
+    else if (ri.status === '已截止') roundNote = g.hasActive ? '该轮次已截止 · 不可修改订单，可申请售后' : '该轮次已截止';
+    else if (ri.status === '已停止') roundNote = '该轮次已停止 · 不可修改/取消订单';
+    else if (ri.status === '策划中') roundNote = '该轮次策划中';
 
-    // 状态标签
+    // 订单状态标签
     let statusBadge = '';
     if (g.hasCancelled && !g.hasActive) {
       statusBadge = `<span class="badge ${g.isAdminCancelled ? 'badge-danger' : 'badge-muted'}">${g.isAdminCancelled ? '已砍单' : '已取消'}</span>`;
@@ -4433,11 +4542,11 @@ async function lookupOrders() {
     }
 
     html += `<div class="card" style="margin-bottom:12px;border:1.5px solid var(--color-accent);border-radius:var(--radius-lg);opacity:${!g.hasActive ? '.6' : '1'}">
-      <div style="text-align:center;font-weight:900;color:var(--color-accent);font-size:.9rem;padding:8px 0 4px">${roundLabel}${roundStatusTag}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 12px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:0 12px">
+        <div style="font-weight:900;color:var(--color-accent);font-size:.95rem;line-height:1.35;min-width:0;flex:1;word-break:break-word">${roundLabel}</div>
         ${statusBadge}
-        ${g.hasTeam ? '<span class="badge" style="font-size:.7rem;background:var(--color-accent-light);color:var(--color-accent);margin-left:6px">组队</span>' : ''}
-      </div>`;
+      </div>
+      ${roundNote ? `<p class="caption" style="margin:6px 0 2px;padding:0 12px">${roundNote}</p>` : ''}`;
 
     // 分离组队商品和直接下单商品
     const mergedItems = Object.values(g.merged);
@@ -4449,7 +4558,7 @@ async function lookupOrders() {
       const specLabel = formatUnitLabel(it.spec_name);
       let weightInfo = '';
       if (it.actual_weight != null) {
-        weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQty(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
+        weightInfo = `<span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQty(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
       }
       // 逐客户拼满状态：优先用时间排序的 customerFillStatus（能正确区分不同客户归属），
       // 全局缓存 cachedSummaryByProduct 只能反映"还需多少凑整"，不适合逐客户判断
@@ -4474,11 +4583,17 @@ async function lookupOrders() {
         const cacheKeys = Object.keys(cachedSummaryByProduct).slice(0, 10).join(',');
         console.log('[fill-debug] final', it.product_name, `row:fillStatus=${it.fillStatus}`, `cached:${globalSum ? `fillLabel=${globalSum.fillLabel} unfilled=${globalSum.unfilled} missing=${globalSum.missingLabel} isSplit=${globalSum.isSplitUnit}` : 'EMPTY'}`, `fallback:${fallbackFillMap[it.product_id || ''] ? 'yes' : 'no'}`, `source=${fillSource} pidFill="${pidFill}"`);
       }
-      const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill.startsWith('已拼满') ? '<span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span>' : '';
-      const timeInfo = it.lastTime ? `<br><span class="caption">最后下单: ${it.lastTime}</span>` : '';
-      html += `<div class="order-item-row" style="${isTeam ? 'border-left:3px solid var(--color-accent);padding-left:8px;' : ''}">
-        <span class="item-name">${escHtml(it.product_name)} ${escHtml(specLabel)} <strong>×${formatQtyLabel(it.quantity)}</strong>${fillBadge}${weightInfo}${timeInfo}</span>
-        <span class="item-price">${it.subtotal.toFixed(2)}</span>
+      const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill.startsWith('已拼满') ? '<span class="badge badge-success" style="font-size:.7rem">已拼满</span>' : '';
+      const timeInfo = it.lastTime ? `<span class="caption">最后下单: ${it.lastTime}</span>` : '';
+      // 三行式商品块：①名称/规格/×数量 + 金额 ②拼单状态/称重公式 ③最后下单
+      const metaHtml = (fillBadge || weightInfo) ? `<div style="display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center">${fillBadge}${weightInfo}</div>` : '';
+      html += `<div class="order-item-row" style="flex-direction:column;align-items:stretch;padding:7px 0;gap:6px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%">
+          <span class="item-name" style="flex:1;min-width:0;padding-right:8px;font-size:.875rem;line-height:1.45">${escHtml(it.product_name)} ${escHtml(specLabel)} <strong>×${formatQtyLabel(it.quantity)}</strong></span>
+          <span class="item-price">${it.subtotal.toFixed(2)}</span>
+        </div>
+        ${metaHtml}
+        ${timeInfo ? `<div style="display:flex;align-items:center" class="caption">${timeInfo}</div>` : ''}
       </div>`;
 
       // 组队商品：显示队友信息（名字 + 份额，不显示价格）
@@ -4495,7 +4610,7 @@ async function lookupOrders() {
           });
         });
         if (memberParts.length > 0) {
-          html += `<div style="margin-left:${isTeam ? '8px' : '0'};margin-bottom:2px;font-size:.75rem;color:var(--color-text-secondary);padding:2px 0">
+          html += `<div style="margin-bottom:2px;font-size:.75rem;color:var(--color-text-secondary);padding:3px 0 4px">
             <span style="opacity:.7">队友: </span>${memberParts.join(' &middot; ')}
           </div>`;
         }
@@ -4505,12 +4620,12 @@ async function lookupOrders() {
     // 渲染直接下单商品（无特殊标识）
     directItems.forEach(it => renderMergedItem(it, false));
 
-    // 渲染组队商品（带组队标识和绿色边框）
+    // 渲染组队商品（统一放在浅蓝组队面板内，标签与内容一体）
     if (teamItems.length > 0) {
-      html += '<div style="background:var(--color-accent-light);border:1.5px solid var(--color-accent-border);border-radius:var(--radius-sm);padding:6px 10px;margin-bottom:6px;margin-top:8px">';
-      html += '<span style="font-weight:700;color:var(--color-accent);font-size:.8rem">组队拼单商品</span>';
-      html += '</div>';
+      html += '<div style="background:var(--color-accent-light);border:1.5px solid var(--color-accent-border);border-radius:var(--radius-md);padding:10px 12px;margin:10px 0 2px">';
+      html += '<div style="font-weight:700;color:var(--color-accent);font-size:.8rem;margin-bottom:4px">组队拼单商品</div>';
       teamItems.forEach(it => renderMergedItem(it, true));
+      html += '</div>';
     }
 
     // 备注
@@ -4528,11 +4643,11 @@ async function lookupOrders() {
       html += `<p class="caption" style="${noteStyle}">${noteLabel}${escHtml(note)}</p>`;
     });
 
-    html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border-light)">
-      <span style="font-weight:800">合计: <span style="color:var(--color-accent);font-size:1.1rem">${g.totalAmount.toFixed(2)}</span></span>
-      <span style="display:flex;gap:6px">
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border-light)">
+      <span style="font-weight:800;white-space:nowrap">合计: <span style="color:var(--color-accent);font-size:1.1rem">${g.totalAmount.toFixed(2)}</span></span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         ${ri.status === '已截止' ? `<button class="btn btn-ghost btn-sm" onclick="showAfterSales('${escAttr(rid)}', document.getElementById('lookup-name').value.trim())">申请售后</button><button class="btn btn-ghost btn-sm" onclick="showAfterSalesDetail('${escAttr(rid)}', document.getElementById('lookup-name').value.trim())">售后详情</button>` : ''}
-        ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelAllRoundOrders('${rid}', this)">修改/取消订单</button>` : (!g.hasActive ? '' : '<span class="badge badge-muted">已截止</span>')}
+        ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelAllRoundOrders('${rid}', this)">修改/取消订单</button>` : ''}
       </span>
     </div></div>`;
   });
@@ -4986,23 +5101,39 @@ async function exportOrders() {
 
   // Sheet 1: User orders
   const rows1 = [['顾客昵称', '商品名称', '规格', '购买次数', '折算采购数量', '单价', '小计', '备注', '应付总额', '下单时间']];
+  const teamRows1 = [], wgtRows1 = [];
+  let sumQty1 = 0, sumSub1 = 0;
   orders.forEach(o => {
+    const isTeamRow = (o.note || '').indexOf('[组队]') >= 0;
+    const isWgtRow = o.status === 'pending_weight';
     (o.items || []).forEach(it => {
       if (it.deleted) return;
       rows1.push([o.customer_name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), formatQtyLabel(getItemStockQty(it)), it.spec_price, it.subtotal, o.note || '', o.total_amount, new Date(it._orig_time || o.created_at).toLocaleString('zh-CN')]);
+      const idx = rows1.length - 1;
+      if (isTeamRow) teamRows1.push(idx);
+      if (isWgtRow && !isTeamRow) wgtRows1.push(idx);
+      sumQty1 += Number(getItemStockQty(it)) || 0;
+      sumSub1 += Number(it.subtotal) || 0;
     });
   });
+  rows1.push(['合计', '', '', '', formatQtyLabel(sumQty1), '', (Math.round(sumSub1 * 100) / 100).toFixed(2), '', '', '']);
 
   // Sheet 2: Product summary
   const productSales = buildProductSummary(orders);
   const rows2 = [['商品名称', '规格/拼单说明', '采购数量', '总金额', '拼单状态']];
-  productSales.forEach(ps => rows2.push([
-    ps.name,
-    ps.spec,
-    ps.qtyLabel || formatQtyLabel(ps.qty),
-    ps.amount.toFixed(2),
-    ps.unfilled ? `未拼满，差 ${toDisplayFraction(ps.missingQty, 40) || ps.missingLabel || formatQtyLabel(ps.missingQty)}` : (ps.isSplitUnit ? '已拼满' : '')
-  ]));
+  let sumQty2 = 0, sumAmt2 = 0;
+  productSales.forEach(ps => {
+    sumQty2 += Number(ps.qty) || 0;
+    sumAmt2 += Number(ps.amount) || 0;
+    rows2.push([
+      ps.name,
+      ps.spec,
+      ps.qtyLabel || formatQtyLabel(ps.qty),
+      ps.amount.toFixed(2),
+      ps.unfilled ? `未拼满，差 ${toDisplayFraction(ps.missingQty, 40) || ps.missingLabel || formatQtyLabel(ps.missingQty)}` : (ps.isSplitUnit ? '已拼满' : '')
+    ]);
+  });
+  rows2.push(['合计', '', formatQtyLabel(sumQty2), (Math.round(sumAmt2 * 100) / 100).toFixed(2), '']);
 
   // Sheet 3: Orders by person
   const personMap = {};
@@ -5015,21 +5146,39 @@ async function exportOrders() {
     personMap[o.customer_name].total += Number(o.total_amount) || 0;
   });
   const rows3 = [['顾客昵称', '商品名称', '规格', '数量', '单价', '小计', '应付总额', '备注']];
+  let grandTotal3 = 0;
   Object.entries(personMap).forEach(([name, data]) => {
     data.items.forEach(it => {
       rows3.push([name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), it.spec_price, Number(it.subtotal||0).toFixed(2), data.total.toFixed(2), '']);
     });
-    data.total = data.total;
+    grandTotal3 += Number(data.total) || 0;
     // 每人小计行
     if (data.items.length > 1) {
       rows3.push([name, '', '', '', '', '小计', data.total.toFixed(2), '']);
     }
   });
+  rows3.push(['', '', '', '', '', '总计', (Math.round(grandTotal3 * 100) / 100).toFixed(2), '']);
 
   const wb = XLSX.utils.book_new();
   const ws1 = XLSX.utils.aoa_to_sheet(rows1);
   const ws2 = XLSX.utils.aoa_to_sheet(rows2);
   const ws3 = XLSX.utils.aoa_to_sheet(rows3);
+  // 视觉增强：表头品牌绿、斑马纹、语义着色（组队/待称重/拼单状态/小计/合计）
+  xlPolishSheet(ws1, { widths: [14, 22, 14, 9, 13, 9, 10, 16, 11, 20], rightAligned: [3, 4, 5, 6, 8] });
+  xlPolishSheet(ws2, { widths: [22, 30, 13, 11, 26], rightAligned: [2, 3] });
+  xlPolishSheet(ws3, { widths: [14, 22, 14, 9, 9, 10, 11, 16], rightAligned: [3, 4, 5, 6] });
+  xlColorRowsByText(ws1, 0, v => v === '合计', { bg: XL_PALETTE.grandBg, fg: XL_PALETTE.grandFg, sz: 13, hpt: 28 });
+  xlColorRowsByText(ws1, 7, v => v.indexOf('[组队]') >= 0, { bg: XL_PALETTE.teamBg, fg: XL_PALETTE.teamFg });
+  wgtRows1.forEach(r => {
+    for (let c = 0; c <= 9; c++) {
+      xlSet(ws1, r, c, { fill: xlFillStyle(XL_PALETTE.wgtBg), font: { bold: true, color: { rgb: XL_PALETTE.wgtFg } } });
+    }
+  });
+  xlColorRowsByText(ws2, 4, v => v.indexOf('已拼满') === 0, { bg: XL_PALETTE.okBg, fg: XL_PALETTE.okFg });
+  xlColorRowsByText(ws2, 4, v => v.indexOf('未拼满') === 0, { bg: XL_PALETTE.warnBg, fg: XL_PALETTE.warnFg });
+  xlColorRowsByText(ws2, 0, v => v === '合计', { bg: XL_PALETTE.grandBg, fg: XL_PALETTE.grandFg, sz: 13, hpt: 28 });
+  xlColorRowsByText(ws3, 5, v => v === '小计', { bg: XL_PALETTE.subBg, fg: XL_PALETTE.subFg, sz: 13, hpt: 28 });
+  xlColorRowsByText(ws3, 5, v => v === '总计', { bg: XL_PALETTE.grandBg, fg: XL_PALETTE.grandFg, sz: 13, hpt: 28 });
   XLSX.utils.book_append_sheet(wb, ws1, '订单明细');
   XLSX.utils.book_append_sheet(wb, ws2, '商品汇总');
   XLSX.utils.book_append_sheet(wb, ws3, '按人订单明细');
@@ -5037,33 +5186,233 @@ async function exportOrders() {
   toast('Excel 已下载');
 }
 
-async function exportPaymentExcel() {
-  if (!adminRoundId) { toast('请先选择轮次', 'error'); return; }
-
+// ============================================================
+// 收款清单 导出数据（Excel 与长图共用）
+// ============================================================
+async function loadPaymentExportData() {
   const [{ data: rawOrders }, { data: curProducts }, allRounds] = await Promise.all([
     adminRpc('admin_get_orders', { p_round_id: adminRoundId }),
     adminRpc('admin_get_products', { p_round_id: adminRoundId }),
     getRounds()
   ]);
-  if (!rawOrders || rawOrders.length === 0) { toast('没有可导出的订单', 'info'); return; }
-
+  if (!rawOrders || rawOrders.length === 0) { toast('没有可导出的订单', 'info'); return null; }
   const priceMap = buildPriceMap(curProducts || []);
   const orders = enrichOrdersWithCurrentPrices(getAdminVisibleOrders(rawOrders), priceMap).filter(o => o.status !== 'pending_weight');
   const fees = await getRoundFees(adminRoundId);
+  const round = (allRounds || []).find(r => r.id === adminRoundId);
+  return { orders, fees, round };
+}
+
+// 收款清单表格数据（与 Excel Sheet4 完全一致，长图共用）
+function buildPaymentRows(orders, fees) {
+  const feeTotal = getFeeTotal(fees);
+  const personOrderMap = {};
+  orders.forEach(o => { if (!personOrderMap[o.customer_name]) personOrderMap[o.customer_name] = 0; personOrderMap[o.customer_name] += Number(o.total_amount) || 0; });
+  const personCount = Object.keys(personOrderMap).length;
+  const totalAmount = Object.values(personOrderMap).reduce((s, v) => s + v, 0);
+  const totalItems = orders.reduce((s, o) => s + (o.items || []).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.purchase_qty) || Number(it.quantity) || 0), 0), 0);
+  const personMap = {};
+  orders.forEach(o => {
+    if (!personMap[o.customer_name]) personMap[o.customer_name] = { items: [], total: 0 };
+    (o.items || []).forEach(it => { if (!it.deleted) personMap[o.customer_name].items.push(it); });
+    personMap[o.customer_name].total += Number(o.total_amount) || 0;
+  });
+  const rows = [['顾客昵称', '商品名称', '规格', '数量', '单价', '小计', '应付总额']];
+  let grandTotal = 0;
+  Object.entries(personMap).forEach(([name, data]) => {
+    data.items.forEach(it => rows.push([name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), it.spec_price, Number(it.subtotal || 0).toFixed(2), '']));
+    let feeShare = 0;
+    if (fees.mode === 'per_item') {
+      const personItems = orders.filter(o => o.customer_name === name).reduce((s, o) => s + (o.items || []).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.purchase_qty) || Number(it.quantity) || 0), 0), 0);
+      feeShare = totalItems > 0 ? Math.round(feeTotal * personItems / totalItems * 100) / 100 : 0;
+    } else if (fees.mode === 'per_amount') {
+      feeShare = totalAmount > 0 ? Math.round(feeTotal * data.total / totalAmount * 100) / 100 : 0;
+    } else {
+      feeShare = personCount > 0 ? Math.round(feeTotal / personCount * 100) / 100 : 0;
+    }
+    if (feeShare > 0) rows.push([name, '运费均摊', '', '', '', feeShare.toFixed(2), '']);
+    const grand = data.total + feeShare;
+    grandTotal += grand;
+    rows.push([name, '', '', '', '', '小计', grand.toFixed(2)]);
+  });
+  rows.push(['', '', '', '', '', '总计', (Math.round(grandTotal * 100) / 100).toFixed(2)]);
+  return rows;
+}
+
+// ============================================================
+// 收款清单 长图导出（PNG，可直接发微信群；零依赖 Canvas 手绘 2x 高清）
+// ============================================================
+async function exportPaymentImage() {
+  if (!adminRoundId) { toast('请先选择轮次', 'error'); return; }
+  const data = await loadPaymentExportData();
+  if (!data) return;
+  const { orders, fees, round } = data;
+  const rows = buildPaymentRows(orders, fees);
+
+  const PX = 760;                       // 图片宽(1x)
+  const PAD = 22;
+  const LEFT = PAD;
+  const RIGHT = PX - PAD;
+  const INNER = RIGHT - LEFT;
+  const COLS = [96, 220, 86, 56, 70, 88, 100];   // 7 列，合计 716 = INNER
+  const HEAD_H = 42;
+  const TITLE_H = 88;
+  const FOOT_H = 26;
+  const rowH = (cells) => cells[5] === '总计' ? 48 : (cells[5] === '小计' ? 44 : 34);
+  const rowKind = (cells) => cells[5] === '总计' ? 'grand' : cells[5] === '小计' ? 'sub' : (cells[1] === '运费均摊' ? 'fee' : 'detail');
+
+  const rowHs = rows.map((cells, i) => i === 0 ? HEAD_H : rowH(cells));
+  const totalH = TITLE_H + rowHs.reduce((s, h) => s + h, 0) + FOOT_H;
+  const k = Math.min(2, Math.sqrt(22e6 / (PX * Math.max(totalH, 1))));   // 高清单降低倍率，防超规格
+  if (k <= 0.1) { toast('收款清单过长，无法生成长图', 'error'); return; }
+
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(PX * k);
+  cv.height = Math.round(totalH * k);
+  const gctx = cv.getContext('2d');
+  gctx.scale(k, k);
+  gctx.fillStyle = '#FFFFFF';
+  gctx.fillRect(0, 0, PX, totalH);
+
+  const roundName = (round && round.name) ? String(round.name) : '团购';
+  const grandVal = rows[rows.length - 1][6] || '0.00';
+  const personTotal = rows.filter(r => r[5] === '小计').length;
+
+  // 标题区
+  gctx.fillStyle = '#15803D';
+  gctx.font = 'bold 20px "PingFang SC","Microsoft YaHei",sans-serif';
+  gctx.textBaseline = 'middle';
+  gctx.textAlign = 'left';
+  gctx.fillText(roundName + ' 收款清单', LEFT, 36);
+  gctx.fillStyle = '#667085';
+  gctx.font = '12px "PingFang SC","Microsoft YaHei",sans-serif';
+  gctx.fillText('共 ' + personTotal + ' 人 · 合计 ¥' + grandVal + '（含杂费 ¥' + (Number(getFeeTotal(fees)) || 0).toFixed(2) + '）· ' + new Date().toLocaleDateString('zh-CN'), LEFT, 58);
+  gctx.strokeStyle = '#E7E5E4';
+  gctx.lineWidth = 1;
+  gctx.beginPath(); gctx.moveTo(LEFT, 74); gctx.lineTo(RIGHT, 74); gctx.stroke();
+
+  const colX = [];
+  (function() { let x = LEFT; COLS.forEach(w => { colX.push({ x: x, w: w }); x += w; }); })();
+  const trunc = function(txt, maxW, font) {
+    gctx.font = font;
+    if (gctx.measureText(txt).width <= maxW) return txt;
+    let t = txt;
+    while (t.length > 1 && gctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+    return t + '…';
+  };
+
+  // 表头
+  let y = TITLE_H;
+  gctx.fillStyle = '#15803D';
+  gctx.fillRect(LEFT, y, INNER, HEAD_H);
+  gctx.fillStyle = '#FFFFFF';
+  gctx.font = 'bold 13px "PingFang SC","Microsoft YaHei",sans-serif';
+  colX.forEach((col, i) => {
+    const align = i >= 3 ? 'right' : 'left';
+    gctx.textAlign = align;
+    gctx.fillText(rows[0][i], align === 'right' ? col.x + col.w - 10 : col.x + 10, y + HEAD_H / 2);
+  });
+  y += HEAD_H;
+
+  // 数据行
+  for (let i = 1; i < rows.length; i++) {
+    const cells = rows[i];
+    const kind = rowKind(cells);
+    const h = rowHs[i];
+    let bg = '#FFFFFF';
+    if (kind === 'sub') bg = '#EAF6EC';
+    else if (kind === 'grand') bg = '#FFF6D9';
+    else if (kind === 'fee') bg = '#F1E9FF';
+    else if (i % 2 === 0) bg = '#F4F8F4';
+    gctx.fillStyle = bg;
+    gctx.fillRect(LEFT, y, INNER, h);
+    let color = '#1C1917';
+    let font = '13px "PingFang SC","Microsoft YaHei",sans-serif';
+    if (kind === 'sub') { color = '#166534'; font = 'bold 15px "PingFang SC","Microsoft YaHei",sans-serif'; }
+    else if (kind === 'grand') { color = '#92400E'; font = 'bold 16px "PingFang SC","Microsoft YaHei",sans-serif'; }
+    else if (kind === 'fee') { color = '#6D28D9'; font = 'bold 12.5px "PingFang SC","Microsoft YaHei",sans-serif'; }
+    gctx.fillStyle = color;
+    gctx.font = font;
+    colX.forEach((col, c) => {
+      const align = c >= 3 ? 'right' : 'left';
+      gctx.textAlign = align;
+      const txt = cells[c] == null ? '' : String(cells[c]);
+      gctx.fillText(trunc(txt, col.w - 16, font), align === 'right' ? col.x + col.w - 10 : col.x + 10, y + h / 2);
+    });
+    gctx.strokeStyle = '#D8DEE4';
+    gctx.beginPath();
+    gctx.moveTo(LEFT, y + h); gctx.lineTo(RIGHT, y + h);
+    gctx.stroke();
+    y += h;
+  }
+  gctx.strokeRect(LEFT, TITLE_H - 0.5, INNER, y - TITLE_H + 1);
+
+  // 脚注
+  gctx.fillStyle = '#A8A29E';
+  gctx.font = '10.5px "PingFang SC","Microsoft YaHei",sans-serif';
+  gctx.textAlign = 'left';
+  gctx.fillText('邻选社区团购 · 长图自动生成', LEFT, y + FOOT_H / 2 + 4);
+
+  const safeName = roundName.replace(/[\\/:*?"<>|]/g, '_');
+  const fname = safeName + '_收款长图_' + new Date().toISOString().slice(0, 10) + '.png';
+  const doDownload = function(url) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+  try {
+    cv.toBlob(function(blob) {
+      if (!blob) { toast('长图生成失败，请重试', 'error'); return; }
+      const url = URL.createObjectURL(blob);
+      doDownload(url);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 1500);
+      toast('收款清单长图已导出');
+    }, 'image/png');
+  } catch (e) {
+    try { doDownload(cv.toDataURL('image/png')); toast('收款清单长图已导出'); }
+    catch (e2) { toast('长图生成失败，请重试', 'error'); }
+  }
+}
+
+async function exportPaymentExcel() {
+  if (!adminRoundId) { toast('请先选择轮次', 'error'); return; }
+
+  const data = await loadPaymentExportData();
+  if (!data) return;
+  const { orders, fees, round } = data;
 
   // Sheet 1: 订单明细
   const rows1 = [['顾客昵称', '商品名称', '规格', '购买次数', '折算采购数量', '单价', '小计', '备注', '应付总额', '下单时间']];
+  const teamRows1 = [], wgtRows1 = [];
+  let sumQty1 = 0, sumSub1 = 0;
   orders.forEach(o => {
+    const isTeamRow = (o.note || '').indexOf('[组队]') >= 0;
+    const isWgtRow = o.status === 'pending_weight';
     (o.items || []).forEach(it => {
       if (it.deleted) return;
       rows1.push([o.customer_name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), formatQtyLabel(getItemStockQty(it)), it.spec_price, it.subtotal, o.note || '', o.total_amount, new Date(it._orig_time || o.created_at).toLocaleString('zh-CN')]);
+      const idx = rows1.length - 1;
+      if (isTeamRow) teamRows1.push(idx);
+      if (isWgtRow && !isTeamRow) wgtRows1.push(idx);
+      sumQty1 += Number(getItemStockQty(it)) || 0;
+      sumSub1 += Number(it.subtotal) || 0;
     });
   });
+  rows1.push(['合计', '', '', '', formatQtyLabel(sumQty1), '', (Math.round(sumSub1 * 100) / 100).toFixed(2), '', '', '']);
 
   // Sheet 2: 商品汇总
   const productSales = buildProductSummary(orders);
   const rows2 = [['商品名称', '规格/拼单说明', '采购数量', '总金额', '拼单状态']];
-  productSales.forEach(ps => rows2.push([ps.name, ps.spec, ps.qtyLabel || formatQtyLabel(ps.qty), ps.amount.toFixed(2), ps.unfilled ? '未拼满，差 ' + (toDisplayFraction(ps.missingQty, 40) || formatQty(ps.missingQty)) : (ps.isSplitUnit ? '已拼满' : '')]));
+  let sumQty2 = 0, sumAmt2 = 0;
+  productSales.forEach(ps => {
+    sumQty2 += Number(ps.qty) || 0;
+    sumAmt2 += Number(ps.amount) || 0;
+    rows2.push([ps.name, ps.spec, ps.qtyLabel || formatQtyLabel(ps.qty), ps.amount.toFixed(2), ps.unfilled ? '未拼满，差 ' + (toDisplayFraction(ps.missingQty, 40) || formatQty(ps.missingQty)) : (ps.isSplitUnit ? '已拼满' : '')]);
+  });
+  rows2.push(['合计', '', formatQtyLabel(sumQty2), (Math.round(sumAmt2 * 100) / 100).toFixed(2), '']);
 
   // Sheet 3: 按人订单明细
   const personMap = {};
@@ -5073,42 +5422,47 @@ async function exportPaymentExcel() {
     personMap[o.customer_name].total += Number(o.total_amount) || 0;
   });
   const rows3 = [['顾客昵称', '商品名称', '规格', '数量', '单价', '小计', '应付总额']];
+  let grandTotal3 = 0;
   Object.entries(personMap).forEach(([name, data]) => {
     data.items.forEach(it => rows3.push([name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), it.spec_price, Number(it.subtotal||0).toFixed(2), '']));
+    grandTotal3 += Number(data.total) || 0;
     if (data.items.length > 1) rows3.push([name, '', '', '', '', '小计', data.total.toFixed(2)]);
     else rows3[rows3.length - 1][6] = data.total.toFixed(2);
   });
+  rows3.push(['', '', '', '', '', '总计', (Math.round(grandTotal3 * 100) / 100).toFixed(2)]);
 
   // Sheet 4: 收款清单
-  const feeTotal = getFeeTotal(fees);
-  const personOrderMap = {};
-  orders.forEach(o => { if (!personOrderMap[o.customer_name]) personOrderMap[o.customer_name] = 0; personOrderMap[o.customer_name] += Number(o.total_amount) || 0; });
-  const personCount = Object.keys(personOrderMap).length;
-  const totalAmount = Object.values(personOrderMap).reduce((s, v) => s + v, 0);
-  const totalItems = orders.reduce((s, o) => s + (o.items||[]).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.purchase_qty) || Number(it.quantity) || 0), 0), 0);
-  const rows4 = [['顾客昵称', '商品名称', '规格', '数量', '单价', '小计', '应付总额']];
-  Object.entries(personMap).forEach(([name, data]) => {
-    data.items.forEach(it => rows4.push([name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), it.spec_price, Number(it.subtotal||0).toFixed(2), '']));
-    let feeShare = 0;
-    if (fees.mode === 'per_item') {
-      const personItems = orders.filter(o => o.customer_name === name).reduce((s, o) => s + (o.items||[]).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.purchase_qty) || Number(it.quantity) || 0), 0), 0);
-      feeShare = totalItems > 0 ? Math.round(feeTotal * personItems / totalItems * 100) / 100 : 0;
-    } else if (fees.mode === 'per_amount') {
-      feeShare = totalAmount > 0 ? Math.round(feeTotal * data.total / totalAmount * 100) / 100 : 0;
-    } else {
-      feeShare = personCount > 0 ? Math.round(feeTotal / personCount * 100) / 100 : 0;
-    }
-    if (feeShare > 0) rows4.push([name, '运费均摊', '', '', '', feeShare.toFixed(2), '']);
-    const grandTotal = data.total + feeShare;
-    rows4.push([name, '', '', '', '', '小计', grandTotal.toFixed(2)]);
-  });
+  const rows4 = buildPaymentRows(orders, fees);
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows1), '订单明细');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows2), '商品汇总');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows3), '按人订单明细');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows4), '收款清单');
-  const round = allRounds.find(r => r.id === adminRoundId);
+  const ws1 = XLSX.utils.aoa_to_sheet(rows1);
+  const ws2 = XLSX.utils.aoa_to_sheet(rows2);
+  const ws3 = XLSX.utils.aoa_to_sheet(rows3);
+  const ws4 = XLSX.utils.aoa_to_sheet(rows4);
+  // 视觉增强：表头品牌绿、斑马纹、语义着色（组队/拼单状态/运费均摊/小计/总计）
+  xlPolishSheet(ws1, { widths: [14, 22, 14, 9, 13, 9, 10, 16, 11, 20], rightAligned: [3, 4, 5, 6, 8] });
+  xlPolishSheet(ws2, { widths: [22, 30, 13, 11, 26], rightAligned: [2, 3] });
+  xlPolishSheet(ws3, { widths: [14, 22, 14, 9, 9, 10, 11], rightAligned: [3, 4, 5, 6] });
+  xlPolishSheet(ws4, { widths: [14, 22, 14, 9, 9, 10, 11], rightAligned: [3, 4, 5, 6] });
+  xlColorRowsByText(ws1, 0, v => v === '合计', { bg: XL_PALETTE.grandBg, fg: XL_PALETTE.grandFg, sz: 13, hpt: 28 });
+  xlColorRowsByText(ws1, 7, v => v.indexOf('[组队]') >= 0, { bg: XL_PALETTE.teamBg, fg: XL_PALETTE.teamFg });
+  wgtRows1.forEach(r => {
+    for (let c = 0; c <= 9; c++) {
+      xlSet(ws1, r, c, { fill: xlFillStyle(XL_PALETTE.wgtBg), font: { bold: true, color: { rgb: XL_PALETTE.wgtFg } } });
+    }
+  });
+  xlColorRowsByText(ws2, 4, v => v.indexOf('已拼满') === 0, { bg: XL_PALETTE.okBg, fg: XL_PALETTE.okFg });
+  xlColorRowsByText(ws2, 4, v => v.indexOf('未拼满') === 0, { bg: XL_PALETTE.warnBg, fg: XL_PALETTE.warnFg });
+  xlColorRowsByText(ws2, 0, v => v === '合计', { bg: XL_PALETTE.grandBg, fg: XL_PALETTE.grandFg, sz: 13, hpt: 28 });
+  xlColorRowsByText(ws3, 5, v => v === '小计', { bg: XL_PALETTE.subBg, fg: XL_PALETTE.subFg, sz: 13, hpt: 28 });
+  xlColorRowsByText(ws3, 5, v => v === '总计', { bg: XL_PALETTE.grandBg, fg: XL_PALETTE.grandFg, sz: 13, hpt: 28 });
+  xlColorRowsByText(ws4, 1, v => v === '运费均摊', { bg: XL_PALETTE.feeBg, fg: XL_PALETTE.feeFg, sz: 13, hpt: 28 });
+  xlColorRowsByText(ws4, 5, v => v === '小计', { bg: XL_PALETTE.subBg, fg: XL_PALETTE.subFg, sz: 13, hpt: 28 });
+  xlColorRowsByText(ws4, 5, v => v === '总计', { bg: XL_PALETTE.grandBg, fg: XL_PALETTE.grandFg, sz: 13, hpt: 28 });
+  XLSX.utils.book_append_sheet(wb, ws1, '订单明细');
+  XLSX.utils.book_append_sheet(wb, ws2, '商品汇总');
+  XLSX.utils.book_append_sheet(wb, ws3, '按人订单明细');
+  XLSX.utils.book_append_sheet(wb, ws4, '收款清单');
   const fname = (round ? round.name : '团购') + '_收款_' + new Date().toISOString().slice(0,10) + '.xlsx';
   XLSX.writeFile(wb, fname);
   toast('Excel 已下载');
@@ -5238,7 +5592,8 @@ async function renderPaymentSummary(el) {
   lastPurchaseSummaryCopyText = copyText;
   html += `<button class="btn btn-primary btn-block" style="margin-top:16px" data-copy-payment>一键复制收款清单</button>`;
   html += `<button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="exportPaymentExcel()">导出收款清单 Excel</button>`;
-  html += '<p class="caption" style="text-align:center;margin-top:8px">复制后可直接粘贴到微信群收款</p>';
+  html += `<button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="exportPaymentImage()">导出收款清单长图（发微信群）</button>`;
+  html += '<p class="caption" style="text-align:center;margin-top:8px">复制后可直接粘贴到微信群收款，长图一目了然</p>';
 
   el.innerHTML = html;
 }
