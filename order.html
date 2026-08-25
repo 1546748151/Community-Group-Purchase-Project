@@ -5249,19 +5249,60 @@ async function exportPaymentImage() {
   const { orders, fees, round } = data;
   const rows = buildPaymentRows(orders, fees);
 
-  const PX = 760;                       // 图片宽(1x)
+  const PX = 920;                       // 图片宽(1x)
   const PAD = 22;
   const LEFT = PAD;
   const RIGHT = PX - PAD;
   const INNER = RIGHT - LEFT;
-  const COLS = [96, 220, 86, 56, 70, 88, 100];   // 7 列，合计 716 = INNER
+  const COLS = [100, 334, 96, 60, 78, 96, 112];   // 7 列：商品名称加宽（334≈25个汉字），合计 876 = INNER
   const HEAD_H = 42;
   const TITLE_H = 88;
   const FOOT_H = 26;
   const rowH = (cells) => cells[5] === '总计' ? 48 : (cells[5] === '小计' ? 44 : 34);
   const rowKind = (cells) => cells[5] === '总计' ? 'grand' : cells[5] === '小计' ? 'sub' : (cells[1] === '运费均摊' ? 'fee' : 'detail');
 
-  const rowHs = rows.map((cells, i) => i === 0 ? HEAD_H : rowH(cells));
+  // 测量用离屏画布（图片尺寸未定时先估算行高）
+  const measCv = document.createElement('canvas');
+  measCv.width = 8; measCv.height = 8;
+  const mg = measCv.getContext('2d');
+  const BODY_FONT = '13px "PingFang SC","Microsoft YaHei",sans-serif';
+  const LINE_H = 18, PAD_V = 8, MIN_ROW_H = 34;
+  // 长文本换行（CJK 友好 + 英文/数字词不断开）：保证名称/规格完整显示不截断
+  function wrapText(txt, maxW, font) {
+    if (!txt) return [''];
+    mg.font = font;
+    const lines = [];
+    let cur = '';
+    let word = '';
+    const isWordCh = (c) => /[A-Za-z0-9.%\-±]/.test(c);   // 字母数字/百分号/点/减号/± 视为一个词
+    const flushWord = () => {
+      if (!word) return;
+      if (cur === '' || mg.measureText(cur + word).width <= maxW) { cur += word; }
+      else if (mg.measureText(word).width > maxW) { cur += word; }   // 词本身超宽则强制并入当前行
+      else { lines.push(cur); cur = word; }
+      word = '';
+    };
+    for (let i = 0; i < txt.length; i++) {
+      const ch = txt[i];
+      if (isWordCh(ch)) { word += ch; continue; }
+      flushWord();
+      if (cur !== '' && mg.measureText(cur + ch).width > maxW) { lines.push(cur); cur = ch; }
+      else cur += ch;
+    }
+    flushWord();
+    if (cur !== '') lines.push(cur);
+    return lines.length ? lines : [''];
+  }
+  const rowHs = rows.map((cells, i) => {
+    if (i === 0) return HEAD_H;
+    if (rowKind(cells) !== 'detail') return rowH(cells);
+    const nLines = Math.max(
+      wrapText(String(cells[0] != null ? cells[0] : ''), COLS[0] - 16, BODY_FONT).length,
+      wrapText(String(cells[1] != null ? cells[1] : ''), COLS[1] - 16, BODY_FONT).length,
+      wrapText(String(cells[2] != null ? cells[2] : ''), COLS[2] - 16, BODY_FONT).length
+    );
+    return Math.max(MIN_ROW_H, PAD_V * 2 + nLines * LINE_H);
+  });
   const totalH = TITLE_H + rowHs.reduce((s, h) => s + h, 0) + FOOT_H;
   const k = Math.min(2, Math.sqrt(22e6 / (PX * Math.max(totalH, 1))));   // 高清单降低倍率，防超规格
   if (k <= 0.1) { toast('收款清单过长，无法生成长图', 'error'); return; }
@@ -5314,7 +5355,7 @@ async function exportPaymentImage() {
   });
   y += HEAD_H;
 
-  // 数据行
+  // 数据行（detail 行：名称/规格自动换行、行高自适应；特殊行居中加粗）
   for (let i = 1; i < rows.length; i++) {
     const cells = rows[i];
     const kind = rowKind(cells);
@@ -5326,19 +5367,43 @@ async function exportPaymentImage() {
     else if (i % 2 === 0) bg = '#F4F8F4';
     gctx.fillStyle = bg;
     gctx.fillRect(LEFT, y, INNER, h);
-    let color = '#1C1917';
-    let font = '13px "PingFang SC","Microsoft YaHei",sans-serif';
-    if (kind === 'sub') { color = '#166534'; font = 'bold 15px "PingFang SC","Microsoft YaHei",sans-serif'; }
-    else if (kind === 'grand') { color = '#92400E'; font = 'bold 16px "PingFang SC","Microsoft YaHei",sans-serif'; }
-    else if (kind === 'fee') { color = '#6D28D9'; font = 'bold 12.5px "PingFang SC","Microsoft YaHei",sans-serif'; }
-    gctx.fillStyle = color;
-    gctx.font = font;
-    colX.forEach((col, c) => {
-      const align = c >= 3 ? 'right' : 'left';
-      gctx.textAlign = align;
-      const txt = cells[c] == null ? '' : String(cells[c]);
-      gctx.fillText(trunc(txt, col.w - 16, font), align === 'right' ? col.x + col.w - 10 : col.x + 10, y + h / 2);
-    });
+    if (kind === 'detail') {
+      // 左三列（昵称/商品名称/规格）多行换行，右四列单行垂直居中
+      const wraps = [
+        wrapText(String(cells[0] != null ? cells[0] : ''), COLS[0] - 16, BODY_FONT),
+        wrapText(String(cells[1] != null ? cells[1] : ''), COLS[1] - 16, BODY_FONT),
+        wrapText(String(cells[2] != null ? cells[2] : ''), COLS[2] - 16, BODY_FONT)
+      ];
+      const nLines = Math.max(wraps[0].length, wraps[1].length, wraps[2].length);
+      const topPad = (h - nLines * LINE_H) / 2;
+      gctx.fillStyle = '#1C1917';
+      gctx.font = BODY_FONT;
+      for (let c = 0; c < 3; c++) {
+        gctx.textAlign = 'left';
+        wraps[c].forEach((ln, li) => {
+          gctx.fillText(ln, colX[c].x + 10, y + topPad + li * LINE_H + LINE_H / 2);
+        });
+      }
+      for (let c = 3; c < colX.length; c++) {
+        gctx.textAlign = 'right';
+        const txt = cells[c] == null ? '' : String(cells[c]);
+        gctx.fillText(trunc(txt, colX[c].w - 16, BODY_FONT), colX[c].x + colX[c].w - 10, y + h / 2);
+      }
+    } else {
+      let color = '#1C1917';
+      let font = BODY_FONT;
+      if (kind === 'sub') { color = '#166534'; font = 'bold 15px "PingFang SC","Microsoft YaHei",sans-serif'; }
+      else if (kind === 'grand') { color = '#92400E'; font = 'bold 16px "PingFang SC","Microsoft YaHei",sans-serif'; }
+      else if (kind === 'fee') { color = '#6D28D9'; font = 'bold 12.5px "PingFang SC","Microsoft YaHei",sans-serif'; }
+      gctx.fillStyle = color;
+      gctx.font = font;
+      colX.forEach((col, c) => {
+        const align = c >= 3 ? 'right' : 'left';
+        gctx.textAlign = align;
+        const txt = cells[c] == null ? '' : String(cells[c]);
+        gctx.fillText(trunc(txt, col.w - 16, font), align === 'right' ? col.x + col.w - 10 : col.x + 10, y + h / 2);
+      });
+    }
     gctx.strokeStyle = '#D8DEE4';
     gctx.beginPath();
     gctx.moveTo(LEFT, y + h); gctx.lineTo(RIGHT, y + h);
