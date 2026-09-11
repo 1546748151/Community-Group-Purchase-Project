@@ -7094,15 +7094,22 @@ async function submitCreateTeam(productId) {
   }
 }
 
-function showJoinTeamModal(teamId, productId, targetQty, splitCount, remaining) {
+function showJoinTeamModal(teamId, productId, targetQty, splitCount, remaining, remainingShares = null) {
   const trigger = document.activeElement;
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.dataset.modal = 'team-join';
   modal.setAttribute('aria-hidden', 'true');
   const minShare = targetQty / splitCount;
-  const maxShares = Math.floor((remaining + 1e-7) / minShare);
-  if (!Number.isFinite(minShare) || minShare <= 0 || maxShares < 1) { toast('队伍份额已变化，请刷新后重试', 'info'); return; }
+  const hasShareCount = remainingShares !== null;
+  const maxShares = hasShareCount ? remainingShares : Math.min(splitCount, Math.floor((remaining + 1e-7) / minShare));
+  // New teams expose exact allocated portion counts; legacy responses retain the quantity fallback.
+  // This tolerance only checks metadata consistency, never determines how many portions can be taken.
+  const roundingBound = splitCount * 5e-9 + Number.EPSILON * Math.max(1, targetQty) * 4;
+  if (!Number.isSafeInteger(splitCount) || splitCount < 2 || !Number.isFinite(minShare) || minShare <= 0
+    || !Number.isFinite(remaining) || remaining <= 0 || remaining > targetQty
+    || !Number.isSafeInteger(maxShares) || maxShares < 1 || maxShares > splitCount
+    || (hasShareCount && Math.abs(remaining - maxShares * minShare) > roundingBound)) { toast('队伍份额已变化，请刷新后重试', 'info'); return; }
   modal.innerHTML = `<div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="team-join-title" tabindex="-1">
     <div class="modal-handle"></div>
     <h3 class="section-title" id="team-join-title" style="margin-bottom:12px">加入队伍</h3>
@@ -7179,8 +7186,14 @@ function findTeamSpec(product) {
 }
 
 function teamActionButton(t, pid, minShare, remaining) {
-  if (remaining > 0) {
-    return `<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="showJoinTeamModal(${escJsAttr(t.team_id)},${escJsAttr(pid)},${t.target_qty},${t.split_count},${remaining})\">加入（最少 ${formatQtyLabel(minShare)} 份）</button>`;
+  let remainingShares = null;
+  if (Number.isSafeInteger(t.split_count) && t.split_count >= 2 && Array.isArray(t.members) && t.members.length
+    && t.members.every(m => Number.isSafeInteger(m.share_count) && m.share_count > 0 && m.share_count <= t.split_count)) {
+    const taken = t.members.reduce((sum, m) => sum + m.share_count, 0);
+    if (Number.isSafeInteger(taken) && taken <= t.split_count) remainingShares = t.split_count - taken;
+  }
+  if (remaining > 0 && remainingShares !== 0) {
+    return `<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="showJoinTeamModal(${escJsAttr(t.team_id)},${escJsAttr(pid)},${t.target_qty},${t.split_count},${remaining},${remainingShares})\">加入（最少 ${formatQtyLabel(minShare)} 份）</button>`;
   }
   return '<span class="badge badge-muted" style="margin-top:4px">已满</span>';
 }
