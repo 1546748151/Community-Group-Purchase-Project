@@ -503,6 +503,107 @@ body[data-mode="admin"] .cart-bar{display:none}
   .skeleton{animation:none;background:var(--color-border-light)}
 }
 </style>
+<style id="customer-ui-upgrade">
+/* Customer-only presentation. Keep shared styles and #admin unchanged. */
+body[data-mode="customer"]{
+  --color-warning:#92400e;
+  --color-danger:#b42318;
+  --color-danger-light:#fff1f1;
+  --font-sans:'Geist',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei','Segoe UI',sans-serif;
+  background:#f5f7fa;
+}
+body[data-mode="customer"] #app{background:#f5f7fa}
+body[data-mode="customer"] #mode-customer{padding:12px 16px 132px}
+body[data-mode="customer"] .network-status{margin:-12px -16px 8px}
+body[data-mode="customer"] .app-header{
+  padding:12px 0;gap:8px;background:rgba(245,247,250,.97);backdrop-filter:blur(12px);
+  border-bottom:1px solid #e5eaf1;margin-bottom:14px;
+}
+body[data-mode="customer"] .brand-line{font-size:1.3rem;font-weight:700;line-height:1.45}
+body[data-mode="customer"] .brand-mark{width:22px;height:22px;border-width:2px}
+body[data-mode="customer"] .customer-header-actions{display:flex;gap:8px;justify-content:flex-start}
+body[data-mode="customer"] .customer-header-actions .btn{width:auto;min-height:44px;padding:8px 12px;font-weight:500}
+body[data-mode="customer"] .customer-header-actions .btn:first-child{background:#e8eef8;color:#064da8}
+body[data-mode="customer"] .customer-hero{padding:0 0 8px}
+body[data-mode="customer"] .customer-hero-card{border:0;padding:0;background:transparent;box-shadow:none;margin-bottom:16px}
+body[data-mode="customer"] .round-line{font-size:1rem;font-weight:600;line-height:1.5;margin-bottom:8px}
+body[data-mode="customer"] .deadline-pill{min-height:42px;padding:8px 12px;border:0;border-radius:10px;background:#e8eef8;color:#254a78;font-size:.875rem;font-weight:500}
+body[data-mode="customer"] .customer-search{height:48px;padding:0 14px;border-radius:12px;box-shadow:none;margin-bottom:12px}
+body[data-mode="customer"] .customer-search input{font-size:.9375rem;font-weight:400}
+body[data-mode="customer"] .customer-search input::placeholder{font-weight:400}
+body[data-mode="customer"] .category-row{gap:8px;margin-bottom:4px}
+body[data-mode="customer"] .category-chip{min-height:44px;padding:0 16px;border-radius:10px;background:#eaf0f6;color:#475467;font-size:.875rem;font-weight:500}
+body[data-mode="customer"] .category-chip.active{background:#064da8;color:#fff}
+body[data-mode="customer"] .round-chip{font-weight:500;white-space:normal;height:auto;min-height:44px}
+body[data-mode="customer"] #customer-products{gap:14px!important}
+body[data-mode="customer"] .shop-product{
+  display:block;padding:16px;margin:0;border:1px solid #e2e8f0;border-radius:18px;
+  background:#fff;box-shadow:0 2px 6px rgba(16,24,40,.025);
+}
+body[data-mode="customer"] .shop-product-top{display:grid;grid-template-columns:88px minmax(0,1fr);gap:14px;align-items:start}
+body[data-mode="customer"] .shop-product-img{width:88px;height:88px;object-fit:cover;border-radius:12px;background:#f0f3f7}
+body[data-mode="customer"] .shop-product-img.placeholder{color:#667085;font-weight:600}
+body[data-mode="customer"] .shop-product-body{min-width:0;padding:0}
+body[data-mode="customer"] .shop-product-name{font-size:1rem;font-weight:600;line-height:1.5;margin-bottom:8px;overflow-wrap:anywhere}
+body[data-mode="customer"] .shop-product .tag-list{gap:5px;margin:0 0 10px}
+body[data-mode="customer"] .tag-pill{font-size:.75rem;font-weight:400;border-radius:6px;padding:3px 7px;background:#f1f4f8;color:#526174}
+body[data-mode="customer"] .shop-product-weight-badge{display:inline-block;vertical-align:middle;margin-left:5px;padding:2px 6px;border-radius:5px;background:#fff4df;color:#92400e;font-size:.75rem;font-weight:500}
+body[data-mode="customer"] .shop-product-price{color:#172b4d;font-size:1.375rem;font-weight:700;line-height:1.35;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+body[data-mode="customer"] .shop-product-price small{font-size:.8125rem;color:#667085;font-weight:400}
+body[data-mode="customer"] .shop-product-estimate{font-size:.8125rem;font-weight:500;color:#475467;margin-top:4px}
+body[data-mode="customer"] .shop-product-meta{gap:6px;margin:12px 0 0}
+body[data-mode="customer"] .shop-product-stock,
+body[data-mode="customer"] .shop-product-fill{height:auto;min-height:24px;padding:3px 8px;font-size:.75rem;font-weight:500;border-radius:6px;overflow-wrap:anywhere}
+body[data-mode="customer"] .shop-product-stock{background:#f1f4f8;color:#526174}
+body[data-mode="customer"] .shop-product-fill{background:#fff4df;color:#92400e}
+body[data-mode="customer"] .shop-product .spec-grid{display:flex;flex-wrap:wrap;max-width:none;margin:12px 0 0;padding:0;gap:8px}
+body[data-mode="customer"] .shop-product .spec-option{
+  display:inline-flex;align-items:center;justify-content:center;min-width:64px;max-width:100%;
+  width:auto;height:auto;min-height:44px;padding:10px 12px;white-space:normal;overflow:visible;
+  overflow-wrap:anywhere;line-height:1.4;text-align:left;text-overflow:clip;font-size:.875rem;
+  font-weight:500;border:1px solid #d4dde8;border-radius:9px;background:#fff;color:#475467;
+}
+body[data-mode="customer"] .shop-product .spec-option.selected{background:#edf3fc;border-color:#064da8;color:#064da8;font-weight:600;box-shadow:inset 0 0 0 1px #064da8}
+body[data-mode="customer"] .shop-product .spec-option:disabled{opacity:1;color:#667085;background:#f5f7fa;border-color:#e2e8f0;text-decoration:none}
+body[data-mode="customer"] .shop-product-purchase{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #edf0f4;margin-top:14px;padding-top:12px}
+body[data-mode="customer"] .shop-product-selection{flex:1;min-width:0;font-size:.8125rem;line-height:1.5;color:#526174;overflow-wrap:anywhere}
+body[data-mode="customer"] .shop-product-selection strong{display:block;font-weight:600;color:#172b4d}
+body[data-mode="customer"] .shop-product-action{position:static;flex:none;z-index:auto}
+body[data-mode="customer"] .add-round{width:44px;height:44px;background:#064da8;box-shadow:none;border-radius:12px;font-weight:400}
+body[data-mode="customer"] .shop-product .qty-ctrl{width:132px;height:46px;min-height:46px;border:1px solid #d4dde8;border-radius:10px;box-shadow:none}
+body[data-mode="customer"] .shop-product .qty-ctrl button{width:44px;min-width:44px;height:44px;color:#064da8;font-weight:600}
+body[data-mode="customer"] .shop-product .qty-ctrl .qty-val{flex:1;min-width:40px;font-weight:600;font-variant-numeric:tabular-nums}
+body[data-mode="customer"] .shop-product-note{font-size:.8125rem;color:#92400e;background:#fffbeb;border-radius:8px;padding:9px 11px;line-height:1.6;margin-top:10px;overflow-wrap:anywhere}
+body[data-mode="customer"] .shop-product .team-btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;margin:12px 0 0;padding:10px 12px;background:#f0f4fa;color:#254a78;border:1px solid #dce5f1;border-radius:10px;font-size:.875rem;font-weight:500;line-height:1.5;white-space:normal}
+body[data-mode="customer"] .shop-product.is-sold-out{background:#f9fafb;border-style:dashed}
+body[data-mode="customer"] .shop-product.is-sold-out .shop-product-img{filter:grayscale(.6);opacity:.7}
+body[data-mode="customer"] .shop-product.is-sold-out .shop-product-price{color:#667085}
+body[data-mode="customer"] .sold-out-divider{padding:8px 0 0;margin:0;color:#667085}
+body[data-mode="customer"] .btn{font-weight:600}
+body[data-mode="customer"] .btn-primary{background:#064da8;box-shadow:none}
+body[data-mode="customer"] .cart-bar{border-radius:18px;box-shadow:0 6px 24px rgba(16,35,64,.14);padding:10px 12px;gap:10px}
+body[data-mode="customer"] .cart-icon{width:44px;height:44px;border-radius:12px;background:#edf3fc;color:#064da8;box-shadow:none}
+body[data-mode="customer"] .cart-badge{background:#064da8;font-weight:600}
+body[data-mode="customer"] .cart-total{font-size:1.3rem;font-weight:700;color:#172b4d;font-variant-numeric:tabular-nums}
+body[data-mode="customer"] .cart-count{font-size:.75rem;font-weight:400}
+body[data-mode="customer"] .cart-detail{font-size:.75rem;font-weight:500}
+body[data-mode="customer"] .cart-bar .btn-lg{min-height:48px;padding:12px 18px;font-size:.9375rem;border-radius:12px}
+body[data-mode="customer"] .section-title{font-weight:600}
+body[data-mode="customer"] .modal-sheet{border-radius:22px 22px 0 0}
+body[data-mode="customer"] .form-input{border-radius:10px}
+@media(max-width:360px){
+  body[data-mode="customer"] #mode-customer{padding-left:12px;padding-right:12px}
+  body[data-mode="customer"] .network-status{margin-left:-12px;margin-right:-12px}
+  body[data-mode="customer"] .shop-product{padding:14px}
+  body[data-mode="customer"] .shop-product-top{grid-template-columns:80px minmax(0,1fr);gap:12px}
+  body[data-mode="customer"] .shop-product-img{width:80px;height:80px}
+}
+@media(hover:hover){
+  body[data-mode="customer"] .btn-primary:hover,
+  body[data-mode="customer"] .add-round:hover{background:#003f8f}
+  body[data-mode="customer"] .shop-product .spec-option:not(:disabled):hover{border-color:#064da8}
+}
+</style>
 </head>
 <body>
 <div id="app">
@@ -782,12 +883,14 @@ function unlockScroll() {
   if (modalDepth === 0) document.body.style.overflow = '';
 }
 function syncManagedModalBackground() {
-  const customerMode = document.getElementById('mode-customer');
-  if (!customerMode) return;
   const blocked = managedModalStack.length > 0;
-  customerMode.inert = blocked;
-  if (blocked) customerMode.setAttribute('aria-hidden', 'true');
-  else customerMode.removeAttribute('aria-hidden');
+  ['mode-customer', 'mode-admin', 'mode-setup'].forEach(id => {
+    const page = document.getElementById(id);
+    if (!page) return;
+    page.inert = blocked;
+    if (blocked) page.setAttribute('aria-hidden', 'true');
+    else page.removeAttribute('aria-hidden');
+  });
   managedModalStack.forEach((entry, index) => {
     const isTop = index === managedModalStack.length - 1;
     entry.modal.inert = !isTop;
@@ -854,6 +957,12 @@ function closeManagedModal(modal, options = {}) {
 function closeTopManagedModal(options = {}) {
   const entry = managedModalStack[managedModalStack.length - 1];
   return entry ? closeManagedModal(entry.modal, options) : false;
+}
+function requestCloseTopManagedModal() {
+  const entry = managedModalStack[managedModalStack.length - 1];
+  if (!entry) return false;
+  if (typeof entry.onRequestClose === 'function') return entry.onRequestClose();
+  return closeManagedModal(entry.modal);
 }
 function closeAllManagedModals() {
   while (managedModalStack.length > 0) {
@@ -1058,7 +1167,7 @@ function showSetup() {
   const list = document.getElementById('community-list');
   if (list) {
     list.innerHTML = Object.keys(COMMUNITY_PRESETS).map(name =>
-      `<button class="btn btn-primary btn-block btn-lg" onclick="selectCommunity('${escAttr(name)}')" style="justify-content:center;text-align:center">${escHtml(name)}</button>`
+      `<button class="btn btn-primary btn-block btn-lg" onclick="selectCommunity(${escJsAttr(name)})" style="justify-content:center;text-align:center">${escHtml(name)}</button>`
     ).join('');
   }
 }
@@ -1286,8 +1395,8 @@ async function renderAdminTabLeaders() {
         <span class="caption" style="margin-left:8px">${new Date(l.created_at).toLocaleDateString('zh-CN')}</span>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="btn btn-ghost btn-sm" onclick="showResetPasswordModal('${l.id}','${escAttr(l.username)}')">修改密码</button>
-        ${!isSuper ? `<button class="btn btn-ghost btn-sm" style="color:var(--color-danger)" onclick="deleteLeader('${l.id}','${escAttr(l.username)}')">删除</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="showResetPasswordModal('${l.id}',${escJsAttr(l.username)})">修改密码</button>
+        ${!isSuper ? `<button class="btn btn-ghost btn-sm" style="color:var(--color-danger)" onclick="deleteLeader('${l.id}',${escJsAttr(l.username)})">删除</button>` : ''}
       </div>
     </div>`;
   });
@@ -1630,12 +1739,11 @@ function buildPurchaseSummaryText(roundLabel, productSummary) {
 }
 
 function normalizeFeeConfig(fees) {
+  const amount = value => Number.isFinite(Number(value)) ? Math.max(0, Math.round(Number(value) * 100) / 100) : 0;
   return {
-    shipping: Math.max(0, Number(fees?.shipping) || 0),
-    packing: Math.max(0, Number(fees?.packing) || 0),
-    other: Math.max(0, Number(fees?.other) || 0),
+    shipping: amount(fees?.shipping), packing: amount(fees?.packing), other: amount(fees?.other),
     note: String(fees?.note || '').trim(),
-    mode: fees?.mode || 'per_person'
+    mode: ['per_person', 'per_item', 'per_amount'].includes(fees?.mode) ? fees.mode : 'per_person'
   };
 }
 
@@ -1645,42 +1753,37 @@ function getFeeTotal(fees) {
 }
 
 function buildFeeAdjustedPaymentRows(groupedAmounts, fees, groupedQtys) {
-  const names = Object.keys(groupedAmounts || {});
+  // 排序固定尾差归属；金额统一以分计算，筛选和导出不得重新分摊。
+  const names = Object.keys(groupedAmounts || {}).sort();
   const cfg = normalizeFeeConfig(fees);
-  const feeTotalCents = Math.round(getFeeTotal(cfg) * 100);
-  if (names.length === 0 || feeTotalCents === 0) return names.map(name => ({ name, productAmount: Number(groupedAmounts[name])||0, feeShare: 0, total: Number(groupedAmounts[name])||0 }));
+  const feeCents = Math.round(getFeeTotal(cfg) * 100);
+  const amounts = names.map(n => Math.round((Number(groupedAmounts[n]) || 0) * 100));
+  let weights = names.map((n, i) => cfg.mode === 'per_item' ? Math.max(0, Number(groupedQtys?.[n]) || 0)
+    : cfg.mode === 'per_amount' ? Math.max(0, amounts[i]) : 1);
+  let weightTotal = weights.reduce((sum, n) => sum + n, 0);
+  if (!weightTotal) { weights = names.map(() => 1); weightTotal = names.length; }
+  const exact = weights.map(w => feeCents * w / weightTotal);
+  const shares = exact.map(Math.floor);
+  const remainder = feeCents - shares.reduce((sum, n) => sum + n, 0);
+  const priority = names.map((_, i) => i).sort((a, b) => (exact[b] - shares[b]) - (exact[a] - shares[a]) || a - b);
+  for (let i = 0; i < remainder && priority.length; i++) shares[priority[i % priority.length]]++;
+  return names.map((name, i) => ({ name, productAmount: amounts[i] / 100, feeShare: shares[i] / 100, total: (amounts[i] + shares[i]) / 100 }));
+}
 
-  const mode = cfg.mode || 'per_person';
-  let weights = {};
-  if (mode === 'per_person') {
-    names.forEach(n => { weights[n] = 1; });
-  } else if (mode === 'per_item') {
-    const totalQty = Object.values(groupedQtys||{}).reduce((s,v) => s+v, 0);
-    names.forEach(n => { weights[n] = totalQty > 0 ? (groupedQtys[n]||0) / totalQty : 0; });
-  } else if (mode === 'per_amount') {
-    const totalAmt = Object.values(groupedAmounts).reduce((s,v) => s+(Number(v)||0), 0);
-    names.forEach(n => { weights[n] = totalAmt > 0 ? (Number(groupedAmounts[n])||0) / totalAmt : 0; });
-  }
-
-  // 按权重分配费用（分）
-  const sharesCents = names.map(n => Math.round(weights[n] * feeTotalCents));
-  // 尾差调整
-  const allocated = sharesCents.reduce((s,v) => s+v, 0);
-  let diff = feeTotalCents - allocated;
-  let idx = 0;
-  while (diff > 0) { sharesCents[idx % names.length]++; diff--; idx++; }
-  while (diff < 0) { sharesCents[idx % names.length]--; diff++; idx++; }
-
-  return names.map((name, i) => {
-    const productAmount = Number(groupedAmounts[name]) || 0;
-    const feeShare = sharesCents[i] / 100;
-    return { name, productAmount, feeShare, total: Math.round((productAmount + feeShare) * 100) / 100 };
+function buildPaymentSettlement(orders, fees) {
+  const amounts = Object.create(null), quantities = Object.create(null);
+  (orders || []).forEach(o => {
+    const name = o.customer_name;
+    amounts[name] = (amounts[name] || 0) + (Number(o.total_amount) || 0);
+    quantities[name] = (quantities[name] || 0) + (o.items || []).filter(it => !it.deleted).reduce((sum, it) => sum + getItemStockQty(it), 0);
   });
+  return buildFeeAdjustedPaymentRows(amounts, fees, quantities);
 }
 
 async function getRoundFeeMap() {
-  const { data } = await adminRpc('admin_get_round_fee_map');
-  return data || {};
+  const { data, error } = await adminRpc('admin_get_round_fee_map');
+  if (error || !data || typeof data !== 'object') throw new Error('查询费用失败，请重试');
+  return data;
 }
 
 async function getRoundFees(roundId) {
@@ -1814,7 +1917,9 @@ function xlColorRowsByText(ws, col, test, style, rowStart) {
 // ============================================================
 function exportRoundProducts() {
   if (!adminProductRoundId) { toast('请先选择轮次', 'error'); return; }
-  adminRpc('admin_get_products', { p_round_id: adminProductRoundId }).then(({ data, error }) => {
+  const roundId = adminProductRoundId;
+  const roundName = (document.querySelector('.admin-product-list')?.closest('#admin-tab-products')?.querySelector('.round-chip.active')?.textContent || '商品').trim();
+  adminRpc('admin_get_products', { p_round_id: roundId }).then(({ data, error }) => {
     if (error || !data || data.length === 0) { toast('当前轮次没有可导出的商品', 'error'); return; }
     const rows = data.map(p => ({
       name: p.name,
@@ -1823,24 +1928,24 @@ function exportRoundProducts() {
       stock: p.stock != null ? p.stock : ''
     }));
     // 同时保存一份完整 JSON 在隐藏列供导入还原
-    const hidden = data.map(p => JSON.stringify({ name: p.name, specs: p.specs, tags: p.tags, stock: p.stock, image: p.image || null }));
+    const hidden = data.map(p => JSON.stringify({ name: p.name, specs: p.specs, tags: p.tags, stock: p.stock, image: p.image || null, is_active: p.is_active !== false, is_team: p.is_team === true, is_weighted: p.is_weighted === true, weight_estimate: p.weight_estimate || '', weight_unit: p.weight_unit || 'kg' }));
     const ws = XLSX.utils.json_to_sheet(rows);
     // 附加隐藏列（第5列，col E）存 JSON，导入时精确还原
-    XLSX.utils.sheet_add_json(ws, hidden.map(v => ({ _json: v })), { header: ['_json'], skipHeader: false, origin: -1 });
+    XLSX.utils.sheet_add_aoa(ws, [['_json'], ...hidden.map(v => [v])], { origin: 'E1' });
     // 设置 _json 列为隐藏（在 Excel 中不可见，但 xlsx 读取时仍可获取）
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '商品');
     // 视觉增强：表头品牌绿 + 斑马纹 + 列宽；最后一列 _json 隐藏（仅用于导入还原）
     xlPolishSheet(ws, { widths: [16, 30, 14, 10, 4] });
     if (ws['!cols'] && ws['!cols'][4]) ws['!cols'][4].hidden = true;
-    const rname = (document.querySelector('.admin-product-list')?.closest('#admin-tab-products')?.querySelector('.round-chip.active')?.textContent || '商品').trim();
-    XLSX.writeFile(wb, rname + '.xlsx');
+    XLSX.writeFile(wb, roundName + '.xlsx');
     toast(`已导出 ${data.length} 个商品`);
   }).catch(() => toast('导出失败', 'error'));
 }
 
 function importRoundProducts() {
   if (!adminProductRoundId) { toast('请先选择轮次', 'error'); return; }
+  const roundId = adminProductRoundId;
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.xlsx,.xls';
@@ -1890,7 +1995,9 @@ function importRoundProducts() {
             p_id: null, p_name: String(item.name).slice(0, 50), p_image: item.image || null,
             p_specs: item.specs, p_tags: Array.isArray(item.tags) ? item.tags : [],
             p_stock: item.stock != null ? Number(item.stock) : null,
-            p_is_active: true, p_round_id: adminProductRoundId
+            p_is_active: item.is_active !== false, p_round_id: roundId,
+            p_is_team: item.is_team === true, p_is_weighted: item.is_weighted === true,
+            p_weight_estimate: String(item.weight_estimate || ''), p_weight_unit: String(item.weight_unit || 'kg')
           });
           if (result.error) { fail++; errors.push(`${itemName}: ${result.error.message || '未知错误'}`); }
           else { ok++; }
@@ -1900,7 +2007,7 @@ function importRoundProducts() {
           toast(`正在导入 ${done}/${total}...`, 'info');
         }
       }
-      renderAdminTab('products');
+      if (adminProductRoundId === roundId) renderAdminTab('products');
       let msg = `导入完成：${ok} 个成功${fail ? '，' + fail + ' 个失败' : ''}`;
       if (errors.length > 0) {
         msg += `\n\n失败详情（前5条）：\n${errors.slice(0, 5).map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
@@ -1950,7 +2057,7 @@ async function renderProductManager(el) {
     if (r.is_active && r.cutoff_time && new Date(r.cutoff_time) < new Date()) statusLabel = ' (已截止)';
     else if (r.is_active) statusLabel = ' (进行中)';
     else statusLabel = ' (已结束)';
-    html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId='${escAttr(r.id)}';adminProductSearchKeyword='';renderAdminTab('products')">${escHtml(r.name)}${statusLabel}${!canEditRound(r.leader_id) ? ' (只读)' : ''}</button>`;
+    html += `<button class="round-chip ${r.id === adminProductRoundId ? 'active' : ''}" onclick="adminProductRoundId=${escJsAttr(r.id)};adminProductSearchKeyword='';renderAdminTab('products')">${escHtml(r.name)}${statusLabel}${!canEditRound(r.leader_id) ? ' (只读)' : ''}</button>`;
   });
   html += `</div>`;
   html += `<div class="stat-row">
@@ -1975,7 +2082,7 @@ async function renderProductManager(el) {
   html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-product-search" placeholder="搜索商品名称、规格或标签" value="${escAttr(adminProductSearchKeyword)}" oninput="debouncedAdminProductSearch()"></label>`;
   html += `<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:12px">
     <div class="tag-list" style="flex:1">
-      ${['全部', ...allTags].map(tag => `<button class="tag-pill ${adminProductTagFilter === tag ? 'active' : ''}" onclick="adminProductTagFilter='${escAttr(tag)}';renderAdminTab('products')">${escHtml(tag)}</button>`).join('')}
+      ${['全部', ...allTags].map(tag => `<button class="tag-pill ${adminProductTagFilter === tag ? 'active' : ''}" onclick="adminProductTagFilter=${escJsAttr(tag)};renderAdminTab('products')">${escHtml(tag)}</button>`).join('')}
     </div>
     ${allTags.length > 1 ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-top:2px" onclick="openTagOrderEditor()" title="自定义标签排序">排序</button>` : ''}
   </div>`;
@@ -2008,7 +2115,7 @@ async function renderProductManager(el) {
       const statusBadge = p.is_active ? '<span class="badge badge-success">上架</span>' : '<span class="badge badge-muted">已下架</span>';
       const weightedBadge = p.is_weighted ? '<span class="badge badge-muted" style="margin-left:4px">称重</span>' : '';
       html += `<div class="admin-product-card">
-        ${p.image ? `<img class="admin-product-thumb" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" style="cursor:pointer" onclick="openImagePreview('${escAttr(p.image)}')" onerror="this.outerHTML='<div class=&quot;admin-product-thumb placeholder&quot;>邻选</div>'">` : '<div class="admin-product-thumb placeholder">邻选</div>'}
+        ${p.image ? `<img class="admin-product-thumb" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" style="cursor:pointer" onclick="openImagePreview(${escJsAttr(p.image)})" onerror="this.outerHTML='<div class=&quot;admin-product-thumb placeholder&quot;>邻选</div>'">` : '<div class="admin-product-thumb placeholder">邻选</div>'}
         <div class="admin-product-info">
           <div class="admin-product-head">
             <div class="admin-product-name product-name">${escHtml(p.name)}</div>
@@ -2072,7 +2179,7 @@ function refreshAdminProductList() {
       const statusBadge = p.is_active ? '<span class="badge badge-success">上架</span>' : '<span class="badge badge-muted">已下架</span>';
       const weightedBadge = p.is_weighted ? '<span class="badge badge-muted" style="margin-left:4px">称重</span>' : '';
       html += `<div class="admin-product-card">
-        ${p.image ? `<img class="admin-product-thumb" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" style="cursor:pointer" onclick="openImagePreview('${escAttr(p.image)}')" onerror="this.outerHTML='<div class=&quot;admin-product-thumb placeholder&quot;>邻选</div>'">` : '<div class="admin-product-thumb placeholder">邻选</div>'}
+        ${p.image ? `<img class="admin-product-thumb" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" style="cursor:pointer" onclick="openImagePreview(${escJsAttr(p.image)})" onerror="this.outerHTML='<div class=&quot;admin-product-thumb placeholder&quot;>邻选</div>'">` : '<div class="admin-product-thumb placeholder">邻选</div>'}
         <div class="admin-product-info">
           <div class="admin-product-head">
             <div class="admin-product-name product-name">${escHtml(p.name)}</div>
@@ -3447,7 +3554,7 @@ function buildProductCardHtml(p, teamCountMap) {
   const displayPrice = selected ? selected.specPrice : firstSpec.price;
   const fillSummary = cachedSummaryByProduct[p.id] || cachedSummaryByProduct[p.name];
   const imgHtml = p.image
-    ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" style="cursor:pointer" onclick="openImagePreview('${escAttr(p.image)}')" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
+    ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" class="shop-product-img" loading="lazy" style="cursor:pointer" onclick="openImagePreview(${escJsAttr(p.image)})" onerror="this.outerHTML='<div class=&quot;shop-product-img placeholder&quot;>邻选</div>'">`
     : `<div class="shop-product-img placeholder">邻选</div>`;
   const stockHtml = p.stock !== null && !stockSoldOut ? `<span class="shop-product-stock">剩余 ${formatQtyLabel(p.stock)} 份</span>` : '';
   const fillHtml = fillSummary && fillSummary.isSplitUnit && fillSummary.unfilled && fillSummary.missingQty > 1e-9
@@ -3465,12 +3572,12 @@ function buildProductCardHtml(p, teamCountMap) {
           <button type="button" aria-label="增加${escAttr(p.name)}数量" data-cart-key="${escAttr(selectedKey)}" data-cart-delta="1" ${atStockLimit ? 'disabled' : ''}>+</button>
         </div>`
       : `<button type="button" class="add-round" aria-label="将${escAttr(p.name)}加入购物车" data-spec='${escAttr(JSON.stringify({id:p.id,name:firstSpec.name,price:firstSpec.price,pname:p.name}))}'>+</button>`;
-  return `<div class="shop-product" data-product-id="${p.id}" style="opacity:${stockSoldOut ? '.55' : '1'}">
+  return `<div class="shop-product${stockSoldOut ? ' is-sold-out' : ''}" data-product-id="${p.id}">
+    <div class="shop-product-top">
     ${imgHtml}
     <div class="shop-product-body">
-      <div class="shop-product-name">${escHtml(p.name)}${isWeighted ? ' <span style="display:inline-flex;align-items:center;height:1.3em;padding:0 6px;border-radius:4px;background:var(--color-warning-light);color:#92400e;font-size:.82em;font-weight:600;margin-left:4px;vertical-align:middle">称重</span>' : ''}</div>
-      <div class="shop-product-meta"><span class="shop-product-spec">${escHtml(formatUnitLabel(displaySpec))}</span>${stockHtml}${fillHtml}</div>
-      ${(getProductTags(p).length || (isWeighted && p.weight_estimate)) ? `<div class="tag-list" style="margin:0 0 8px">${getProductTags(p).map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('')}${isWeighted && p.weight_estimate ? `<span class="tag-pill" style="background:var(--color-warning-light);color:#92400e;font-weight:600">预估: ${escHtml(p.weight_estimate)}</span>` : ''}</div>` : ''}
+      <div class="shop-product-name">${escHtml(p.name)}${isWeighted ? ' <span class="shop-product-weight-badge">称重</span>' : ''}</div>
+      ${(getProductTags(p).length || (isWeighted && p.weight_estimate)) ? `<div class="tag-list">${getProductTags(p).map(tag => `<span class="tag-pill">${escHtml(tag)}</span>`).join('')}${isWeighted && p.weight_estimate ? `<span class="tag-pill">预估: ${escHtml(p.weight_estimate)}</span>` : ''}</div>` : ''}
       <div class="shop-product-price">¥${Number(displayPrice || 0).toFixed(2)} <small>${isWeighted ? '/' + (p.weight_unit || 'kg') : '/份'}</small></div>
       ${(() => {
         if (isWeighted && selected) {
@@ -3478,25 +3585,30 @@ function buildProductCardHtml(p, teamCountMap) {
           const share = parseSpecShare(selected.specName);
           if (grams && share) {
             const estPrice = selected.specPrice * (grams / 1000) * share;
-            return `<div class="caption" style="color:var(--color-accent);font-weight:600">约 ¥${estPrice.toFixed(2)}（预估）</div>`;
+            return `<div class="shop-product-estimate">约 ¥${estPrice.toFixed(2)} / 所选规格（预估）</div>`;
           }
         }
         return '';
       })()}
-      ${specs.length > 1 ? `<div class="spec-grid">${specs.map(s => {
+    </div>
+    </div>
+    ${stockHtml || fillHtml ? `<div class="shop-product-meta">${stockHtml}${fillHtml}</div>` : ''}
+      ${specs.length > 1 ? `<div class="spec-grid" role="group" aria-label="${escAttr(p.name)}规格，选择后加入购物车">${specs.map(s => {
         const cartKey = `${p.id}-${s.name}`;
         const inCart = cart[cartKey];
         return stockSoldOut
           ? `<button type="button" class="spec-option disabled" disabled>${escHtml(formatUnitLabel(s.name))}</button>`
           : `<button type="button" class="spec-option ${inCart ? 'selected' : ''}" aria-pressed="${!!inCart}" data-spec='${escAttr(JSON.stringify({id:p.id,name:s.name,price:s.price,pname:p.name}))}'>${escHtml(formatUnitLabel(s.name))}</button>`;
       }).join('')}</div>` : ''}
-      ${isWeighted ? `<p class="caption" style="margin-top:4px;color:var(--color-warning)">规格不对？联系团长自定义</p>` : ''}
+    <div class="shop-product-purchase">
+      <div class="shop-product-selection">${stockSoldOut ? '当前已售罄' : isInTeam ? '已通过组队购买' : selected ? '已选规格' : specs.length > 1 ? '选规格即可加入购物车' : '购买规格'}<strong>${escHtml(formatUnitLabel(displaySpec))}${selected ? ' × ' + selected.quantity : ''}</strong></div>
+      <div class="shop-product-action">${actionHtml}</div>
     </div>
-    <div class="shop-product-action">${actionHtml}</div>
-    ${p.is_team === true ? `<button type="button" class="team-btn" data-team-product="${escAttr(p.id)}" onclick="showTeamModal('${escAttr(p.id)}')">
+    ${isWeighted ? '<p class="shop-product-note">按到货实重结算，当前显示单价。规格不合适可联系团长。</p>' : ''}
+    ${p.is_team === true ? `<button type="button" class="team-btn" data-team-product="${escAttr(p.id)}" onclick="showTeamModal(${escJsAttr(p.id)})">
       👥 组队拼单${teamCount > 0 ? ' · ' + teamCount + '队' : ''}
     </button><div class="team-list" data-team-product="${escAttr(p.id)}" style="display:none;grid-column:1/-1;padding:8px 0 4px;font-size:.78rem"></div>` : ''}
-    ${isInTeam ? '<div class="caption" style="color:var(--color-warning);margin-top:6px;font-weight:600">已加入队伍，不可单独下单</div>' : ''}
+    ${isInTeam ? '<div class="shop-product-note">已加入队伍，不可单独下单</div>' : ''}
   </div>`;
 }
 
@@ -3518,6 +3630,8 @@ function selectSpec(productId, specName, specPrice, productName) {
   if (cart[cartKey]) {
     delete cart[cartKey];
   } else {
+    const product = cachedProducts.find(p => p.id === productId);
+    if (product && !product.is_weighted && product.stock != null && (parsePurchaseUnit(specName) || 1) > Number(product.stock) + 1e-8) { toast('该规格库存不足', 'info'); return; }
     // Remove other specs of same product
     Object.keys(cart).forEach(k => {
       if (k.startsWith(productId + '-')) delete cart[k];
@@ -3535,11 +3649,11 @@ function updateCartItem(cartKey, delta) {
   // 库存校验：加购时检查是否超出库存
   if (delta > 0) {
     const product = cachedProducts.find(p => p.id === productId);
-    if (product && product.stock !== null) {
+    if (product && !product.is_weighted && product.stock != null) {
       const sameProductQty = Object.values(cart)
         .filter(i => i.productId === productId)
         .reduce((s, i) => s + (parsePurchaseUnit(i.specName) || 1) * i.quantity, 0);
-      if (sameProductQty >= product.stock) return;
+      if (sameProductQty + (parsePurchaseUnit(cart[cartKey].specName) || 1) * delta > Number(product.stock) + 1e-8) { toast('库存不足，无法继续加购', 'info'); return; }
     }
   }
   cart[cartKey].quantity += delta;
@@ -3613,9 +3727,9 @@ function adjustCartDetailsQty(cartKey, delta) {
   const productId = cart[cartKey].productId;
   if (delta > 0) {
     const product = cachedProducts.find(p => p.id === productId);
-    if (product && product.stock !== null) {
+    if (product && !product.is_weighted && product.stock != null) {
       const sameProductQty = Object.values(cart).filter(i => i.productId === productId).reduce((s, i) => s + (parsePurchaseUnit(i.specName) || 1) * i.quantity, 0);
-      if (sameProductQty >= product.stock) return;
+      if (sameProductQty + (parsePurchaseUnit(cart[cartKey].specName) || 1) * delta > Number(product.stock) + 1e-8) { toast('库存不足，无法继续加购', 'info'); return; }
     }
   }
   cart[cartKey].quantity += delta;
@@ -3775,9 +3889,9 @@ function adjustCheckoutQty(cartKey, delta) {
   const productId = cart[cartKey].productId;
   if (delta > 0) {
     const product = cachedProducts.find(p => p.id === productId);
-    if (product && product.stock !== null) {
+    if (product && !product.is_weighted && product.stock != null) {
       const sameProductQty = Object.values(cart).filter(i => i.productId === productId).reduce((s, i) => s + (parsePurchaseUnit(i.specName) || 1) * i.quantity, 0);
-      if (sameProductQty >= product.stock) return;
+      if (sameProductQty + (parsePurchaseUnit(cart[cartKey].specName) || 1) * delta > Number(product.stock) + 1e-8) { toast('库存不足，无法继续加购', 'info'); return; }
     }
   }
   cart[cartKey].quantity += delta;
@@ -4439,9 +4553,9 @@ async function lookupOrders() {
         if (it.deleted) return;
         const fillStatus = (customerFillStatus[it.product_id] || {})[`${order.customer_name}::${it._orig_time || order.created_at}`] || '';
           const fillKey = fillStatus.startsWith('未拼满') ? 'unfilled' : 'filled';
-          const key = `${it.product_id || ''}|${it.spec_name || ''}|${fillKey}`;
+          const key = `${it.product_id || ''}|${it.spec_name || ''}|${fillKey}|${isTeamOrder(order) ? 'team' : 'direct'}|${it.actual_weight != null ? order.id + ':' + (order.items || []).indexOf(it) : ''}`;
         const isTeamItem = isTeamOrder(order);
-        if (!g.merged[key]) g.merged[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, purchase_qty: 0, share: it.share, actual_weight: it.actual_weight, lastTime: '', _orig_time: it._orig_time || order.created_at, fillStatus, isTeam: isTeamItem };
+        if (!g.merged[key]) g.merged[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, purchase_qty: 0, share: it.share, actual_weight: it.actual_weight, weight_input_mode: it.weight_input_mode, weight_unit: it.weight_unit, lastTime: '', _orig_time: it._orig_time || order.created_at, fillStatus, isTeam: isTeamItem };
         g.merged[key].quantity += it.quantity || 0;
         g.merged[key].subtotal += Number(it.subtotal) || 0;
       g.merged[key].purchase_qty += Number(it.purchase_qty) || 0;
@@ -4459,7 +4573,7 @@ async function lookupOrders() {
   Object.entries(roundGroups).forEach(([rid, g]) => {
     const newMerged = {};
     Object.entries(g.merged).forEach(([key, item]) => {
-      if (key.endsWith('|filled') || !item.product_id) { newMerged[key] = item; return; }
+      if (key.endsWith('|filled') || !item.product_id || item.actual_weight != null) { newMerged[key] = item; return; }
       const split = (customerSplitMap[item.product_id] || {});
       let filledPQty = 0, totalPQty = item.purchase_qty || item.quantity || 0;
       const seenSplits = new Set();
@@ -4558,7 +4672,7 @@ async function lookupOrders() {
       const specLabel = formatUnitLabel(it.spec_name);
       let weightInfo = '';
       if (it.actual_weight != null) {
-        weightInfo = `<span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQty(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${it.subtotal.toFixed(2)}</span>`;
+        weightInfo = `<span class="caption">${escHtml(formatWeightAmountText(it))}</span>`;
       }
       // 逐客户拼满状态：优先用时间排序的 customerFillStatus（能正确区分不同客户归属），
       // 全局缓存 cachedSummaryByProduct 只能反映"还需多少凑整"，不适合逐客户判断
@@ -4646,7 +4760,7 @@ async function lookupOrders() {
     html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border-light)">
       <span style="font-weight:800;white-space:nowrap">合计: <span style="color:var(--color-accent);font-size:1.1rem">${g.totalAmount.toFixed(2)}</span></span>
       <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-        ${ri.status === '已截止' ? `<button class="btn btn-ghost btn-sm" onclick="showAfterSales('${escAttr(rid)}', document.getElementById('lookup-name').value.trim())">申请售后</button><button class="btn btn-ghost btn-sm" onclick="showAfterSalesDetail('${escAttr(rid)}', document.getElementById('lookup-name').value.trim())">售后详情</button>` : ''}
+        ${ri.status === '已截止' ? `<button class="btn btn-ghost btn-sm" onclick="showAfterSales(${escJsAttr(rid)}, document.getElementById('lookup-name').value.trim())">申请售后</button><button class="btn btn-ghost btn-sm" onclick="showAfterSalesDetail(${escJsAttr(rid)}, document.getElementById('lookup-name').value.trim())">售后详情</button>` : ''}
         ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelAllRoundOrders('${rid}', this)">修改/取消订单</button>` : ''}
       </span>
     </div></div>`;
@@ -4679,112 +4793,69 @@ async function cancelOrder(orderId) {
 
 async function cancelAllRoundOrders(roundId, btn) {
   const name = document.getElementById('lookup-name').value.trim();
-  if (!name) return;
-
-  const { data: orders } = await sb.rpc('lookup_orders', { p_customer_name: name, p_round_id: roundId });
-  const activeOrders = (orders || []).filter(o => o.status === 'active' && !isTeamOrder(o));
-  if (activeOrders.length === 0) { toast('本轮没有可修改的普通订单，组队订单请在组队入口处理'); return; }
-
-  // 合并同类商品
-  const mergedItems = {};
-  activeOrders.forEach(o => {
-    (o.items || []).forEach(it => {
-      if (it.deleted) return;
-      const key = `${it.product_id}|${it.spec_name}`;
-      if (!mergedItems[key]) mergedItems[key] = { product_id: it.product_id, product_name: it.product_name, spec_name: it.spec_name, spec_price: it.spec_price, quantity: 0, subtotal: 0, purchase_qty: 0, _orig_time: it._orig_time || o.created_at };
-      mergedItems[key].quantity += it.quantity || 0;
-      mergedItems[key].subtotal += Number(it.subtotal) || 0;
-      mergedItems[key].purchase_qty += Number(it.purchase_qty) || 0;
-    });
-  });
-
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.innerHTML = `<div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
-    <div class="modal-handle"></div>
-    <h3 class="section-title" style="margin-bottom:8px">修改订单</h3>
-    <p style="margin-bottom:8px;color:var(--color-text-secondary);font-size:.8125rem">输入要取消的数量（0=保留，填满=全部取消），取消的商品会回到购物车</p>
-    <div id="customer-cancel-list"></div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
-      <button class="btn btn-danger btn-block btn-lg" id="confirm-cancel-btn">确认修改</button>
-      <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-
-  const listEl = document.getElementById('customer-cancel-list');
-  const itemKeys = Object.keys(mergedItems);
-  listEl.innerHTML = itemKeys.map((key, idx) => {
-    const it = mergedItems[key];
-    const cancelKey = `cust-cancel-${idx}`;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border-light)">
-      <span style="flex:1;font-size:.875rem">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} ×${it.quantity}</span>
-      <input type="number" id="${cancelKey}" class="form-input" value="0" min="0" max="${it.quantity}" step="1" oninput="this.value=Math.floor(this.value)||0" style="width:60px;text-align:right">
-      <span style="color:var(--color-text-secondary);font-size:.75rem">/ ${it.quantity}</span>
-      <span style="color:var(--color-text-secondary);font-size:.8125rem;min-width:50px;text-align:right">¥${it.subtotal.toFixed(2)}</span>
-    </div>`;
-  }).join('');
-
-  modal.querySelector('#confirm-cancel-btn').onclick = async function() {
-    let hasCancel = false;
-    const keepItems = [];
-    let keepTotal = 0;
-    const cartAdditions = {};
-
-    itemKeys.forEach((key, idx) => {
-      const it = mergedItems[key];
-      const input = document.getElementById(`cust-cancel-${idx}`);
-      const cancelQty = input ? parseInt(input.value, 10) || 0 : 0;
-      if (cancelQty > 0) {
-        hasCancel = true;
-        const cartKey = `${it.product_id}-${it.spec_name}`;
-        if (!cartAdditions[cartKey]) cartAdditions[cartKey] = { productId: it.product_id, productName: it.product_name, specName: it.spec_name, specPrice: it.spec_price, quantity: 0 };
-        cartAdditions[cartKey].quantity += cancelQty;
+  if (!name || btn?.disabled) return;
+  if (btn) btn.disabled = true;
+  try {
+    const { data: orders, error } = await sb.rpc('lookup_orders', { p_customer_name: name, p_round_id: roundId });
+    if (error || !Array.isArray(orders)) throw new Error('查询订单失败，请重试');
+    const activeOrders = orders.filter(o => ['active', 'pending_weight'].includes(o.status) && !isTeamOrder(o));
+    if (!activeOrders.length) { toast('本轮没有可修改的普通订单，组队订单请在组队入口处理'); return; }
+    const merged = new Map();
+    activeOrders.forEach(o => (o.items || []).filter(it => !it.deleted).forEach(it => {
+      const key = JSON.stringify([it.product_id, it.spec_name]);
+      if (!merged.has(key)) merged.set(key, { ...it, quantity: 0 });
+      merged.get(key).quantity += Number(it.quantity) || 0;
+    }));
+    const items = [...merged.values()];
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="customer-modify-title" tabindex="-1"><div class="modal-handle"></div><h3 id="customer-modify-title" class="section-title">修改订单</h3><p class="caption" style="margin:12px 0">输入要取消的数量，0 表示保留。确认后取消的商品将回到购物车，保留商品的原订单不变。</p><div id="customer-cancel-list">${items.map((it, idx) => `<div class="order-item-row"><label for="cust-cancel-${idx}" style="flex:1;overflow-wrap:anywhere">${escHtml(it.product_name)} · ${escHtml(formatUnitLabel(it.spec_name))} ×${it.quantity}</label><input type="number" id="cust-cancel-${idx}" class="form-input" value="0" min="0" max="${it.quantity}" step="1" style="width:78px"></div>`).join('')}</div><p id="customer-modify-error" class="form-error" role="alert" style="display:none"></p><button class="btn btn-danger btn-block" id="confirm-cancel-btn" style="margin-top:16px">确认修改</button><button class="btn btn-ghost btn-block" id="dismiss-cancel-btn">取消</button></div>`;
+    document.body.appendChild(modal);
+    let busy = false, completed = false, request = null;
+    const close = () => { if (!busy) closeManagedModal(modal, { remove: true }); };
+    openManagedModal(modal, { trigger: btn, initialFocus: 'input', removeOnClose: true, onRequestClose: close });
+    modal.querySelector('#dismiss-cancel-btn').onclick = close;
+    modal.querySelector('#confirm-cancel-btn').onclick = async function() {
+      if (busy || completed) return;
+      const errorEl = modal.querySelector('#customer-modify-error');
+      errorEl.style.display = 'none';
+      if (!request) {
+        const removals = [];
+        for (let idx = 0; idx < items.length; idx++) {
+          const qty = Number(modal.querySelector(`#cust-cancel-${idx}`).value);
+          if (!Number.isInteger(qty) || qty < 0 || qty > items[idx].quantity) { errorEl.textContent = '取消数量必须是范围内的整数'; errorEl.style.display = 'block'; return; }
+          if (qty) removals.push({ product_id: items[idx].product_id, spec_name: items[idx].spec_name, cancel_qty: qty });
+        }
+        if (!removals.length) { errorEl.textContent = '请至少输入一个要取消的数量'; errorEl.style.display = 'block'; return; }
+        request = { p_customer_name: name, p_round_id: roundId, p_items_to_cancel: removals,
+          p_request_id: crypto.randomUUID(), p_expected_orders: activeOrders.map(o => ({ order_id: o.id, updated_at: o.updated_at })) };
+        modal.querySelectorAll('input').forEach(input => { input.disabled = true; });
       }
-      const keepQty = Math.max(0, it.quantity - cancelQty);
-      if (keepQty > 0) {
-        const ratio = keepQty / it.quantity;
-        keepItems.push({ product_id: it.product_id, spec_name: it.spec_name, spec_price: it.spec_price, quantity: keepQty, unit_qty: parsePurchaseUnit(it.spec_name) || 1, purchase_qty: parseFloat(((it.purchase_qty || it.quantity || 0) * ratio).toFixed(6)), subtotal: parseFloat((it.subtotal * ratio).toFixed(2)), _orig_time: cancelQty > 0 ? new Date().toISOString() : (it._orig_time || null) });
-        keepTotal += parseFloat((it.subtotal * ratio).toFixed(2));
-      }
-    });
-
-    if (!hasCancel) { toast('请至少输入一个要取消的数量'); return; }
-    modal.remove();
-
-    // 取消全部旧订单
-    for (const o of activeOrders) {
-      if (cancellingOrders.has(o.id)) continue;
-      cancellingOrders.add(o.id);
+      busy = true; this.disabled = true; this.textContent = '正在修改…';
       try {
-        await sb.rpc('cancel_order', { p_order_id: o.id, p_customer_name: name });
-      } finally {
-        cancellingOrders.delete(o.id);
-      }
-    }
-
-    // 创建保留商品的新订单，每个商品独立携带原始时间
-    if (keepItems.length > 0) {
-      await sb.rpc('create_order', { p_customer_name: name, p_items: keepItems, p_note: '', p_total_amount: keepTotal, p_round_id: roundId });
-    }
-
-    // 取消的商品合并回其所属轮次草稿，再用最新商品数据校验恢复
-    const cartDraftPersisted = mergeItemsIntoCartDraft(roundId, cartAdditions);
-    closeLookup();
-    if (customerRoundId !== roundId) {
-      selectCustomerRound(roundId);
-    } else {
-      cartRestorePending = true;
-      customerContentValidated = false;
-      updateCutoffCountdown(null);
-      setCustomerBrowseState('loading');
-      loadCustomerProducts({ requireFreshValidation: true });
-    }
-    const totalCancel = Object.values(cartAdditions).reduce((s, v) => s + v.quantity, 0);
-    toast(cartDraftPersisted
-      ? `已取消 ${totalCancel} 件，商品已回到购物车`
-      : `已取消 ${totalCancel} 件；商品将在本页恢复，但草稿未保存，请勿关闭页面`, cartDraftPersisted ? 'success' : 'error');
-  };
+        const { data, error } = await sb.rpc('customer_remove_order_items', request);
+        if (error || !data || data.request_id !== request.p_request_id || !Array.isArray(data.cancelled_items)) throw new Error(error?.message || '修改未成功，请重试');
+        completed = true;
+        const additions = Object.create(null);
+        data.cancelled_items.forEach(it => {
+          const key = `${it.product_id}-${it.spec_name}`;
+          if (!additions[key]) additions[key] = { productId: it.product_id, productName: it.product_name, specName: it.spec_name, specPrice: it.spec_price, quantity: 0 };
+          additions[key].quantity += Number(it.quantity) || 0;
+        });
+        const persisted = mergeItemsIntoCartDraft(roundId, additions);
+        closeManagedModal(modal, { remove: true });
+        closeLookup();
+        if (customerRoundId !== roundId) selectCustomerRound(roundId);
+        else { cartRestorePending = true; customerContentValidated = false; updateCutoffCountdown(null); setCustomerBrowseState('loading'); loadCustomerProducts({ requireFreshValidation: true }); }
+        const count = Object.values(additions).reduce((sum, it) => sum + it.quantity, 0);
+        toast(persisted ? `已取消 ${count} 件，商品已回到购物车` : `已取消 ${count} 件，但购物车草稿未保存，请勿关闭页面`, persisted ? 'success' : 'error');
+      } catch (e) {
+        errorEl.textContent = `${e.message || '请求失败'}。可重试同一修改；如订单已变化，请关闭后重新查询。`;
+        errorEl.style.display = 'block';
+      } finally { busy = false; this.disabled = false; this.textContent = '重试同一修改'; }
+    };
+  } catch (e) { toast(e.message || '查询订单失败，请重试', 'error'); }
+  finally { if (btn) btn.disabled = false; }
 }
 
 // ============================================================
@@ -4969,7 +5040,7 @@ async function renderOrderManager(el) {
         if (it.deleted) return;
         // 检查是否需要拆分
         const split = (adminSplitMap[it.product_id] || {})[`${g.name}::${it._orig_time || o.createdAt}`];
-        if (split && split.filledQty > 0.001 && split.unfilledQty > 0.001) {
+        if (it.actual_weight == null && split && split.filledQty > 0.001 && split.unfilledQty > 0.001) {
           const total = split.filledQty + split.unfilledQty;
           const ratio = total > 0 ? split.filledQty / total : 0;
           // 已拼满行
@@ -4989,7 +5060,7 @@ async function renderOrderManager(el) {
         const fillBadge = pidFill.startsWith('未拼满') ? `<span class="badge badge-muted" style="margin-left:6px;font-size:.7rem">${escHtml(pidFill)}</span>` : pidFill === '已拼满' ? '<span class="badge badge-success" style="margin-left:6px;font-size:.7rem">已拼满</span>' : '';
         let weightInfo = '';
         if (it.actual_weight != null) {
-          weightInfo = `<br><span class="caption">¥${Number(it.spec_price || 0).toFixed(2)} × ${formatQty(it.actual_weight)}kg × ${formatQtyLabel(it.share || 1)} = ¥${Number(it.subtotal||0).toFixed(2)}</span>`;
+          weightInfo = `<br><span class="caption">${escHtml(formatWeightAmountText(it))}</span>`;
         }
         html += `<div class="order-item-row" style="margin-bottom:4px">
           <span class="item-name">${escHtml(it.product_name)} - ${escHtml(formatUnitLabel(it.spec_name))} <strong>×${formatQtyLabel(it.quantity||0)}</strong>${fillBadge} <span class="caption" style="font-size:.7rem">${o.time}</span>${weightInfo}</span>
@@ -5000,7 +5071,7 @@ async function renderOrderManager(el) {
     });
     const ri = roundInfo[g.roundId] || {};
     html += `<div style="text-align:right;margin-top:6px">
-      ${canEditRound(ri.leader_id) ? `<button class="btn btn-danger btn-sm" data-customer-name="${escAttr(g.name)}" onclick="adminBatchCancel('${escAttr(g.name)}', '${escAttr(g.roundId)}')">砍单 · ¥${g.totalAmount.toFixed(2)}</button>` : ''}
+      ${canEditRound(ri.leader_id) ? `<button class="btn btn-danger btn-sm" data-customer-name="${escAttr(g.name)}" onclick="adminBatchCancel(${escJsAttr(g.name)}, ${escJsAttr(g.roundId)})">砍单 · ¥${g.totalAmount.toFixed(2)}</button>` : ''}
     </div></div>`;
   });
 
@@ -5052,7 +5123,7 @@ async function renderOrderManager(el) {
           <div style="margin-bottom:6px">${(a.items || []).map(it => `<span class="tag-pill" style="margin:2px">${escHtml(it.product_name || '')} ${escHtml(it.spec_name || '')} ×${it.quantity || 0}</span>`).join('')}</div>
           <p style="font-size:.875rem;margin-bottom:6px;white-space:pre-wrap">${escHtml(a.reason)}</p>
           <div style="display:flex;gap:8px;margin-top:6px">
-            ${(a.image_url ? a.image_url.split(',').map((url, i) => `<button class="btn btn-ghost btn-sm" onclick="openImagePreview('${escAttr(url.trim())}')">查看图片${a.image_url.split(',').length > 1 ? i+1 : ''}</button>`).join('') : '')}
+            ${(a.image_url ? a.image_url.split(',').map((url, i) => `<button class="btn btn-ghost btn-sm" onclick="openImagePreview(${escJsAttr(url.trim())})">查看图片${a.image_url.split(',').length > 1 ? i+1 : ''}</button>`).join('') : '')}
             ${a.status === 'unread' ? `<button class="btn btn-ghost btn-sm" onclick="adminUpdateAfterSalesStatus('${a.id}', 'read')">标记已读</button>` : ''}
             ${a.status !== 'resolved' ? `<button class="btn btn-primary btn-sm" onclick="adminUpdateAfterSalesStatus('${a.id}', 'resolved')">标记已处理</button>` : '<span class="badge badge-muted">已处理</span>'}
           </div>
@@ -5073,7 +5144,7 @@ async function renderOrderManager(el) {
         const remaining = Math.max(0, t.target_qty - t.current_qty);
         html += `<div class="card" style="margin-bottom:8px;padding:12px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-weight:600;font-size:.875rem">${escHtml(t.product_name)} · ${escHtml(t.product_name || product.name)} · ${escHtml(t.initiator)} 的队伍</span>
+            <span style="font-weight:600;font-size:.875rem">${escHtml(t.product_name || '未命名商品')} · ${escHtml(t.initiator)} 的队伍</span>
             <span class="badge badge-muted">${formatQtyLabel(t.current_qty)} / ${formatQtyLabel(t.target_qty)} 份</span>
           </div>
           <div style="height:8px;background:var(--color-border-light);border-radius:4px;margin-bottom:8px;overflow:hidden">
@@ -5190,52 +5261,37 @@ async function exportOrders() {
 // 收款清单 导出数据（Excel 与长图共用）
 // ============================================================
 async function loadPaymentExportData() {
-  const [{ data: rawOrders }, { data: curProducts }, allRounds] = await Promise.all([
-    adminRpc('admin_get_orders', { p_round_id: adminRoundId }),
-    adminRpc('admin_get_products', { p_round_id: adminRoundId }),
-    getRounds()
-  ]);
-  if (!rawOrders || rawOrders.length === 0) { toast('没有可导出的订单', 'info'); return null; }
-  const priceMap = buildPriceMap(curProducts || []);
-  const orders = enrichOrdersWithCurrentPrices(getAdminVisibleOrders(rawOrders), priceMap).filter(o => o.status !== 'pending_weight');
-  const fees = await getRoundFees(adminRoundId);
-  const round = (allRounds || []).find(r => r.id === adminRoundId);
-  return { orders, fees, round };
+  const roundId = adminRoundId;
+  const keyword = (adminPaymentSearchKeyword || '').trim().toLowerCase();
+  if (!roundId) { toast('请先选择轮次', 'error'); return null; }
+  try {
+    const [orderResult, allRounds, fees] = await Promise.all([
+      adminRpc('admin_get_orders', { p_round_id: roundId }), getRounds(), getRoundFees(roundId)
+    ]);
+    if (orderResult.error || !Array.isArray(orderResult.data) || lastRoundsError) throw new Error('查询收款数据失败，请重试');
+    const round = allRounds.find(r => r.id === roundId);
+    if (!round) throw new Error('轮次已不存在，请刷新后重试');
+    const pendingCount = getAdminVisibleOrders(orderResult.data).filter(o => o.status === 'pending_weight').length;
+    const settlementOrders = getAdminVisibleOrders(orderResult.data).filter(o => o.status !== 'pending_weight');
+    const orders = settlementOrders.filter(o => !keyword || (o.customer_name || '').toLowerCase().includes(keyword));
+    if (!orders.length) { toast('没有可导出的已确认订单', 'info'); return null; }
+    return { orders, settlementOrders, fees, round, keyword, pendingCount };
+  } catch (e) { toast(e.message || '查询收款数据失败，请重试', 'error'); return null; }
 }
 
 // 收款清单表格数据（与 Excel Sheet4 完全一致，长图共用）
-function buildPaymentRows(orders, fees) {
-  const feeTotal = getFeeTotal(fees);
-  const personOrderMap = {};
-  orders.forEach(o => { if (!personOrderMap[o.customer_name]) personOrderMap[o.customer_name] = 0; personOrderMap[o.customer_name] += Number(o.total_amount) || 0; });
-  const personCount = Object.keys(personOrderMap).length;
-  const totalAmount = Object.values(personOrderMap).reduce((s, v) => s + v, 0);
-  const totalItems = orders.reduce((s, o) => s + (o.items || []).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.purchase_qty) || Number(it.quantity) || 0), 0), 0);
-  const personMap = {};
-  orders.forEach(o => {
-    if (!personMap[o.customer_name]) personMap[o.customer_name] = { items: [], total: 0 };
-    (o.items || []).forEach(it => { if (!it.deleted) personMap[o.customer_name].items.push(it); });
-    personMap[o.customer_name].total += Number(o.total_amount) || 0;
-  });
+function buildPaymentRows(orders, fees, keyword = '') {
   const rows = [['顾客昵称', '商品名称', '规格', '数量', '单价', '小计', '应付总额']];
-  let grandTotal = 0;
-  Object.entries(personMap).forEach(([name, data]) => {
-    data.items.forEach(it => rows.push([name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), it.spec_price, Number(it.subtotal || 0).toFixed(2), '']));
-    let feeShare = 0;
-    if (fees.mode === 'per_item') {
-      const personItems = orders.filter(o => o.customer_name === name).reduce((s, o) => s + (o.items || []).filter(it => !it.deleted).reduce((ss, it) => ss + (Number(it.purchase_qty) || Number(it.quantity) || 0), 0), 0);
-      feeShare = totalItems > 0 ? Math.round(feeTotal * personItems / totalItems * 100) / 100 : 0;
-    } else if (fees.mode === 'per_amount') {
-      feeShare = totalAmount > 0 ? Math.round(feeTotal * data.total / totalAmount * 100) / 100 : 0;
-    } else {
-      feeShare = personCount > 0 ? Math.round(feeTotal / personCount * 100) / 100 : 0;
-    }
-    if (feeShare > 0) rows.push([name, '运费均摊', '', '', '', feeShare.toFixed(2), '']);
-    const grand = data.total + feeShare;
-    grandTotal += grand;
-    rows.push([name, '', '', '', '', '小计', grand.toFixed(2)]);
+  const settlement = buildPaymentSettlement(orders, fees).filter(row => !keyword || row.name.toLowerCase().includes(keyword));
+  let grandCents = 0;
+  settlement.forEach(row => {
+    orders.filter(o => o.customer_name === row.name).forEach(o => (o.items || []).filter(it => !it.deleted).forEach(it =>
+      rows.push([row.name, it.product_name, formatUnitLabel(it.spec_name), formatQtyLabel(it.quantity), it.spec_price, Number(it.subtotal || 0).toFixed(2), ''])));
+    if (row.feeShare > 0) rows.push([row.name, '杂费分摊', '', '', '', row.feeShare.toFixed(2), '']);
+    rows.push([row.name, '', '', '', '', '小计', row.total.toFixed(2)]);
+    grandCents += Math.round(row.total * 100);
   });
-  rows.push(['', '', '', '', '', '总计', (Math.round(grandTotal * 100) / 100).toFixed(2)]);
+  rows.push(['', '', '', '', '', '总计', (grandCents / 100).toFixed(2)]);
   return rows;
 }
 
@@ -5246,8 +5302,8 @@ async function exportPaymentImage() {
   if (!adminRoundId) { toast('请先选择轮次', 'error'); return; }
   const data = await loadPaymentExportData();
   if (!data) return;
-  const { orders, fees, round } = data;
-  const rows = buildPaymentRows(orders, fees);
+  const { orders, settlementOrders, fees, round, keyword, pendingCount } = data;
+  const rows = buildPaymentRows(settlementOrders, fees, keyword);
 
   const PX = 920;                       // 图片宽(1x)
   const PAD = 22;
@@ -5256,10 +5312,10 @@ async function exportPaymentImage() {
   const INNER = RIGHT - LEFT;
   const COLS = [100, 334, 96, 60, 78, 96, 112];   // 7 列：商品名称加宽（334≈25个汉字），合计 876 = INNER
   const HEAD_H = 42;
-  const TITLE_H = 88;
+  const TITLE_H = pendingCount ? 112 : 88;
   const FOOT_H = 26;
   const rowH = (cells) => cells[5] === '总计' ? 48 : (cells[5] === '小计' ? 44 : 34);
-  const rowKind = (cells) => cells[5] === '总计' ? 'grand' : cells[5] === '小计' ? 'sub' : (cells[1] === '运费均摊' ? 'fee' : 'detail');
+  const rowKind = (cells) => cells[5] === '总计' ? 'grand' : cells[5] === '小计' ? 'sub' : (cells[1] === '杂费分摊' ? 'fee' : 'detail');
 
   // 测量用离屏画布（图片尺寸未定时先估算行高）
   const measCv = document.createElement('canvas');
@@ -5317,20 +5373,21 @@ async function exportPaymentImage() {
 
   const roundName = (round && round.name) ? String(round.name) : '团购';
   const grandVal = rows[rows.length - 1][6] || '0.00';
-  const personTotal = rows.filter(r => r[5] === '小计').length;
+  const personTotal = rows.slice(1).filter(r => r[5] === '小计').length;
 
   // 标题区
   gctx.fillStyle = '#15803D';
   gctx.font = 'bold 20px "PingFang SC","Microsoft YaHei",sans-serif';
   gctx.textBaseline = 'middle';
   gctx.textAlign = 'left';
-  gctx.fillText(roundName + ' 收款清单', LEFT, 36);
+  gctx.fillText(roundName + (keyword ? ' 收款清单（筛选结果）' : ' 收款清单'), LEFT, 36);
   gctx.fillStyle = '#667085';
   gctx.font = '12px "PingFang SC","Microsoft YaHei",sans-serif';
-  gctx.fillText('共 ' + personTotal + ' 人 · 合计 ¥' + grandVal + '（含杂费 ¥' + (Number(getFeeTotal(fees)) || 0).toFixed(2) + '）· ' + new Date().toLocaleDateString('zh-CN'), LEFT, 58);
+  gctx.fillText('共 ' + personTotal + ' 人 · 合计 ¥' + grandVal + ' · 整轮杂费 ¥' + (Number(getFeeTotal(fees)) || 0).toFixed(2) + ' · ' + new Date().toLocaleDateString('zh-CN'), LEFT, 58);
+  if (pendingCount) gctx.fillText('另有 ' + pendingCount + ' 笔待称重订单，本清单尚非最终结算', LEFT, 82);
   gctx.strokeStyle = '#E7E5E4';
   gctx.lineWidth = 1;
-  gctx.beginPath(); gctx.moveTo(LEFT, 74); gctx.lineTo(RIGHT, 74); gctx.stroke();
+  gctx.beginPath(); gctx.moveTo(LEFT, TITLE_H - 14); gctx.lineTo(RIGHT, TITLE_H - 14); gctx.stroke();
 
   const colX = [];
   (function() { let x = LEFT; COLS.forEach(w => { colX.push({ x: x, w: w }); x += w; }); })();
@@ -5447,7 +5504,7 @@ async function exportPaymentExcel() {
 
   const data = await loadPaymentExportData();
   if (!data) return;
-  const { orders, fees, round } = data;
+  const { orders, settlementOrders, fees, round, keyword, pendingCount } = data;
 
   // Sheet 1: 订单明细
   const rows1 = [['顾客昵称', '商品名称', '规格', '购买次数', '折算采购数量', '单价', '小计', '备注', '应付总额', '下单时间']];
@@ -5480,7 +5537,7 @@ async function exportPaymentExcel() {
   rows2.push(['合计', '', formatQtyLabel(sumQty2), (Math.round(sumAmt2 * 100) / 100).toFixed(2), '']);
 
   // Sheet 3: 按人订单明细
-  const personMap = {};
+  const personMap = Object.create(null);
   orders.forEach(o => {
     if (!personMap[o.customer_name]) personMap[o.customer_name] = { items: [], total: 0 };
     (o.items || []).forEach(it => { if (!it.deleted) personMap[o.customer_name].items.push(it); });
@@ -5497,7 +5554,7 @@ async function exportPaymentExcel() {
   rows3.push(['', '', '', '', '', '总计', (Math.round(grandTotal3 * 100) / 100).toFixed(2)]);
 
   // Sheet 4: 收款清单
-  const rows4 = buildPaymentRows(orders, fees);
+  const rows4 = buildPaymentRows(settlementOrders, fees, keyword);
 
   const wb = XLSX.utils.book_new();
   const ws1 = XLSX.utils.aoa_to_sheet(rows1);
@@ -5521,13 +5578,17 @@ async function exportPaymentExcel() {
   xlColorRowsByText(ws2, 0, v => v === '合计', { bg: XL_PALETTE.grandBg, fg: XL_PALETTE.grandFg, sz: 13, hpt: 28 });
   xlColorRowsByText(ws3, 5, v => v === '小计', { bg: XL_PALETTE.subBg, fg: XL_PALETTE.subFg, sz: 13, hpt: 28 });
   xlColorRowsByText(ws3, 5, v => v === '总计', { bg: XL_PALETTE.grandBg, fg: XL_PALETTE.grandFg, sz: 13, hpt: 28 });
-  xlColorRowsByText(ws4, 1, v => v === '运费均摊', { bg: XL_PALETTE.feeBg, fg: XL_PALETTE.feeFg, sz: 13, hpt: 28 });
+  xlColorRowsByText(ws4, 1, v => v === '杂费分摊', { bg: XL_PALETTE.feeBg, fg: XL_PALETTE.feeFg, sz: 13, hpt: 28 });
   xlColorRowsByText(ws4, 5, v => v === '小计', { bg: XL_PALETTE.subBg, fg: XL_PALETTE.subFg, sz: 13, hpt: 28 });
   xlColorRowsByText(ws4, 5, v => v === '总计', { bg: XL_PALETTE.grandBg, fg: XL_PALETTE.grandFg, sz: 13, hpt: 28 });
   XLSX.utils.book_append_sheet(wb, ws1, '订单明细');
   XLSX.utils.book_append_sheet(wb, ws2, '商品汇总');
   XLSX.utils.book_append_sheet(wb, ws3, '按人订单明细');
   XLSX.utils.book_append_sheet(wb, ws4, '收款清单');
+  const notes = [['结算说明'], [keyword ? '当前文件为筛选结果，费用按完整轮次分摊。' : '费用按完整轮次分摊。'], ['整轮杂费：' + getFeeTotal(fees).toFixed(2) + ' 元'], [pendingCount ? '另有 ' + pendingCount + ' 笔待称重订单，本清单尚非最终结算。' : '本轮无待称重订单。']];
+  const notesSheet = XLSX.utils.aoa_to_sheet(notes);
+  xlPolishSheet(notesSheet, { widths: [80] });
+  XLSX.utils.book_append_sheet(wb, notesSheet, '结算说明');
   const fname = (round ? round.name : '团购') + '_收款_' + new Date().toISOString().slice(0,10) + '.xlsx';
   XLSX.writeFile(wb, fname);
   toast('Excel 已下载');
@@ -5537,130 +5598,77 @@ async function exportPaymentExcel() {
 // PAYMENT SUMMARY
 // ============================================================
 async function renderPaymentSummary(el) {
-
-  const allRounds = await getRounds();
-  if (lastRoundsError) {
-    el.innerHTML = `<div class="empty-state"><p>查询轮次失败：${escHtml(lastRoundsError.message || '未知错误')}</p><button class="btn btn-primary btn-sm" onclick="renderAdminTab('summary')">重试</button></div>`;
-    return;
-  }
-  if (!adminRoundId || !allRounds.some(r => r.id === adminRoundId)) { const owned = allRounds.filter(r => canEditRound(r.leader_id)); const active = owned.find(r => r.is_active); adminRoundId = active ? active.id : (owned[0]?.id || null); }
-  const roundId = adminRoundId;
-  const roundOwnerEdit = allRounds.find(r => r.id === roundId);
-
-  // 非自己的轮次无法查看收款清单
-  if (roundId && !canEditRound(roundOwnerEdit?.leader_id)) {
-    el.innerHTML = `<div class="empty-state"><p>此轮次由其他团长管理，无法查看收款清单</p><button class="btn btn-primary btn-sm" onclick="adminRoundId=null;renderAdminTab('summary')">回到我的轮次</button></div>`;
-    return;
-  }
-
-  let roundOpts = allRounds.map(r => {
-    let statusLabel = '';
-    if (r.is_active && r.cutoff_time && new Date(r.cutoff_time) < new Date()) statusLabel = '(已截止)';
-    else if (r.is_active) statusLabel = '(进行中)';
-    else statusLabel = '(已结束)';
-    return `<option value="${r.id}" ${r.id === roundId ? 'selected' : ''}>${escHtml(r.name)} ${statusLabel}</option>`;
-  }).join('');
-
-  const { data: rawOrders } = await adminRpc('admin_get_orders', { p_round_id: roundId });
-  // 用当前商品价格刷新订单金额
-  let curProducts = [];
-  try { const r = await adminRpc('admin_get_products', { p_round_id: roundId }); curProducts = r.data || []; } catch(e) {}
-  const priceMap = buildPriceMap(curProducts);
-  const orders = enrichOrdersWithCurrentPrices(getAdminVisibleOrders(rawOrders), priceMap).filter(o => o.status !== 'pending_weight');
-  const fees = roundId ? await getRoundFees(roundId) : normalizeFeeConfig({});
-
-  const currentRound = allRounds.find(r => r.id === roundId);
-  let roundLabel = currentRound ? currentRound.name : '';
-
-  let html = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-    <select class="form-input" style="flex:1;min-width:120px" onchange="adminRoundId=this.value;adminPaymentSearchKeyword='';renderPaymentSummary(document.getElementById('admin-tab-summary'))">
-      ${roundOpts}
-    </select>
-    <button class="btn btn-secondary btn-sm" onclick="renderPaymentSummary(document.getElementById('admin-tab-summary'))">刷新</button>
-  </div>
-  ${!canEditRound(currentRound?.leader_id) ? `<p class="caption" style="color:var(--color-text-muted);margin-bottom:12px;text-align:center">此轮次由其他团长管理，你只能查看</p>` : ''}`;
-
-  const feeTotal = getFeeTotal(fees);
-  html += `<div class="fee-config-card">
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
-      <div>
-        <h3 class="section-title" style="margin-bottom:4px">本轮费用设置</h3>
-        <p class="caption">仅团长后台可见，会按下单人数均摊到收款清单。</p>
-      </div>
-      <div style="font-weight:900;color:var(--color-accent)">费用合计 ${feeTotal.toFixed(2)} 元</div>
-    </div>
-    <div class="fee-config-grid">
-      <div class="form-group"><label class="form-label">运费</label><input id="fee-shipping" class="form-input" type="number" min="0" step="0.01" value="${fees.shipping || ''}" placeholder="0.00"></div>
-      <div class="form-group"><label class="form-label">包装费</label><input id="fee-packing" class="form-input" type="number" min="0" step="0.01" value="${fees.packing || ''}" placeholder="0.00"></div>
-      <div class="form-group"><label class="form-label">其他费用</label><input id="fee-other" class="form-input" type="number" min="0" step="0.01" value="${fees.other || ''}" placeholder="0.00"></div>
-      <div class="form-group"><label class="form-label">均摊方式</label><select id="fee-mode" class="form-input"><option value="per_person" ${(fees.mode||'per_person')==='per_person'?'selected':''}>按人均摊</option><option value="per_item" ${fees.mode==='per_item'?'selected':''}>按件均摊</option><option value="per_amount" ${fees.mode==='per_amount'?'selected':''}>按金额均摊</option></select></div>
-    </div>
-    <div class="form-group" style="margin-bottom:12px"><label class="form-label">费用说明（选填）</label><input id="fee-note" class="form-input" maxlength="80" value="${escAttr(fees.note)}" placeholder="如：山姆配送费、保温袋、停车费"></div>
-    ${canEditRound(currentRound?.leader_id) ? `<button class="btn btn-primary btn-sm" onclick="saveRoundFees()">保存费用设置</button>` : ''}
-  </div>`;
-
-  // Payment search filter
-  const payKeyword = (adminPaymentSearchKeyword || '').trim().toLowerCase();
-  const visiblePaymentOrders = !payKeyword ? orders : orders.filter(o => (o.customer_name || '').toLowerCase().includes(payKeyword));
-
-  html += `<label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-payment-search" placeholder="搜索顾客名" value="${escAttr(adminPaymentSearchKeyword)}" oninput="debouncedAdminPaymentSearch()"></label>`;
-
-  if (!orders || orders.length === 0) {
-    html += '<div class="empty-state"><p>该轮次暂无订单可汇总</p></div>';
+  const gen = (el._paymentLoadGen || 0) + 1;
+  el._paymentLoadGen = gen;
+  const selectedRoundId = adminRoundId;
+  const keyword = (adminPaymentSearchKeyword || '').trim().toLowerCase();
+  const searchInput = el.querySelector?.('#admin-payment-search');
+  const searching = searchInput && document.activeElement === searchInput;
+  lastPurchaseSummaryCopyText = '';
+  if (!searching) el.innerHTML = '<div class="empty-state" role="status"><p>正在查询收款清单…</p></div>';
+  const current = () => el._paymentLoadGen === gen && adminRoundId === selectedRoundId;
+  try {
+    const allRounds = await getRounds();
+    if (!current()) return;
+    if (lastRoundsError) throw new Error('查询轮次失败，请重试');
+    let roundId = selectedRoundId;
+    if (!roundId || !allRounds.some(r => r.id === roundId)) {
+      const owned = allRounds.filter(r => canEditRound(r.leader_id));
+      roundId = (owned.find(r => r.is_active) || owned[0])?.id || null;
+      adminRoundId = roundId;
+    }
+    const round = allRounds.find(r => r.id === roundId);
+    if (!round) { el.innerHTML = '<div class="empty-state"><p>暂无团购轮次，请先创建轮次</p></div>'; return; }
+    if (!canEditRound(round.leader_id)) { el.innerHTML = `<div class="empty-state"><p>此轮次由其他团长管理，无法查看收款清单</p><button class="btn btn-primary" onclick="adminRoundId=null;renderAdminTab('summary')">回到我的轮次</button></div>`; return; }
+    const [result, fees] = await Promise.all([adminRpc('admin_get_orders', { p_round_id: roundId }), getRoundFees(roundId)]);
+    if (el._paymentLoadGen !== gen || adminRoundId !== roundId) return;
+    if (searching && searchInput.value.trim().toLowerCase() !== keyword) return;
+    if (result.error || !Array.isArray(result.data)) throw new Error('查询订单失败，请重试');
+    const allOrders = getAdminVisibleOrders(result.data);
+    const pendingCount = allOrders.filter(o => o.status === 'pending_weight').length;
+    const orders = allOrders.filter(o => o.status !== 'pending_weight');
+    const allRows = buildPaymentSettlement(orders, fees);
+    const paymentRows = allRows.filter(row => !keyword || row.name.toLowerCase().includes(keyword));
+    const total = paymentRows.reduce((sum, row) => sum + Math.round(row.total * 100), 0) / 100;
+    const feeTotal = getFeeTotal(fees);
+    const modeLabel = fees.mode === 'per_item' ? '按件分摊' : fees.mode === 'per_amount' ? '按金额分摊' : '按人分摊';
+    const roundOpts = allRounds.map(r => `<option value="${escAttr(r.id)}" ${r.id === roundId ? 'selected' : ''}>${escHtml(r.name)} ${r.is_active ? (r.cutoff_time && new Date(r.cutoff_time) < new Date() ? '(已截止)' : '(进行中)') : '(已结束)'}</option>`).join('');
+    let html = `<div style="display:flex;gap:8px;margin-bottom:16px"><select class="form-input" style="flex:1;min-width:0" onchange="adminRoundId=this.value;adminPaymentSearchKeyword='';renderPaymentSummary(document.getElementById('admin-tab-summary'))">${roundOpts}</select><button class="btn btn-secondary btn-sm" onclick="renderPaymentSummary(document.getElementById('admin-tab-summary'))">刷新</button></div>
+      <label class="customer-search" style="margin-bottom:12px">⌕ <input type="search" id="admin-payment-search" placeholder="搜索顾客名" value="${escAttr(adminPaymentSearchKeyword)}" oninput="debouncedAdminPaymentSearch()"></label>
+      <div class="stat-row"><div class="stat-card"><div class="stat-value">${paymentRows.length}</div><div class="stat-label">${keyword ? '筛选结果' : '已确认收款'} · 人数</div></div><div class="stat-card"><div class="stat-value">${total.toFixed(2)}</div><div class="stat-label">${keyword ? '筛选结果' : '本轮'}应收 (元)</div></div></div>
+      <p class="caption">杂费共 ${feeTotal.toFixed(2)} 元 · ${modeLabel} · 全轮 ${allRows.length} 人参与。搜索不改变每人应收。</p>
+      ${pendingCount ? `<p class="caption" role="status" style="margin:12px 0;color:var(--color-warning)">${pendingCount} 笔订单待称重，确认后才计入收款及分摊；本清单尚非最终结算。</p>` : ''}
+      <h3 class="section-title" style="margin:16px 0 12px">收款清单</h3>`;
+    if (!paymentRows.length) html += `<div class="empty-state"><p>${keyword ? '没有匹配的顾客，请更换或清空搜索' : pendingCount ? '暂无已确认金额，请先完成称重' : '该轮次暂无订单可汇总'}</p></div>`;
+    let copyText = `${round.name} 收款汇总${keyword ? '（筛选结果）' : ''}：\n`;
+    copyText += `整轮杂费 ${feeTotal.toFixed(2)} 元，${modeLabel}，全轮 ${allRows.length} 人参与。\n`;
+    if (pendingCount) copyText += `注意：另有 ${pendingCount} 笔待称重订单，本清单尚非最终结算。\n`;
+    paymentRows.forEach(row => {
+      html += `<div class="copyable" style="display:block"><div class="name" style="overflow-wrap:anywhere;margin-bottom:6px">${escHtml(row.name)}</div><div class="amount" style="text-align:right;font-variant-numeric:tabular-nums"><strong>${row.total.toFixed(2)} 元</strong><div class="caption">商品 ${row.productAmount.toFixed(2)} + 杂费 ${row.feeShare.toFixed(2)}</div></div></div>`;
+      copyText += `${row.name} — 商品 ${row.productAmount.toFixed(2)} + 均摊 ${row.feeShare.toFixed(2)} = ${row.total.toFixed(2)} 元\n`;
+    });
+    copyText += `合计：${total.toFixed(2)} 元`;
+    if (paymentRows.length) {
+      lastPurchaseSummaryCopyText = copyText;
+      html += `<button class="btn btn-primary btn-block" style="margin-top:16px" data-copy-payment>复制${keyword ? '筛选结果' : '收款清单'}</button><button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="exportPaymentExcel()">导出${keyword ? '筛选结果 ' : '收款清单 '}Excel</button><button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="exportPaymentImage()">导出${keyword ? '筛选结果' : '收款清单'}长图</button>`;
+    }
+    html += `<details class="fee-config-card" style="margin-top:20px"><summary style="cursor:pointer;font-weight:700">本轮费用设置 · ${feeTotal.toFixed(2)} 元</summary><p class="caption" style="margin-top:12px">保存后按整轮已确认订单重新分摊。</p><div class="fee-config-grid">
+      <div class="form-group"><label class="form-label" for="fee-shipping">运费</label><input id="fee-shipping" class="form-input" type="number" min="0" step="0.01" value="${fees.shipping}" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label" for="fee-packing">包装费</label><input id="fee-packing" class="form-input" type="number" min="0" step="0.01" value="${fees.packing}" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label" for="fee-other">其他费用</label><input id="fee-other" class="form-input" type="number" min="0" step="0.01" value="${fees.other}" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label" for="fee-mode">分摊方式</label><select id="fee-mode" class="form-input"><option value="per_person" ${fees.mode==='per_person'?'selected':''}>按人分摊</option><option value="per_item" ${fees.mode==='per_item'?'selected':''}>按件分摊</option><option value="per_amount" ${fees.mode==='per_amount'?'selected':''}>按金额分摊</option></select></div></div>
+      <div class="form-group"><label class="form-label" for="fee-note">费用说明</label><input id="fee-note" class="form-input" maxlength="80" value="${escAttr(fees.note)}" placeholder="如：配送费、保温袋"></div><button class="btn btn-primary btn-sm" onclick="saveRoundFees()">保存费用设置</button></details>`;
+    const keepFocus = searching && document.activeElement === searchInput;
     el.innerHTML = html;
-    return;
+    if (searching) {
+      el.querySelector('#admin-payment-search').replaceWith(searchInput);
+      if (keepFocus) searchInput.focus({ preventScroll: true });
+    }
+  } catch (e) {
+    if (el._paymentLoadGen !== gen) return;
+    lastPurchaseSummaryCopyText = '';
+    el.innerHTML = `<div class="empty-state" role="alert"><p>${escHtml(e.message || '查询收款清单失败，请重试')}</p><button class="btn btn-primary" onclick="renderPaymentSummary(document.getElementById('admin-tab-summary'))">重试</button></div>`;
   }
-
-  const grouped = {};
-  const groupedQtys = {};
-  visiblePaymentOrders.forEach(o => {
-    if (!grouped[o.customer_name]) { grouped[o.customer_name] = 0; groupedQtys[o.customer_name] = 0; }
-    grouped[o.customer_name] += parseFloat(o.total_amount);
-    (o.items||[]).forEach(it => { if (!it.deleted) groupedQtys[o.customer_name] += Number(it.purchase_qty) || Number(it.quantity) || 0; });
-  });
-
-  const paymentRows = buildFeeAdjustedPaymentRows(grouped, fees, groupedQtys);
-  const productTotal = paymentRows.reduce((s, row) => s + row.productAmount, 0);
-  const total = paymentRows.reduce((s, row) => s + row.total, 0);
-  const modeLabel = fees.mode === 'per_item' ? '按件均摊' : fees.mode === 'per_amount' ? '按金额均摊' : '按人均摊';
-  const perPersonHint = paymentRows.length ? `${modeLabel} · ${paymentRows[0].feeShare.toFixed(2)} 元起` : '';
-
-  html += `<div class="stat-row">
-    <div class="stat-card"><div class="stat-value" style="color:var(--color-accent)">${Object.keys(grouped).length}</div><div class="stat-label">${escHtml(roundLabel)} · 下单人数</div></div>
-    <div class="stat-card"><div class="stat-value">${total.toFixed(2)}</div><div class="stat-label">含均摊费用收款总额 (元)</div></div>
-  </div>`;
-
-  if (feeTotal > 0) {
-    html += `<div class="card" style="margin-bottom:16px;background:#fff">
-      <div class="order-item-row"><span class="item-name">商品金额合计</span><span class="item-price">${productTotal.toFixed(2)} 元</span></div>
-      <div class="order-item-row"><span class="item-name">运费</span><span class="item-price">${fees.shipping.toFixed(2)} 元</span></div>
-      <div class="order-item-row"><span class="item-name">包装费</span><span class="item-price">${fees.packing.toFixed(2)} 元</span></div>
-      <div class="order-item-row"><span class="item-name">其他费用</span><span class="item-price">${fees.other.toFixed(2)} 元</span></div>
-      <div class="order-item-row" style="border-top:1px solid var(--color-border-light);margin-top:8px;padding-top:10px"><span class="item-name">均摊说明</span><span class="item-price">${perPersonHint}</span></div>
-      ${fees.note ? `<p class="caption" style="margin-top:8px">说明：${escHtml(fees.note)}</p>` : ''}
-    </div>`;
-  }
-
-  html += '<h3 class="section-title" style="margin-bottom:12px">收款清单</h3>';
-
-  let copyText = `${roundLabel} 收款汇总：\n`;
-  if (feeTotal > 0) copyText += `费用：运费 ${fees.shipping.toFixed(2)} 元，包装费 ${fees.packing.toFixed(2)} 元，其他 ${fees.other.toFixed(2)} 元，按 ${paymentRows.length} 人均摊\n`;
-  paymentRows.forEach(row => {
-    html += `<div class="copyable">
-      <span class="name">${escHtml(row.name)}</span>
-      <span class="amount">${row.productAmount.toFixed(2)} + ${row.feeShare.toFixed(2)} = ${row.total.toFixed(2)} 元</span>
-    </div>`;
-    copyText += `${row.name} — 商品 ${row.productAmount.toFixed(2)} + 均摊 ${row.feeShare.toFixed(2)} = ${row.total.toFixed(2)} 元\n`;
-  });
-  copyText += `合计：${total.toFixed(2)} 元`;
-
-  lastPurchaseSummaryCopyText = copyText;
-  html += `<button class="btn btn-primary btn-block" style="margin-top:16px" data-copy-payment>一键复制收款清单</button>`;
-  html += `<button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="exportPaymentExcel()">导出收款清单 Excel</button>`;
-  html += `<button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="exportPaymentImage()">导出收款清单长图（发微信群）</button>`;
-  html += '<p class="caption" style="text-align:center;margin-top:8px">复制后可直接粘贴到微信群收款，长图一目了然</p>';
-
-  el.innerHTML = html;
 }
 
 function fallbackCopyStrict(text) {
@@ -5990,7 +5998,7 @@ async function renderSettings(el) {
         actionBtn = `<button class="btn btn-primary btn-sm" onclick="activateRound('${r.id}')">开团</button>`;
       } else if (r.is_active && !isExpired) {
         statusBadge = '<span class="badge badge-success" style="margin-left:6px">进行中</span>';
-        actionBtn = `<button class="btn btn-danger btn-sm" onclick="stopRound('${r.id}', '${escAttr(r.name)}')">停止</button>`;
+        actionBtn = `<button class="btn btn-danger btn-sm" onclick="stopRound('${r.id}', ${escJsAttr(r.name)})">停止</button>`;
       } else if (isExpired) {
         statusBadge = '<span class="badge badge-danger" style="margin-left:6px">已截止</span>';
         actionBtn = `<button class="btn btn-secondary btn-sm" onclick="activateRound('${r.id}')">启用</button>`;
@@ -6013,7 +6021,7 @@ async function renderSettings(el) {
         <span style="display:flex;gap:4px">
           ${canEdit ? `<button class="btn btn-ghost btn-sm" onclick="editRound('${r.id}')">编辑</button>` : ''}
           ${canEdit ? actionBtn : ''}
-          ${canEdit ? `<button class="btn btn-danger btn-sm" onclick="deleteRound('${r.id}', '${escAttr(r.name)}')">删除</button>` : (!canEdit && !checkboxHtml ? '<span class="caption" style="color:var(--color-text-muted);padding:4px 8px">此轮次由其他团长管理，你只能查看</span>' : '')}
+          ${canEdit ? `<button class="btn btn-danger btn-sm" onclick="deleteRound('${r.id}', ${escJsAttr(r.name)})">删除</button>` : (!canEdit && !checkboxHtml ? '<span class="caption" style="color:var(--color-text-muted);padding:4px 8px">此轮次由其他团长管理，你只能查看</span>' : '')}
         </span>
       </div>`;
     });
@@ -6139,6 +6147,8 @@ function createNewRound() {
 async function editRound(id) {
   const { data: round } = await sb.from('rounds').select('*').eq('id', id).single();
   if (!round) return;
+  const cutoffDate = round.cutoff_time ? new Date(round.cutoff_time) : null;
+  const localCutoff = cutoffDate && !Number.isNaN(cutoffDate.getTime()) ? new Date(cutoffDate.getTime() - cutoffDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
@@ -6152,7 +6162,7 @@ async function editRound(id) {
       </div>
       <div class="form-group">
         <label class="form-label">下单截止时间</label>
-        <input type="datetime-local" id="round-cutoff" class="form-input" value="${round.cutoff_time ? round.cutoff_time.slice(0,16) : ''}">
+        <input type="datetime-local" id="round-cutoff" class="form-input" value="${localCutoff}">
       </div>
       <div class="form-group">
         <label class="form-label">本期团长</label>
@@ -6176,7 +6186,7 @@ async function editRound(id) {
       const { error } = await adminRpc('admin_update_round', {
         p_id: id,
         p_name: name,
-        p_cutoff_time: cutoffVal ? new Date(cutoffVal).toISOString() : null,
+        p_cutoff_time: cutoffVal === localCutoff ? round.cutoff_time : (cutoffVal ? new Date(cutoffVal).toISOString() : null),
         p_leader_name: leaderVal || null
       });
       if (error) { errEl.textContent = '保存失败: ' + error.message; errEl.style.display = 'block'; return; }
@@ -6253,83 +6263,92 @@ function adminCancelOrder(orderId, customerName) {
 }
 
 async function showWeightAllocation() {
-  const { data: orders } = await adminRpc('admin_get_orders', { p_round_id: adminRoundId });
-  const pendingOrders = (orders || []).filter(o => o.status === 'pending_weight');
-  if (pendingOrders.length === 0) { toast('没有待称重确认的订单'); return; }
-
-  // 查产品信息获取 weight_unit
-  const { data: weightedProductData } = await adminRpc('admin_get_products', { p_round_id: adminRoundId });
-  const productInfo = {};
-  (weightedProductData || []).forEach(p => { productInfo[p.id] = p; });
-
-  // 构建权重输入表: { productId: { name, unitPrice, unit, items: [{customer, share, shareLabel, orderId}] } }
-  const weightMap = {};
-  pendingOrders.forEach(o => {
-    (o.items || []).forEach(it => {
-      if (it.deleted) return;
-      const pinfo = productInfo[it.product_id] || {};
-      if (!pinfo.is_weighted) return;
-      const pid = it.product_id;
-      if (!weightMap[pid]) weightMap[pid] = { name: it.product_name, unitPrice: Number(it.spec_price) || 0, unit: pinfo.weight_unit || 'kg', items: [] };
-      weightMap[pid].items.push({ customer: o.customer_name, share: Number(it.share) || 1, shareLabel: it.spec_name, orderId: o.id });
+  const roundId = adminRoundId;
+  const trigger = document.activeElement;
+  if (!roundId) { toast('请先选择轮次', 'error'); return; }
+  try {
+    const [orderResult, productResult] = await Promise.all([
+      adminRpc('admin_get_orders', { p_round_id: roundId }), adminRpc('admin_get_products', { p_round_id: roundId })
+    ]);
+    if (adminRoundId !== roundId) return;
+    if (orderResult.error || productResult.error || !Array.isArray(orderResult.data) || !Array.isArray(productResult.data)) throw new Error('查询待称重订单失败，请重试');
+    const pendingOrders = orderResult.data.filter(o => o.status === 'pending_weight');
+    if (!pendingOrders.length) { toast('没有待称重确认的订单'); return; }
+    const products = new Map(productResult.data.map(p => [p.id, p]));
+    const entries = [];
+    pendingOrders.forEach(o => (o.items || []).forEach((it, itemIndex) => {
+      const product = products.get(it.product_id);
+      if (it.deleted || !(it.is_weighted === true || (it.is_weighted == null && product?.is_weighted))) return;
+      entries.push({ orderId: o.id, itemIndex, customer: o.customer_name, item: it, unit: it.weight_unit || product?.weight_unit || 'kg', price: Number(it.spec_price) });
+    }));
+    if (!entries.length) throw new Error('待称重商品信息不完整，请刷新商品与订单后重试');
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.dataset.modal = 'weight-allocation';
+    modal.innerHTML = `<div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="weight-title" tabindex="-1"><div class="modal-handle"></div><h3 id="weight-title" class="section-title">确认实收重量</h3><p class="caption" style="margin:12px 0">填该顾客这条明细实际分到的合计重量，包含购买的全部数量。金额 = 单价 × 合计重量，不再乘份额或件数。</p>${entries.map((entry, idx) => `<div class="card" data-weight-row="${idx}" style="padding:12px;margin-bottom:10px"><p style="font-weight:700;overflow-wrap:anywhere">${escHtml(entry.customer)} · ${escHtml(entry.item.product_name)}</p><p class="caption" style="margin:6px 0">${escHtml(entry.item.spec_name)} ×${formatQtyLabel(entry.item.quantity)} · ¥${entry.price.toFixed(2)}/${escHtml(entry.unit)}</p><label class="form-label" for="weight-entry-${idx}">本人实收合计重量 (${escHtml(entry.unit)})</label><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><input type="number" inputmode="decimal" id="weight-entry-${idx}" class="form-input" min="0.001" step="0.001" placeholder="例如 0.850" style="flex:1;min-width:130px"><span class="weight-sub" aria-live="polite" style="font-weight:700">待填写</span></div><p class="weight-status caption" role="status" style="margin-top:6px"></p></div>`).join('')}<p id="weight-error" class="form-error" role="alert" style="display:none"></p><button class="btn btn-primary btn-block" id="confirm-weight-btn">确认重量与金额</button><button class="btn btn-ghost btn-block" id="close-weight-btn">取消</button></div>`;
+    document.body.appendChild(modal);
+    let busy = false;
+    const confirmed = new Set();
+    const close = () => { if (!busy) closeManagedModal(modal, { remove: true }); };
+    modal.querySelector('#close-weight-btn').onclick = close;
+    entries.forEach((entry, idx) => {
+      const input = modal.querySelector(`#weight-entry-${idx}`);
+      input.oninput = () => {
+        const value = Number(input.value), output = modal.querySelector(`[data-weight-row="${idx}"] .weight-sub`);
+        output.textContent = input.value && Number.isFinite(value) && value > 0 ? `¥${(entry.price * value).toFixed(2)}` : '待填写';
+      };
     });
-  });
-
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  let html = '<div class="modal-sheet" style="max-height:90vh;overflow-y:auto"><div class="modal-handle"></div><h3 class="section-title" style="margin-bottom:16px">称重分配</h3>';
-
-  Object.entries(weightMap).forEach(([pid, w]) => {
-    const wunit = w.unit || 'kg';
-    html += `<div style="margin-bottom:16px"><p style="font-weight:700;margin-bottom:8px">${escHtml(w.name)} <span class="caption">¥${w.unitPrice.toFixed(2)}/${wunit}</span></p>`;
-    w.items.forEach((item, idx) => {
-      const inputId = `weight-${pid}-${idx}`;
-      html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--color-border-light)">
-        <span style="flex:1;font-size:.875rem">${escHtml(item.customer)} · ${escHtml(item.shareLabel)}</span>
-        <input type="number" id="${inputId}" class="form-input" placeholder="重量${wunit}" min="0.01" step="0.01" style="width:100px;text-align:right" oninput="updateWeightSubtotal('${inputId}',${w.unitPrice},${item.share})">
-        <span class="weight-sub" style="min-width:60px;text-align:right;font-weight:600;font-size:.875rem">¥0</span>
-      </div>`;
-    });
-    html += '</div>';
-  });
-
-  html += `<div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
-    <button class="btn btn-primary btn-block btn-lg" id="confirm-weight-btn">确认分配</button>
-    <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
-  </div></div>`;
-  modal.innerHTML = html;
-  document.body.appendChild(modal);
-
-  window.updateWeightSubtotal = function(inputId, unitPrice, share) {
-    const input = document.getElementById(inputId);
-    const sub = input.parentElement.querySelector('.weight-sub');
-    const w = parseFloat(input.value) || 0;
-    sub.textContent = '¥' + (unitPrice * w * share).toFixed(2);
-  };
-
-  modal.querySelector('#confirm-weight-btn').onclick = async function() {
-    const weights = {}; // { orderId: { productId: weight } }
-    Object.entries(weightMap).forEach(([pid, w]) => {
-      w.items.forEach((item, idx) => {
-        const input = document.getElementById(`weight-${pid}-${idx}`);
-        const val = parseFloat(input.value) || 0;
-        if (val > 0) {
-          if (!weights[item.orderId]) weights[item.orderId] = {};
-          weights[item.orderId][pid] = val;
+    openManagedModal(modal, { trigger, initialFocus: 'input', removeOnClose: true, onRequestClose: close });
+    modal.querySelector('#confirm-weight-btn').onclick = async function() {
+      if (busy) return;
+      const errorEl = modal.querySelector('#weight-error');
+      errorEl.style.display = 'none';
+      const weights = new Map();
+      for (let idx = 0; idx < entries.length; idx++) {
+        const entry = entries[idx];
+        if (confirmed.has(entry.orderId)) continue;
+        const input = modal.querySelector(`#weight-entry-${idx}`), value = Number(input.value);
+        if (!input.value || !Number.isFinite(value) || value <= 0 || !Number.isFinite(entry.price) || entry.price <= 0) {
+          errorEl.textContent = '请完整填写每条商品的正数实收重量，并核对单价'; errorEl.style.display = 'block'; input.focus(); return;
         }
-      });
-    });
-
-    let confirmed = 0;
-    for (const [orderId, orderWeights] of Object.entries(weights)) {
-      const { error } = await adminRpc('admin_confirm_order_weight', { p_order_id: orderId, p_weights: orderWeights });
-      if (!error) confirmed++;
-    }
-    modal.remove();
-    renderAdminTab('orders');
-    toast(`已确认 ${confirmed} 单称重，价格已锁定`);
-  };
+        if (!weights.has(entry.orderId)) weights.set(entry.orderId, {});
+        weights.get(entry.orderId)[`item:${entry.itemIndex}`] = value;
+      }
+      busy = true; this.disabled = true; this.textContent = '正在确认…';
+      modal.querySelectorAll('input').forEach(input => { input.disabled = true; });
+      const failures = [];
+      try {
+        for (const [orderId, orderWeights] of weights) {
+          try {
+            const { data, error } = await adminRpc('admin_confirm_order_weight_received', { p_order_id: orderId, p_weights: orderWeights });
+            if (error || data !== true) throw new Error(error?.message || '订单状态已变化，请重新查询');
+            confirmed.add(orderId);
+            entries.forEach((entry, idx) => { if (entry.orderId === orderId) modal.querySelector(`[data-weight-row="${idx}"] .weight-status`).textContent = '已确认，金额已锁定'; });
+          } catch (e) { failures.push(e.message || '请求失败'); }
+        }
+        if (!failures.length) {
+          closeManagedModal(modal, { remove: true });
+          if (adminRoundId === roundId) renderAdminTab('orders');
+          toast(`已确认 ${confirmed.size} 单称重，金额已锁定`);
+        } else {
+          errorEl.textContent = `已确认 ${confirmed.size} 单；其余未确认。${failures[0]}。可重试未确认订单。`;
+          errorEl.style.display = 'block';
+        }
+      } finally {
+        busy = false; this.disabled = false; this.textContent = '重试未确认订单';
+        entries.forEach((entry, idx) => { modal.querySelector(`#weight-entry-${idx}`).disabled = confirmed.has(entry.orderId); });
+      }
+    };
+  } catch (e) { toast(e.message || '查询待称重订单失败，请重试', 'error'); }
 }
+
+function formatWeightAmountText(item) {
+  const price = Number(item.spec_price || 0).toFixed(2), weight = formatQty(item.actual_weight);
+  const unit = item.weight_unit || 'kg';
+  const factor = item.weight_input_mode === 'received_total' ? '' : ` × ${formatQtyLabel(item.share || 1)}`;
+  return `¥${price} × ${weight}${unit}${factor} = ¥${Number(item.subtotal || 0).toFixed(2)}`;
+}
+
 
 function adminBatchCancel(customerName, roundId) {
   (async () => {
@@ -6566,18 +6585,20 @@ async function saveGroupNames() {
 }
 
 async function changePassword() {
-  const pw = document.getElementById('new-password').value.trim();
-  if (!pw) { toast('请输入密码', 'error'); return; }
+  const input = document.getElementById('new-password');
+  if (input.disabled) return;
+  const pw = input.value.trim();
   if (pw.length < 4) { toast('密码至少4位', 'error'); return; }
+  input.disabled = true;
   try {
     const hash = await hashPassword(pw);
-    const { error } = await adminRpc('admin_set_password', { p_pw_hash: hash });
-    if (error) { toast('修改失败', 'error'); return; }
-    document.getElementById('new-password').value = '';
-    toast('密码已更新');
-  } catch (e) {
-    toast('操作失败，请重新登录后重试', 'error');
-  }
+    const { data, error } = await adminRpc('admin_change_password', { p_new_password_hash: hash });
+    if (error || data !== true) { toast('修改失败，请重试', 'error'); return; }
+    input.value = '';
+    adminLogout();
+    toast('密码已更新，旧会话已失效，请用新密码登录');
+  } catch (e) { toast('修改结果未确认，请重新登录后核实', 'error'); }
+  finally { input.disabled = false; }
 }
 
 async function showAdminAfterSales() {
@@ -6601,7 +6622,7 @@ async function showAdminAfterSales() {
       </div>
       <p style="font-size:.875rem;margin-bottom:6px;white-space:pre-wrap">${escHtml(a.reason)}</p>
       <div style="display:flex;gap:8px;margin-top:8px">
-        ${(a.image_url ? a.image_url.split(',').map((url, i) => `<button class="btn btn-ghost btn-sm" onclick="openImagePreview('${escAttr(url.trim())}')">查看图片${a.image_url.split(',').length > 1 ? i+1 : ''}</button>`).join('') : '')}
+        ${(a.image_url ? a.image_url.split(',').map((url, i) => `<button class="btn btn-ghost btn-sm" onclick="openImagePreview(${escJsAttr(url.trim())})">查看图片${a.image_url.split(',').length > 1 ? i+1 : ''}</button>`).join('') : '')}
         ${a.status === 'unread' ? `<button class="btn btn-ghost btn-sm" onclick="adminUpdateAfterSalesStatus('${a.id}', 'read')">标记已读</button>` : ''}
         ${a.status !== 'resolved' ? `<button class="btn btn-primary btn-sm" onclick="adminUpdateAfterSalesStatus('${a.id}', 'resolved')">标记已处理</button>` : '<span class="badge badge-muted">已处理</span>'}
       </div>
@@ -6630,7 +6651,7 @@ async function showAdminFeedback() {
         <span class="caption">${new Date(f.created_at).toLocaleString('zh-CN')}</span>
       </div>
       <p style="font-size:.875rem;margin-bottom:6px;white-space:pre-wrap">${escHtml(f.content)}</p>
-      ${f.image_url ? `<img src="${escHtml(f.image_url)}" style="max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;margin-bottom:6px" onclick="openImagePreview('${escAttr(f.image_url)}')">` : ''}
+      ${f.image_url ? `<img src="${escHtml(f.image_url)}" style="max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;margin-bottom:6px" onclick="openImagePreview(${escJsAttr(f.image_url)})">` : ''}
       ${f.status === 'unread' ? `<button class="btn btn-ghost btn-sm" onclick="markFeedbackRead('${f.id}')">标记已读</button>` : '<span class="badge badge-muted">已读</span>'}
     </div>
   `).join('');
@@ -6725,6 +6746,10 @@ function escAttr(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+function escJsAttr(value) {
+  return escAttr(JSON.stringify(String(value)).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029'));
+}
+
 
 // ============================================================
 // EVENT DELEGATION (replaces inline onclick handlers)
@@ -6876,8 +6901,8 @@ async function createTeam(productId, roundId, customerName, targetQty, splitCoun
       p_target_qty: targetQty, p_split_count: splitCount,
       p_spec_name: specName, p_spec_price: specPrice, p_share_qty: shareQty
     });
-    if (error) { toast('创建失败: ' + error.message, 'error'); return null; }
-    toast('队伍已创建，正在等待队友加入');
+    if (error || typeof data !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data)) { toast('创建失败: ' + (error?.message || '未返回有效队伍'), 'error'); return null; }
+    toast(shareQty === targetQty ? '队伍已满员，订单已生成' : '队伍已创建，正在等待队友加入');
     return data;
   } catch (e) { toast('创建失败，请重试', 'error'); return null; }
 }
@@ -6887,8 +6912,8 @@ async function joinTeam(teamId, customerName, specName, specPrice, shareQty) {
     const { data, error } = await sb.rpc('join_team', {
       p_team_id: teamId, p_customer_name: customerName, p_spec_name: specName, p_spec_price: specPrice, p_share_qty: shareQty
     });
-    if (error) { toast('加入失败: ' + error.message, 'error'); return null; }
-    toast(data === 'filled' ? '队伍已满员，订单自动生成中...' : '已加入队伍');
+    if (error || !['joined', 'filled'].includes(data)) { toast('加入失败: ' + (error?.message || '未确认加入结果'), 'error'); return null; }
+    toast(data === 'filled' ? '队伍已满员，订单已生成' : '已加入队伍');
     return data;
   } catch (e) { toast('加入失败，请重试', 'error'); return null; }
 }
@@ -6900,8 +6925,8 @@ async function leaveTeam(teamId, customerName, productId, teamStatus) {
     : '确定退出队伍吗？';
   if (!confirm(confirmMsg)) return;
   try {
-    const { error } = await sb.rpc('leave_team', { p_team_id: teamId, p_customer_name: customerName });
-    if (error) { toast('退出失败: ' + error.message, 'error'); return; }
+    const { data, error } = await sb.rpc('leave_team', { p_team_id: teamId, p_customer_name: customerName });
+    if (error || data !== true) { toast('退出失败: ' + (error?.message || '队伍状态已变化'), 'error'); return; }
     toast(isFilled ? '已退出队伍，订单已取消，库存已归还' : '已退出队伍');
     loadCustomerProducts();
     if (productId) {
@@ -6946,9 +6971,18 @@ async function toggleTeamDrawer(el) {
 
 async function loadProductTeams(pid, container) {
   const roundIdSnapshot = customerRoundId;
+  const gen = (container._teamLoadGen || 0) + 1; container._teamLoadGen = gen;
   container.innerHTML = '<div class="skel-line skeleton"></div>';
-  const { data: teams } = await sb.rpc('get_product_teams', { p_product_id: pid, p_round_id: roundIdSnapshot });
-  if (!container.isConnected || customerRoundId !== roundIdSnapshot) return;
+  let result;
+  try { result = await sb.rpc('get_product_teams', { p_product_id: pid, p_round_id: roundIdSnapshot }); }
+  catch (error) { result = { error }; }
+  if (!container.isConnected || customerRoundId !== roundIdSnapshot || container._teamLoadGen !== gen) return;
+  if (result.error || !Array.isArray(result.data)) {
+    container.innerHTML = '<p class="caption" role="alert">组队查询失败，请重试</p>';
+    const retry = document.createElement('button'); retry.className = 'btn btn-secondary btn-sm'; retry.textContent = '重试';
+    retry.onclick = () => loadProductTeams(pid, container); container.appendChild(retry); return;
+  }
+  const teams = result.data;
   if (!teams || teams.length === 0) {
     container.innerHTML = '<p class="caption" style="color:var(--color-text-muted);margin-bottom:8px">暂无队伍</p>';
     var b = document.createElement('button'); b.className = 'btn btn-ghost btn-sm'; b.textContent = '+ 发起新队伍'; b.onclick = function(){showCreateTeamModal(pid);}; container.appendChild(b);
@@ -6972,14 +7006,14 @@ async function loadProductTeams(pid, container) {
       </div>
       <div style="margin-bottom:6px">${members.map(m => `<span class="tag-pill" style="margin:2px">${escHtml(m.customer_name)}(${formatQtyLabel(m.share_qty)}份)</span>`).join('')}</div>
       ${isInTeam && myName === t.initiator
-        ? `<button class="btn btn-ghost btn-sm" style="margin-top:4px;color:var(--color-danger)" onclick="event.stopPropagation();dissolveMyTeam('${escAttr(t.team_id)}')">解散队伍</button>`
+        ? `<button class="btn btn-ghost btn-sm" style="margin-top:4px;color:var(--color-danger)" onclick="event.stopPropagation();dissolveMyTeam(${escJsAttr(t.team_id)})">解散队伍</button>`
         : isInTeam
-        ? `<button class="btn btn-ghost btn-sm" style="margin-top:4px;color:var(--color-danger)" onclick="event.stopPropagation();leaveTeam('${escAttr(t.team_id)}','${escAttr(myName)}','${escAttr(pid)}','${escAttr(t.status)}')">退出队伍</button>`
+        ? `<button class="btn btn-ghost btn-sm" style="margin-top:4px;color:var(--color-danger)" onclick="event.stopPropagation();leaveTeam(${escJsAttr(t.team_id)},${escJsAttr(myName)},${escJsAttr(pid)},${escJsAttr(t.status)})">退出队伍</button>`
         : teamActionButton(t, pid, minShare, remaining)
       }
     </div>`;
   });
-  html += `<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="showCreateTeamModal('${escAttr(pid)}')">+ 发起新队伍</button></div>`;
+  html += `<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="showCreateTeamModal(${escJsAttr(pid)})">+ 发起新队伍</button></div>`;
   container.innerHTML = html;
   const countEl = document.querySelector(`.team-count[data-pid="${pid}"]`);
   if (countEl) countEl.textContent = teams.length > 0 ? `${teams.length} 个队伍` : '';
@@ -6997,23 +7031,34 @@ function showCreateTeamModal(productId) {
     <div class="modal-handle"></div>
     <h3 class="section-title" id="team-create-title" style="margin-bottom:12px">发起组队 — ${escHtml(product.name)}</h3>
     <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">你的群昵称</label><input type="text" id="team-nickname" class="form-input" value="${escAttr(localStorage.getItem('groupbuy_last_name') || '')}" maxlength="30">
+      <label class="form-label" for="team-nickname">你的群昵称</label><input type="text" id="team-nickname" class="form-input" value="${escAttr(localStorage.getItem('groupbuy_last_name') || '')}" maxlength="30">
     </div>
     <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">目标整份数</label><input type="number" id="team-target" class="form-input" value="1" min="1" step="1">
+      <label class="form-label" for="team-target">这队共买几整份</label><input type="number" id="team-target" class="form-input" value="1" min="1" step="1">
     </div>
     <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">分成几份</label><input type="number" id="team-split" class="form-input" value="4" min="2" step="1">
+      <label class="form-label" for="team-split">整队平均分成几份</label><input type="number" id="team-split" class="form-input" value="4" min="2" step="1">
     </div>
     <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">我要取几份</label><input type="number" id="team-share" class="form-input" value="1" min="1" step="1">
+      <label class="form-label" for="team-share">我要取几份</label><input type="number" id="team-share" class="form-input" value="1" min="1" step="1">
     </div>
+    <p id="team-create-preview" class="caption" role="status" style="margin:12px 0"></p>
     <span class="form-error" id="team-create-error" style="display:none"></span>
-    <button class="btn btn-primary btn-block btn-lg" id="team-create-btn" onclick="submitCreateTeam('${escAttr(productId)}')">发起组队</button>
-    <button class="btn btn-ghost btn-block btn-sm" onclick="closeTopManagedModal()">取消</button>
+    <button class="btn btn-primary btn-block btn-lg" id="team-create-btn" onclick="submitCreateTeam(${escJsAttr(productId)})">发起组队</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="requestCloseTopManagedModal()">取消</button>
   </div>`;
   document.body.appendChild(modal);
-  openManagedModal(modal, { trigger, initialFocus: '#team-nickname', onRequestClose: () => closeManagedModal(modal), removeOnClose: true });
+  const updatePreview = () => {
+    const target = Number(modal.querySelector('#team-target').value), split = Number(modal.querySelector('#team-split').value), count = Number(modal.querySelector('#team-share').value);
+    const preview = modal.querySelector('#team-create-preview');
+    if (![target, split, count].every(Number.isInteger) || target < 1 || split < 2 || count < 1 || count > split) { preview.textContent = '请填写有效整份数和分配份数'; return; }
+    const qty = target * count / split, spec = findTeamSpec(product);
+    const price = Number(spec.price) / (parsePurchaseUnit(spec.name) || 1);
+    preview.textContent = `整队采购 ${target} 整份；每份占 ${formatQtyLabel(target / split)} 整份。你取 ${count}/${split}，合计 ${formatQtyLabel(qty)} 整份。` + (product.is_weighted ? `称重商品单价 ¥${Number(spec.price).toFixed(2)}/${product.weight_unit || 'kg'}，到货称重后结算。` : `预计 ¥${(price * qty).toFixed(2)}。`);
+  };
+  modal.querySelectorAll('#team-target,#team-split,#team-share').forEach(input => { input.oninput = updatePreview; });
+  updatePreview();
+  openManagedModal(modal, { trigger, initialFocus: '#team-nickname', onRequestClose: () => { if (!teamCreateSubmitting) closeManagedModal(modal); }, removeOnClose: true });
 }
 
 let teamCreateSubmitting = false; // 防连点：同一时刻只允许一次"发起组队"提交
@@ -7024,10 +7069,11 @@ async function submitCreateTeam(productId) {
   if (btn) { btn.disabled = true; btn.textContent = '正在创建…'; }
   try {
     const product = cachedProducts.find(p => p.id === productId);
-    const targetQty = parseInt(document.getElementById('team-target').value, 10) || 1;
-    const splitCount = parseInt(document.getElementById('team-split').value, 10) || 1;
-    const shareCount = parseInt(document.getElementById('team-share').value, 10) || 1;
+    const targetQty = Number(document.getElementById('team-target').value);
+    const splitCount = Number(document.getElementById('team-split').value);
+    const shareCount = Number(document.getElementById('team-share').value);
     const errEl = document.getElementById('team-create-error');
+    if (![targetQty, splitCount, shareCount].every(Number.isInteger) || targetQty < 1 || splitCount < 2 || shareCount < 1) { errEl.textContent = '整份数和分配份数必须是有效整数，至少分成2份'; errEl.style.display = 'block'; return; }
     if (shareCount > splitCount) { errEl.textContent = '取的份数不能超过分成份数'; errEl.style.display = 'block'; return; }
     const shareQty = parseFloat(((targetQty / splitCount) * shareCount).toFixed(8));
     const spec = findTeamSpec(product) || { name: '默认', price: 0 };
@@ -7055,32 +7101,45 @@ function showJoinTeamModal(teamId, productId, targetQty, splitCount, remaining) 
   modal.dataset.modal = 'team-join';
   modal.setAttribute('aria-hidden', 'true');
   const minShare = targetQty / splitCount;
-  const maxShares = Math.floor(remaining / minShare);
+  const maxShares = Math.floor((remaining + 1e-7) / minShare);
+  if (!Number.isFinite(minShare) || minShare <= 0 || maxShares < 1) { toast('队伍份额已变化，请刷新后重试', 'info'); return; }
   modal.innerHTML = `<div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="team-join-title" tabindex="-1">
     <div class="modal-handle"></div>
     <h3 class="section-title" id="team-join-title" style="margin-bottom:12px">加入队伍</h3>
-    <p class="caption" style="margin-bottom:8px">剩余 ${formatQtyLabel(remaining)} 份，最少 ${formatQtyLabel(minShare)} 份</p>
+    <p class="caption" style="margin-bottom:8px">整队采购 ${formatQtyLabel(targetQty)} 整份，平均分成 ${splitCount} 份；尚余 ${formatQtyLabel(remaining)} 整份</p>
     <div class="form-group" style="margin-bottom:8px">
-      <label class="form-label">你的群昵称</label><input type="text" id="join-nickname" class="form-input" value="${escAttr(localStorage.getItem('groupbuy_last_name') || '')}" maxlength="30">
+      <label class="form-label" for="join-nickname">你的群昵称</label><input type="text" id="join-nickname" class="form-input" value="${escAttr(localStorage.getItem('groupbuy_last_name') || '')}" maxlength="30">
     </div>
     <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">我要取几份（每份 ${formatQtyLabel(minShare)}）</label>
+      <label class="form-label" for="team-join-share">我要取几份（每份占 ${formatQtyLabel(minShare)} 整份）</label>
       <input type="number" id="team-join-share" class="form-input" value="1" min="1" max="${maxShares}" step="1">
     </div>
+    <p id="team-join-preview" class="caption" role="status" style="margin:12px 0"></p>
     <span class="form-error" id="team-join-error" style="display:none"></span>
     <button class="btn btn-primary btn-block btn-lg" id="join-team-btn">确认加入</button>
-    <button class="btn btn-ghost btn-block btn-sm" onclick="closeTopManagedModal()">取消</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="requestCloseTopManagedModal()">取消</button>
   </div>`;
   document.body.appendChild(modal);
-  openManagedModal(modal, { trigger, initialFocus: '#join-nickname', onRequestClose: () => closeManagedModal(modal), removeOnClose: true });
+  const shareInput = modal.querySelector('#team-join-share');
+  const updatePreview = () => {
+    const count = Number(shareInput.value), preview = modal.querySelector('#team-join-preview');
+    if (!Number.isInteger(count) || count < 1 || count > maxShares) { preview.textContent = `可取1至${maxShares}份`; return; }
+    const product = cachedProducts.find(p => p.id === productId);
+    const spec = product ? findTeamSpec(product) : null;
+    const qty = count === maxShares ? remaining : minShare * count;
+    preview.textContent = `你取 ${count} 份，合计 ${formatQtyLabel(qty)} 整份。` + (product?.is_weighted ? '到货称重后结算。' : spec ? `预计 ¥${(Number(spec.price) / (parsePurchaseUnit(spec.name) || 1) * qty).toFixed(2)}。` : '请刷新商品信息后确认金额。');
+  };
+  shareInput.oninput = updatePreview; updatePreview();
+  openManagedModal(modal, { trigger, initialFocus: '#join-nickname', onRequestClose: () => { if (!modal.querySelector('#join-team-btn').disabled) closeManagedModal(modal); }, removeOnClose: true });
   modal.querySelector('#join-team-btn').onclick = async function() {
     if (this.disabled) return; // 防连点
     this.disabled = true;
     const originalText = this.textContent;
     this.textContent = '正在加入…';
     try {
-      const shareCount = parseInt(document.getElementById('team-join-share').value, 10) || 1;
-      const shareQty = parseFloat((minShare * shareCount).toFixed(8));
+      const shareCount = Number(document.getElementById('team-join-share').value);
+      if (!Number.isInteger(shareCount) || shareCount < 1 || shareCount > maxShares) { const error = modal.querySelector('#team-join-error'); error.textContent = `可取1至${maxShares}份`; error.style.display = 'block'; return; }
+      const shareQty = Number((shareCount === maxShares ? remaining : minShare * shareCount).toFixed(8));
       const product = cachedProducts.find(p => p.id === productId);
       const spec = findTeamSpec(product) || { name: '默认', price: 0 };
       const customerName = document.getElementById('join-nickname')?.value?.trim() || localStorage.getItem('groupbuy_last_name') || '';
@@ -7102,8 +7161,8 @@ function showJoinTeamModal(teamId, productId, targetQty, splitCount, remaining) 
 async function adminDissolveTeam(teamId) {
   if (!confirm('确定解散此队伍吗？')) return;
   try {
-    const { error } = await sb.rpc('cancel_team', { p_team_id: teamId });
-    if (error) { toast('解散失败: ' + error.message, 'error'); return; }
+    const { data, error } = await adminRpc('admin_cancel_team', { p_team_id: teamId });
+    if (error || data !== true) { toast('解散失败: ' + (error?.message || '队伍已变化'), 'error'); return; }
     toast('队伍已解散');
     renderAdminTab('orders');
   } catch(e) { toast('解散失败', 'error'); }
@@ -7121,7 +7180,7 @@ function findTeamSpec(product) {
 
 function teamActionButton(t, pid, minShare, remaining) {
   if (remaining > 0) {
-    return `<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="showJoinTeamModal('${escAttr(t.team_id)}','${escAttr(pid)}',${t.target_qty},${t.split_count},${remaining})\">加入（最少 ${formatQtyLabel(minShare)} 份）</button>`;
+    return `<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="showJoinTeamModal(${escJsAttr(t.team_id)},${escJsAttr(pid)},${t.target_qty},${t.split_count},${remaining})\">加入（最少 ${formatQtyLabel(minShare)} 份）</button>`;
   }
   return '<span class="badge badge-muted" style="margin-top:4px">已满</span>';
 }
@@ -7129,8 +7188,8 @@ function teamActionButton(t, pid, minShare, remaining) {
 async function dissolveMyTeam(teamId) {
   if (!confirm('确定解散你发起的队伍吗？')) return;
   try {
-    const { error } = await sb.rpc('cancel_team', { p_team_id: teamId });
-    if (error) { toast('解散失败', 'error'); return; }
+    const { data, error } = await sb.rpc('cancel_team', { p_team_id: teamId });
+    if (error || data !== true) { toast('解散未确认，请刷新队伍后重试', 'error'); return; }
     toast('队伍已解散，库存已归还');
     closeTopManagedModal();
     loadCustomerProducts();
@@ -7225,7 +7284,7 @@ function showResetPasswordModal(leaderId, username) {
       <input type="password" id="reset-leader-password" class="form-input" maxlength="20" placeholder="至少4位">
     </div>
     <span class="form-error" id="reset-pw-error" style="display:none"></span>
-    <button class="btn btn-primary btn-block btn-lg" onclick="submitResetPassword('${escAttr(leaderId)}')">确认修改</button>
+    <button class="btn btn-primary btn-block btn-lg" onclick="submitResetPassword(${escJsAttr(leaderId)})">确认修改</button>
     <button class="btn btn-ghost btn-block btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
   </div>`;
   document.body.appendChild(modal);
